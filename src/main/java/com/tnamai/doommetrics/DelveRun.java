@@ -3,16 +3,21 @@ package com.tnamai.doommetrics;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * One trip into the Doom of Mokhaiotl, from entering the cave until loot is claimed, the player
- * leaves, or the player dies.
+ * One trip into the Doom of Mokhaiotl, from entering the cave until the player leaves or dies.
  *
- * <p>Delve segments are contiguous with no gaps: a delve's duration runs from the moment the
- * previous delve was cleared, so restocking and walking to the hole are charged to the delve they
- * precede. The first segment starts when the run does. That makes the sum of every segment equal
- * the total run time by construction.
+ * <p>Delve segments are contiguous with no gaps: a delve's segment runs from the moment the
+ * previous delve was cleared, so restocking and dropping down the hole are charged to the delve
+ * they precede. The first segment starts when the run does. That makes the sum of every segment
+ * equal the total run time by construction, which is what the pace figures are built on.
+ *
+ * <p>The game also reports the length of each fight on its own, to a tenth of a second. That is
+ * kept alongside the segment as {@link Split#fight} for display, but it deliberately does not feed
+ * the pace maths - the downtime between delves is real time spent, and a delves-per-hour figure
+ * that ignored it would flatter you.
  *
  * <p>All timing is wall clock and never pauses.
  */
@@ -22,44 +27,82 @@ class DelveRun
 	{
 		final int level;
 		final Instant completedAt;
-		final Duration duration;
 
-		Split(int level, Instant completedAt, Duration duration)
+		/** Wall clock from the previous clear, or the run start, up to this clear. */
+		final Duration segment;
+
+		/** The fight length the game reported, or null if we never saw it. */
+		final Duration fight;
+
+		Split(int level, Instant completedAt, Duration segment, Duration fight)
 		{
 			this.level = level;
 			this.completedAt = completedAt;
-			this.duration = duration;
+			this.segment = segment;
+			this.fight = fight;
 		}
 	}
 
-	private final Instant startedAt;
 	private final List<Split> splits = new ArrayList<>();
+
+	private Instant startedAt;
 
 	/** True when the run was already underway when we started watching, so times are incomplete. */
 	private final boolean partial;
 
 	private Instant lastClearedAt;
+	private int currentLevel;
 	private EndReason endReason;
+	private Instant endedAt;
 	private int diedOnLevel = -1;
 
-	DelveRun(Instant startedAt, boolean partial)
+	DelveRun(Instant startedAt, int currentLevel, boolean partial)
 	{
 		this.startedAt = startedAt;
 		this.lastClearedAt = startedAt;
+		this.currentLevel = currentLevel;
 		this.partial = partial;
 	}
 
-	Split complete(int level, Instant at)
+	/** The game announced the delve we have just dropped into. */
+	void enterLevel(int level)
 	{
-		Split split = new Split(level, at, Duration.between(lastClearedAt, at));
+		currentLevel = level;
+	}
+
+	/**
+	 * Moves the start of a run that has not banked a delve yet onto the moment the game says the
+	 * delve actually began. The chat line announcing a delve lands a couple of seconds before the
+	 * fight the game is timing starts, and without this the first segment carries that walk-in and
+	 * reads longer than the duration the game reports for the same delve.
+	 *
+	 * @return true if the run was moved
+	 */
+	boolean reanchorStart(Instant at)
+	{
+		if (!splits.isEmpty() || at.isBefore(startedAt))
+		{
+			return false;
+		}
+
+		startedAt = at;
+		lastClearedAt = at;
+		return true;
+	}
+
+	Split complete(int level, Instant at, Duration fight)
+	{
+		Split split = new Split(level, at, Duration.between(lastClearedAt, at), fight);
 		splits.add(split);
 		lastClearedAt = at;
+		currentLevel = level + 1;
 		return split;
 	}
 
-	void end(EndReason reason, int diedOnLevel)
+	void end(EndReason reason, Instant at, int diedOnLevel)
 	{
 		this.endReason = reason;
+		this.endedAt = at;
 		this.diedOnLevel = diedOnLevel;
 	}
 
@@ -68,9 +111,19 @@ class DelveRun
 		return partial;
 	}
 
+	boolean isFinished()
+	{
+		return endReason != null;
+	}
+
 	EndReason getEndReason()
 	{
 		return endReason;
+	}
+
+	Instant getEndedAt()
+	{
+		return endedAt;
 	}
 
 	int getDiedOnLevel()
@@ -84,10 +137,10 @@ class DelveRun
 		return splits.isEmpty() ? 0 : splits.get(splits.size() - 1).level;
 	}
 
-	/** The delve currently being fought - one past the last one cleared. */
+	/** The delve currently being fought. */
 	int currentLevel()
 	{
-		return lastLevel() + 1;
+		return currentLevel;
 	}
 
 	/**
@@ -104,6 +157,15 @@ class DelveRun
 	Duration liveElapsed(Instant now)
 	{
 		return Duration.between(startedAt, now);
+	}
+
+	/**
+	 * What the timer should read: live while the run is going, and frozen on the time through the
+	 * last cleared delve once it is over, so the number always matches the pace denominator.
+	 */
+	Duration displayElapsed(Instant now)
+	{
+		return isFinished() ? clearedElapsed() : liveElapsed(now);
 	}
 
 	/**
@@ -138,7 +200,7 @@ class DelveRun
 			if (split.level >= fromLevel)
 			{
 				count++;
-				millis += split.duration.toMillis();
+				millis += split.segment.toMillis();
 			}
 		}
 
@@ -160,6 +222,6 @@ class DelveRun
 
 	List<Split> getSplits()
 	{
-		return splits;
+		return Collections.unmodifiableList(splits);
 	}
 }
