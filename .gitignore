@@ -8,3 +8,5 @@ nbactions.xml
 nb-configuration.xml
 nbproject/
 *.log
+!src/test/resources/logs/*.log
+screenshots/
