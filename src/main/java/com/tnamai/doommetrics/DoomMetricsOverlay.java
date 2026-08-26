@@ -26,12 +26,14 @@ class DoomMetricsOverlay extends OverlayPanel
 		setPosition(OverlayPosition.TOP_LEFT);
 		getMenuEntries().add(new OverlayMenuEntry(MenuAction.RUNELITE_OVERLAY_CONFIG,
 			OverlayManager.OPTION_CONFIGURE, "Doom Metrics overlay"));
+		getMenuEntries().add(new OverlayMenuEntry(MenuAction.RUNELITE_OVERLAY,
+			"Clear", "Doom Metrics overlay"));
 	}
 
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
-		DelveRun run = plugin.getRun();
+		DelveRun run = plugin.getDisplayRun();
 		if (run == null)
 		{
 			return null;
@@ -41,14 +43,28 @@ class DoomMetricsOverlay extends OverlayPanel
 			.text("Doom Metrics")
 			.build());
 
-		if (config.showDelveNumber())
+		if (run.isFinished())
+		{
+			if (run.getEndReason() == EndReason.DIED)
+			{
+				addLine("Died on", "Delve " + run.getDiedOnLevel());
+			}
+
+			if (config.showDelveNumber())
+			{
+				addLine("Cleared", Integer.toString(run.lastLevel()));
+			}
+		}
+		else if (config.showDelveNumber())
 		{
 			addLine("Delve", Integer.toString(run.currentLevel()));
 		}
 
 		if (config.showRunTimer())
 		{
-			addLine("Run", DoomFormat.duration(run.liveElapsed(Instant.now())));
+			// The asterisk marks a run we joined part way through, whose start time is a guess.
+			addLine(run.isPartial() ? "Run*" : "Run",
+				DoomFormat.duration(run.displayElapsed(Instant.now())));
 		}
 
 		if (config.showPace())

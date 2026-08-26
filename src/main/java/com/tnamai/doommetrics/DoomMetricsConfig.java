@@ -91,6 +91,20 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "resultLingerMinutes",
+		name = "Keep result for",
+		description = "Minutes the overlay keeps showing a finished run after you die or leave, so"
+			+ " the numbers are still there when you get back. Set to 0 to hide it straight away."
+			+ "<br>Right-click the overlay and pick Clear to dismiss it early.",
+		position = 13
+	)
+	@Range(min = 0, max = 180)
+	default int resultLingerMinutes()
+	{
+		return 30;
+	}
+
+	@ConfigItem(
 		keyName = "deepDelveLevel",
 		name = "Deep delve from",
 		description = "The first delve that counts as deep. Gates the chat messages, and is the"
