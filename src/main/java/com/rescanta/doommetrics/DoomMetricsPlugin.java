@@ -3,7 +3,13 @@ package com.rescanta.doommetrics;
 import com.google.inject.Provides;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import javax.inject.Inject;
+import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -26,9 +32,13 @@ import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.OverlayMenuClicked;
+import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.ImageUtil;
 
 @Slf4j
 @PluginDescriptor(
@@ -69,10 +79,34 @@ public class DoomMetricsPlugin extends Plugin
 	@Inject
 	private DoomMetricsOverlay overlay;
 
+	@Inject
+	private ClientToolbar clientToolbar;
+
+	@Inject
+	private MilestoneStore milestoneStore;
+
+	private DoomMetricsPanel panel;
+	private NavigationButton navButton;
+
+	/** This character's lifetime table, reloaded whenever the profile changes. */
+	private final MilestoneTable milestones = new MilestoneTable();
+
+	/** Milestones whose personal best has been beaten since the client started. */
+	private final Set<Integer> improvedThisSession = new HashSet<>();
+
 	private DelveRun run;
 
 	/** The last run that ended for a reason worth showing, kept for the linger window. */
 	private DelveRun lastRun;
+
+	/**
+	 * When this session logged in, if we were watching at the time. Used to bound the start of a
+	 * run we joined part way through - see {@link DelveRun#pbElapsed()}.
+	 */
+	private Instant loginAt;
+
+	/** What the live section last drew, so an unchanged tick costs nothing. */
+	private String lastLiveKey;
 
 	private int bossCount;
 	private int ticksWithoutBoss;
@@ -87,13 +121,27 @@ public class DoomMetricsPlugin extends Plugin
 	protected void startUp()
 	{
 		overlayManager.add(overlay);
+
+		panel = new DoomMetricsPanel();
+		navButton = NavigationButton.builder()
+			.tooltip("Doom Metrics")
+			.icon(ImageUtil.loadImageResource(DoomMetricsPlugin.class, "panel_icon.png"))
+			.priority(7)
+			.panel(panel)
+			.build();
+		clientToolbar.addNavigation(navButton);
+
 		reset();
+		loadMilestones();
 	}
 
 	@Override
 	protected void shutDown()
 	{
 		overlayManager.remove(overlay);
+		clientToolbar.removeNavigation(navButton);
+		navButton = null;
+		panel = null;
 		reset();
 	}
 
@@ -101,6 +149,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		run = null;
 		lastRun = null;
+		loginAt = null;
 		bossCount = 0;
 		ticksWithoutBoss = 0;
 	}
@@ -193,6 +242,31 @@ public class DoomMetricsPlugin extends Plugin
 			level, DoomFormat.preciseDuration(fight), DoomFormat.duration(split.segment));
 
 		announceInterval(level, split);
+		recordMilestone(level);
+	}
+
+	/**
+	 * Banks a clear of every tenth delve into the lifetime table. The kill count goes up whatever
+	 * the circumstances; the time only wins if it beats what is stored, and a run we joined part
+	 * way through offers a deliberately pessimistic one that will rarely do so.
+	 */
+	private void recordMilestone(int level)
+	{
+		if (!MilestoneTable.isMilestone(level))
+		{
+			return;
+		}
+
+		int ticks = DoomFormat.toTicks(run.pbElapsed());
+
+		if (milestones.record(level, ticks))
+		{
+			improvedThisSession.add(level);
+			log.debug("Delve {} personal best is now {} ticks", level, ticks);
+		}
+
+		milestoneStore.save(milestones);
+		refreshTable();
 	}
 
 	/**
@@ -259,6 +333,65 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			endRun(EndReason.FINISHED, -1);
 		}
+
+		// Arrives in the login varp flood, which may land either side of the profile being ready.
+		if (varpId == VarPlayerID.DOM_DEEPEST_LEVEL)
+		{
+			seedFromDeepestLevel();
+		}
+	}
+
+	@Subscribe
+	public void onRuneScapeProfileChanged(RuneScapeProfileChanged event)
+	{
+		loadMilestones();
+	}
+
+	private void loadMilestones()
+	{
+		if (!milestoneStore.hasProfile())
+		{
+			// Logged out, so there is no character to read. Leave the last table on show rather
+			// than blanking the panel the moment you log out.
+			return;
+		}
+
+		Map<Integer, MilestoneTable.Row> loaded = milestoneStore.load();
+		milestones.replaceAll(loaded);
+		improvedThisSession.clear();
+		seedFromDeepestLevel();
+		refreshTable();
+	}
+
+	/**
+	 * Pre-fills the reached rows from the deepest delve the game itself remembers, once per
+	 * character. Nothing is invented: the rows land with no kill count and no time, they just stop
+	 * a returning player being told they have never been past delve 10.
+	 */
+	private void seedFromDeepestLevel()
+	{
+		if (client.getGameState() != GameState.LOGGED_IN || !milestoneStore.hasProfile()
+			|| milestoneStore.isSeeded())
+		{
+			return;
+		}
+
+		int deepest = client.getVarpValue(VarPlayerID.DOM_DEEPEST_LEVEL);
+
+		if (deepest <= 0)
+		{
+			// The varp flood has not landed yet; the change event will bring us back here.
+			return;
+		}
+
+		if (milestones.seedReached(deepest))
+		{
+			milestoneStore.save(milestones);
+			refreshTable();
+			log.debug("Seeded milestones up to delve {} from the game's deepest level", deepest);
+		}
+
+		milestoneStore.setSeeded();
 	}
 
 	@Subscribe
@@ -282,6 +415,12 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onGameTick(GameTick event)
+	{
+		trackAbandonedRun();
+		refreshLive();
+	}
+
+	private void trackAbandonedRun()
 	{
 		if (bossCount > 0)
 		{
@@ -308,6 +447,20 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		GameState state = event.getGameState();
 
+		if (state == GameState.LOGIN_SCREEN)
+		{
+			loginAt = null;
+		}
+		else if (state == GameState.LOGGED_IN && loginAt == null)
+		{
+			// Deliberately not refreshed on a world hop: the earlier of the two is the safer bound,
+			// and a hop ends any run that was in progress anyway.
+			loginAt = Instant.now();
+
+			// In case the varp flood landed before the profile was ready.
+			seedFromDeepestLevel();
+		}
+
 		if (state == GameState.LOADING || state == GameState.LOGIN_SCREEN
 			|| state == GameState.HOPPING || state == GameState.CONNECTION_LOST)
 		{
@@ -321,6 +474,9 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			endRun(EndReason.ABANDONED, -1);
 		}
+
+		// Ticks stop at the login screen, so the panel would otherwise keep the stale run on show.
+		refreshLive();
 	}
 
 	@Subscribe
@@ -334,7 +490,7 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void startRun(Instant startedAt, int level, boolean partial)
 	{
-		run = new DelveRun(startedAt, level, partial);
+		run = new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null);
 		lastRun = null;
 		// Give the boss the full grace period to appear, whatever the counter was doing before.
 		ticksWithoutBoss = 0;
@@ -398,6 +554,95 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			sendChat(String.format("Cleared delve %d | %s | %s", ended.lastLevel(), elapsed, pace));
 		}
+	}
+
+	/**
+	 * The latest moment a run we joined part way through can be proven not to have started before.
+	 *
+	 * <p>The login is the tight answer, but the case this exists for - the plugin switched off for
+	 * part of a trip and back on - is exactly the case where we were not watching to see one. The
+	 * client cannot have started after the login did, so its own uptime is a looser bound that is
+	 * still always on the safe side.
+	 */
+	private Instant sessionAnchor()
+	{
+		return loginAt != null
+			? loginAt
+			: Instant.now().minusMillis((long) client.getGameCycle() * 20L);
+	}
+
+	private void refreshLive()
+	{
+		DoomMetricsPanel target = panel;
+
+		if (target == null)
+		{
+			return;
+		}
+
+		DelveRun display = getDisplayRun();
+		DoomMetricsPanel.Live live = display == null ? null : liveSnapshot(display);
+		String key = live == null ? "" : String.join("|", live.delveLabel, live.delveValue,
+			live.timeLabel, live.timeValue, live.paceLabel, live.paceValue);
+
+		// The timer only moves once a second, so most ticks have nothing to redraw.
+		if (key.equals(lastLiveKey))
+		{
+			return;
+		}
+
+		lastLiveKey = key;
+		SwingUtilities.invokeLater(() -> target.setLive(live));
+	}
+
+	/** The overlay's three rows, as strings, for the panel to draw. */
+	private DoomMetricsPanel.Live liveSnapshot(DelveRun display)
+	{
+		String delveLabel;
+		String delveValue;
+
+		if (!display.isFinished())
+		{
+			delveLabel = "Delve";
+			delveValue = Integer.toString(display.currentLevel());
+		}
+		else if (display.getEndReason() == EndReason.DIED)
+		{
+			delveLabel = "Died on";
+			delveValue = "Delve " + display.getDiedOnLevel();
+		}
+		else
+		{
+			delveLabel = "Cleared";
+			delveValue = Integer.toString(display.lastLevel());
+		}
+
+		PaceMode mode = config.paceMode();
+
+		return new DoomMetricsPanel.Live(
+			delveLabel,
+			delveValue,
+			// The asterisk marks a run we joined part way through, whose start time is a guess.
+			display.isPartial() ? "Run*" : "Run",
+			DoomFormat.duration(display.displayElapsed(Instant.now())),
+			mode.toString(),
+			DoomFormat.pace(pace(display)));
+	}
+
+	private void refreshTable()
+	{
+		DoomMetricsPanel target = panel;
+
+		if (target == null)
+		{
+			return;
+		}
+
+		List<DoomMetricsPanel.Row> rows = new ArrayList<>();
+		milestones.getRows().forEach((delve, row) -> rows.add(new DoomMetricsPanel.Row(
+			delve, row.kc, row.pbTicks, improvedThisSession.contains(delve))));
+
+		SwingUtilities.invokeLater(() -> target.setRows(rows));
 	}
 
 	private Double pace(DelveRun target)

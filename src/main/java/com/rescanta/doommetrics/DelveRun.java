@@ -50,6 +50,12 @@ class DelveRun
 	/** True when the run was already underway when we started watching, so times are incomplete. */
 	private final boolean partial;
 
+	/**
+	 * A moment known to be no later than the real start of the run, used only for milestone
+	 * personal bests. Null when {@link #startedAt} is already exact.
+	 */
+	private final Instant pbAnchor;
+
 	private Instant lastClearedAt;
 	private int currentLevel;
 	private EndReason endReason;
@@ -58,10 +64,16 @@ class DelveRun
 
 	DelveRun(Instant startedAt, int currentLevel, boolean partial)
 	{
+		this(startedAt, currentLevel, partial, null);
+	}
+
+	DelveRun(Instant startedAt, int currentLevel, boolean partial, Instant pbAnchor)
+	{
 		this.startedAt = startedAt;
 		this.lastClearedAt = startedAt;
 		this.currentLevel = currentLevel;
 		this.partial = partial;
+		this.pbAnchor = pbAnchor;
 	}
 
 	/** The game announced the delve we have just dropped into. */
@@ -151,6 +163,22 @@ class DelveRun
 	Duration clearedElapsed()
 	{
 		return Duration.between(startedAt, lastClearedAt);
+	}
+
+	/**
+	 * What a milestone personal best is measured over: the same span as {@link #clearedElapsed},
+	 * except that a run we joined part way through is measured from the anchor instead.
+	 *
+	 * <p>A partial run's {@link #startedAt} is the moment we first saw it, which is later than the
+	 * truth and would hand out a personal best nobody earned. The anchor is a moment the run
+	 * provably had not started by - you cannot drop back into the Doom past delve 1, so the run
+	 * began after you logged in, which in turn was after the client started. Measuring from it can
+	 * only ever make the time too long, and a time that is too long simply never wins.
+	 */
+	Duration pbElapsed()
+	{
+		Instant from = pbAnchor == null || startedAt.isBefore(pbAnchor) ? startedAt : pbAnchor;
+		return Duration.between(from, lastClearedAt);
 	}
 
 	/** Live wall clock time since the run started, including the delve in progress. */
