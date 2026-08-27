@@ -1,4 +1,4 @@
-package com.tnamai.doommetrics;
+package com.rescanta.doommetrics;
 
 import java.awt.Dimension;
 import java.awt.Graphics2D;

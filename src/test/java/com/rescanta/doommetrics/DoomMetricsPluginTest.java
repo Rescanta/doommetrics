@@ -1,4 +1,4 @@
-package com.tnamai.doommetrics;
+package com.rescanta.doommetrics;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
