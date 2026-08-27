@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.inject.Inject;
@@ -63,6 +64,17 @@ public class DoomMetricsPlugin extends Plugin
 	private static final int ABANDON_TICKS = 100;
 
 	private static final String CLEAR_OPTION = "Clear";
+
+	/**
+	 * How long one of our handlers may take before it is worth a line in the log.
+	 *
+	 * <p>Every handler here runs on the client thread, so its time is time the game loop is not
+	 * running. A game tick is 600ms and a frame at 50fps is 20ms, which makes five a threshold
+	 * quiet enough never to fire in normal play and small enough to catch anything a player could
+	 * see. A lone report is more likely a garbage collection landing inside a handler than work we
+	 * did; a repeated one is ours.
+	 */
+	private static final long SLOW_HANDLER_NANOS = Duration.ofMillis(5).toNanos();
 
 	@Inject
 	private Client client;
@@ -183,6 +195,13 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
+		long started = System.nanoTime();
+		handleChatMessage(event);
+		reportSlow("onChatMessage", started);
+	}
+
+	private void handleChatMessage(ChatMessage event)
+	{
 		if (event.getType() != ChatMessageType.GAMEMESSAGE)
 		{
 			return;
@@ -277,6 +296,13 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
+		long started = System.nanoTime();
+		handleMenuOptionClicked(event);
+		reportSlow("onMenuOptionClicked", started);
+	}
+
+	private void handleMenuOptionClicked(MenuOptionClicked event)
+	{
 		if (run == null)
 		{
 			return;
@@ -294,6 +320,13 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onActorDeath(ActorDeath event)
 	{
+		long started = System.nanoTime();
+		handleActorDeath(event);
+		reportSlow("onActorDeath", started);
+	}
+
+	private void handleActorDeath(ActorDeath event)
+	{
 		if (run != null && event.getActor() == client.getLocalPlayer())
 		{
 			endRun(EndReason.DIED, run.currentLevel());
@@ -302,6 +335,13 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
+	{
+		long started = System.nanoTime();
+		handleVarbitChanged(event);
+		reportSlow("onVarbitChanged", started);
+	}
+
+	private void handleVarbitChanged(VarbitChanged event)
 	{
 		int varpId = event.getVarpId();
 
@@ -343,6 +383,13 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onRuneScapeProfileChanged(RuneScapeProfileChanged event)
+	{
+		long started = System.nanoTime();
+		handleRuneScapeProfileChanged(event);
+		reportSlow("onRuneScapeProfileChanged", started);
+	}
+
+	private void handleRuneScapeProfileChanged(RuneScapeProfileChanged event)
 	{
 		loadMilestones();
 	}
@@ -397,6 +444,13 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onNpcSpawned(NpcSpawned event)
 	{
+		long started = System.nanoTime();
+		handleNpcSpawned(event);
+		reportSlow("onNpcSpawned", started);
+	}
+
+	private void handleNpcSpawned(NpcSpawned event)
+	{
 		if (isDoomBoss(event.getNpc().getId()))
 		{
 			bossCount++;
@@ -407,6 +461,13 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onNpcDespawned(NpcDespawned event)
 	{
+		long started = System.nanoTime();
+		handleNpcDespawned(event);
+		reportSlow("onNpcDespawned", started);
+	}
+
+	private void handleNpcDespawned(NpcDespawned event)
+	{
 		if (isDoomBoss(event.getNpc().getId()))
 		{
 			bossCount = Math.max(0, bossCount - 1);
@@ -415,6 +476,13 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onGameTick(GameTick event)
+	{
+		long started = System.nanoTime();
+		handleGameTick(event);
+		reportSlow("onGameTick", started);
+	}
+
+	private void handleGameTick(GameTick event)
 	{
 		trackAbandonedRun();
 		refreshLive();
@@ -444,6 +512,13 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
+	{
+		long started = System.nanoTime();
+		handleGameStateChanged(event);
+		reportSlow("onGameStateChanged", started);
+	}
+
+	private void handleGameStateChanged(GameStateChanged event)
 	{
 		GameState state = event.getGameState();
 
@@ -482,9 +557,38 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onOverlayMenuClicked(OverlayMenuClicked event)
 	{
+		long started = System.nanoTime();
+		handleOverlayMenuClicked(event);
+		reportSlow("onOverlayMenuClicked", started);
+	}
+
+	private void handleOverlayMenuClicked(OverlayMenuClicked event)
+	{
 		if (event.getOverlay() == overlay && CLEAR_OPTION.equals(event.getEntry().getOption()))
 		{
 			lastRun = null;
+		}
+	}
+
+	/**
+	 * Logs a handler that ran long, so a stutter can be pinned on this plugin or ruled out.
+	 *
+	 * <p>Each public event method above is a two line wrapper around the private one that does the
+	 * work, purely so this can time it. Timing the wrapper rather than the body means an early
+	 * return is measured too, and no handler can be added later that quietly escapes measurement.
+	 *
+	 * <p>The measurement itself is two clock reads and a comparison, and the report is at debug, so
+	 * this costs nothing in production - RuneLite logs at INFO, where the line is never built. It
+	 * only sees the client thread: work handed to the Swing thread is timed up to the handoff, not
+	 * through the repaint.
+	 */
+	private void reportSlow(String handler, long startedNanos)
+	{
+		long took = System.nanoTime() - startedNanos;
+
+		if (took >= SLOW_HANDLER_NANOS)
+		{
+			log.debug("{} took {}ms", handler, String.format(Locale.US, "%.1f", took / 1_000_000d));
 		}
 	}
 
