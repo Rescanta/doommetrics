@@ -1,4 +1,4 @@
-package com.tnamai.doommetrics;
+package com.rescanta.doommetrics;
 
 enum EndReason
 {

@@ -1,4 +1,4 @@
-package com.tnamai.doommetrics;
+package com.rescanta.doommetrics;
 
 import com.google.inject.Provides;
 import java.time.Duration;

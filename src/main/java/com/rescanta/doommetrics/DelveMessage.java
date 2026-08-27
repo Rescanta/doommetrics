@@ -1,4 +1,4 @@
-package com.tnamai.doommetrics;
+package com.rescanta.doommetrics;
 
 import java.time.Duration;
 import java.util.regex.Matcher;

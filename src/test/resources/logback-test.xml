@@ -52,5 +52,5 @@
 		<appender-ref ref="STDOUT"/>
 		<appender-ref ref="FILE"/>
 	</root>
-	<logger name="com.tnamai.doommetrics" level="DEBUG" />
+	<logger name="com.rescanta.doommetrics" level="DEBUG" />
 </configuration>
