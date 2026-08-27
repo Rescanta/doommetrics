@@ -42,4 +42,22 @@ final class DoomFormat
 	{
 		return perHour == null ? "-" : String.format(Locale.US, "%.1f/hr", perHour);
 	}
+
+	/** A game tick, the unit the milestone table stores its personal bests in. */
+	static final long TICK_MILLIS = 600;
+
+	static int toTicks(Duration duration)
+	{
+		long millis = Math.max(0, duration.toMillis());
+		return (int) ((millis + TICK_MILLIS / 2) / TICK_MILLIS);
+	}
+
+	/**
+	 * A stored personal best, as hours, minutes, seconds and a tenth. Tick resolution means the
+	 * tenth only ever lands on a multiple of six, so 152 ticks reads {@code 1:31.2}.
+	 */
+	static String ticks(int ticks)
+	{
+		return ticks <= 0 ? "-" : preciseDuration(Duration.ofMillis(ticks * TICK_MILLIS));
+	}
 }

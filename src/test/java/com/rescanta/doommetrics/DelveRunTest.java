@@ -105,6 +105,35 @@ public class DelveRunTest
 		assertEquals(Duration.ofSeconds(60), run.clearedElapsed());
 	}
 
+	/**
+	 * A run joined part way through has a start time that is far too late, which would hand out a
+	 * personal best nobody earned. The anchor - a moment the run provably had not begun by - drags
+	 * the measured time back out to something that can only be too long.
+	 */
+	@Test
+	public void personalBestsOnAPartialRunAreMeasuredFromTheAnchor()
+	{
+		// Really entered at 0:00, but the plugin only started watching at 10:00.
+		DelveRun run = new DelveRun(at(600), 12, true, START);
+		run.complete(12, at(700), null);
+
+		assertEquals(Duration.ofSeconds(100), run.clearedElapsed());
+		assertEquals(Duration.ofSeconds(700), run.pbElapsed());
+	}
+
+	/** With nothing to correct, a personal best spans exactly what every other figure does. */
+	@Test
+	public void personalBestsOnACompleteRunMatchTheRunTimer()
+	{
+		DelveRun run = referenceRun();
+		assertEquals(run.clearedElapsed(), run.pbElapsed());
+
+		// An anchor later than the real start is ignored rather than trusted.
+		DelveRun anchored = new DelveRun(START, 1, false, at(300));
+		anchored.complete(1, at(60), null);
+		assertEquals(Duration.ofSeconds(60), anchored.pbElapsed());
+	}
+
 	@Test
 	public void keepsTheFightLengthTheGameReported()
 	{

@@ -1,6 +1,7 @@
 # Doom of Mokhaiotl Metrics
 
-Times every delve in a Doom of Mokhaiotl run and shows your deep delve completions per hour.
+Times every delve in a Doom of Mokhaiotl run, shows your deep delve completions per hour, and keeps
+a lifetime record of every tenth delve you have reached.
 
 ## How delves are timed
 
@@ -90,6 +91,55 @@ The first figure is the fight itself as the game timed it; the elapsed figure is
 Set the interval to 0 to turn the messages off.
 
 A pace of `-` means there is nothing to average yet - Deep pace needs a delve 9 or deeper.
+
+## Milestones
+
+Every tenth delve gets a row in a lifetime table, kept in the side panel behind the chevron icon.
+
+```
+Current run
+Delve                14
+Run               21:40
+Deep pace       40.0/hr
+
+Milestones
+Delve     KC        PB
+10        77    9:00.0
+20        76   19:00.0
+...
+170        1 2:52:00.0
+```
+
+A row appears the first time you clear that delve and never goes away, so the rows are the
+milestones you have reached. **KC** counts the clears. **PB** is the shortest time from the start
+of a run through to that clear - the same span the run timer measures, restocking included, not
+the sum of the fight lengths. One run to delve 172 therefore touches every row from 10 to 170,
+because it cleared every delve below the one it died on.
+
+The table is stored against the logged-in character, so an alt keeps its own, and it survives
+client restarts and updates. Times are held in game ticks, the unit the game counts delves in, and
+shown as hours, minutes, seconds and a tenth. Tick resolution means that tenth only ever lands on a
+multiple of six.
+
+A personal best beaten since the client started is shown in green.
+
+### Delves you reached before installing
+
+The game remembers your deepest delve ever, so the first time a character logs in the rows up to
+it are marked as reached. They arrive with no KC and no PB - nothing is invented, they just stop a
+returning player being told they have never been past delve 10.
+
+### Runs the plugin joined part way through
+
+A run the plugin did not see from delve 1 has a start time that is too late, and left alone would
+hand out a personal best nobody earned. Instead its time is measured from a moment the run
+provably had not begun by: you cannot drop back into the Doom past delve 1, so the run started
+after you logged in, which in turn was after the client started. The clear still counts towards KC.
+
+That makes the time too long rather than too short, and a time that is too long simply never wins.
+If you logged in at the cave and switched the plugin on mid-trip the bound is tight enough that a
+genuine best still stands; if the client had been open for hours it is loose, and that run quietly
+fails to set one.
 
 ## Config
 
