@@ -5,8 +5,10 @@ import java.awt.image.BufferedImage;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,6 +19,10 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
+import net.runelite.api.ItemContainer;
+import net.runelite.api.ScriptID;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
@@ -24,8 +30,11 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
+import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.client.chat.ChatColorType;
@@ -36,6 +45,7 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.OverlayMenuClicked;
 import net.runelite.client.events.RuneScapeProfileChanged;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
@@ -66,6 +76,34 @@ public class DoomMetricsPlugin extends Plugin
 	private static final int ABANDON_TICKS = 100;
 
 	private static final String CLEAR_OPTION = "Clear";
+
+	/**
+	 * The drops worth writing against a run. Everything else the Doom hands out is supplies and
+	 * currency that say nothing about how the trip went, and listing all of it would bury the one
+	 * line anybody will ever go looking for.
+	 *
+	 * <p>Both forms of the eye are here because only one of them is the drop and which is not
+	 * something this can check from outside the game. Listing both costs nothing - the other
+	 * simply never appears in a loot pile - and listing the wrong one alone would silently miss
+	 * the rarest drop in the place.
+	 */
+	private static final Set<Integer> NOTABLE_DROPS = Collections.unmodifiableSet(new HashSet<>(
+		Arrays.asList(
+			ItemID.EYE_OF_AYAK,
+			ItemID.EYE_OF_AYAK_UNCHARGED,
+			ItemID.AVERNIC_TREADS,
+			ItemID.MOKHAIOTL_CLOTH,
+			ItemID.DOMPET)));
+
+	/**
+	 * How the game announces a pet, depending on whether it had room to walk out beside you.
+	 * Matched on the opening words because the rest of each line varies.
+	 */
+	private static final String[] PET_MESSAGES = {
+		"You have a funny feeling like you're being followed",
+		"You have a funny feeling like you would have been followed",
+		"You feel something weird sneaking into your backpack"
+	};
 
 	/**
 	 * How long one of our handlers may take before it is worth a line in the log.
@@ -101,6 +139,9 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Inject
 	private RunHistoryStore runHistoryStore;
+
+	@Inject
+	private ItemManager itemManager;
 
 	private DoomMetricsPanel panel;
 	private NavigationButton navButton;
@@ -239,6 +280,12 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
+		if (isPetMessage(event.getMessage()))
+		{
+			petDropped();
+			return;
+		}
+
 		DelveMessage delve = DelveMessage.parse(event.getMessage());
 
 		if (delve == null)
@@ -254,6 +301,90 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			delveStarted(delve.getLevel());
 		}
+	}
+
+	private static boolean isPetMessage(String message)
+	{
+		for (String prefix : PET_MESSAGES)
+		{
+			if (message.startsWith(prefix))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Records the pet against the run in progress.
+	 *
+	 * <p>The pet is the one drop the loot pile cannot be relied on for: it is handed over the
+	 * moment it rolls rather than waiting to be claimed with the rest, so this chat line is the
+	 * only sight of it there is. Should it turn up in the pile as well, keying loot by item id
+	 * means the run still only counts it once.
+	 *
+	 * <p>Attributing it to the Doom needs no further checking, because there is nothing else to
+	 * attribute it to - a pet rolled while a delve is in progress came from the thing being fought.
+	 */
+	private void petDropped()
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		recordLoot(ItemID.DOMPET, 1);
+		log.debug("Pet dropped on delve {}", run.currentLevel());
+	}
+
+	/**
+	 * Takes the notable drops out of the Doom's loot pile and records them against the run.
+	 *
+	 * <p>The pile is only read when the loot in it is being claimed, never on a schedule, because
+	 * an unclaimed pile is not yet yours - dying loses it. Reading it as it went would write down
+	 * drops the player never walked out with.
+	 */
+	private void claimLootPile()
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		ItemContainer pile = client.getItemContainer(InventoryID.DOM_LOOTPILE);
+
+		if (pile == null)
+		{
+			return;
+		}
+
+		// Totalled across the pile before anything is recorded, because two of the same unique are
+		// two separate slots holding one each, and reporting them one slot at a time would look
+		// like the same single drop seen twice.
+		Map<Integer, Integer> claimed = new LinkedHashMap<>();
+
+		for (Item item : pile.getItems())
+		{
+			if (NOTABLE_DROPS.contains(item.getId()))
+			{
+				claimed.merge(item.getId(), Math.max(1, item.getQuantity()), Integer::sum);
+			}
+		}
+
+		claimed.forEach((itemId, quantity) ->
+		{
+			recordLoot(itemId, quantity);
+			log.debug("Loot pile holds {} x item {} on delve {}",
+				quantity, itemId, run.currentLevel());
+		});
+	}
+
+	/** Names the item from the cache, so the history is not pinned to names hardcoded here. */
+	private void recordLoot(int itemId, int quantity)
+	{
+		ItemComposition item = itemManager.getItemComposition(itemId);
+		run.recordLoot(itemId, item == null ? null : item.getName(), quantity);
 	}
 
 	/**
@@ -341,11 +472,46 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		int widgetId = event.getParam1();
+		boolean claiming = widgetId == InterfaceID.DomEndLevelUi.BTN_CLAIM;
 
-		if (widgetId == InterfaceID.DomEndLevelUi.BTN_CLAIM
-			|| widgetId == InterfaceID.DomEndLevelUi.BTN_LEAVE)
+		if (!claiming && widgetId != InterfaceID.DomEndLevelUi.BTN_LEAVE)
 		{
-			endRun(EndReason.FINISHED, -1);
+			return;
+		}
+
+		if (claiming)
+		{
+			// Read here rather than waiting for the claim script, which lands after this click and
+			// so after the run has been closed out and written - by which point there is no run
+			// left to hang the drops on.
+			claimLootPile();
+		}
+
+		endRun(EndReason.FINISHED, -1);
+	}
+
+	/**
+	 * The game's own signal that the loot has been claimed.
+	 *
+	 * <p>Claiming is the moment the pile becomes yours - leave any other way, or die, and it stays
+	 * behind - so it is the only moment worth reading the pile at, and this is the reading that is
+	 * certain to be at it. The claim button is watched as well, because that click is what closes
+	 * the run out and it cannot wait for this to arrive; between them one of the two is always in
+	 * time, and taking the largest count seen means it costs nothing when both are.
+	 */
+	@Subscribe
+	public void onScriptPreFired(ScriptPreFired event)
+	{
+		long started = System.nanoTime();
+		handleScriptPreFired(event);
+		reportSlow("onScriptPreFired", started);
+	}
+
+	private void handleScriptPreFired(ScriptPreFired event)
+	{
+		if (event.getScriptId() == ScriptID.DOM_LOOT_CLAIM)
+		{
+			claimLootPile();
 		}
 	}
 
@@ -879,7 +1045,7 @@ public class DoomMetricsPlugin extends Plugin
 		record.end = ended.getEndReason();
 		record.diedOn = Math.max(0, diedOnLevel);
 		record.partial = ended.isPartial();
-		record.loot = Collections.emptyList();
+		record.loot = ended.getLoot();
 
 		runHistoryStore.append(record);
 

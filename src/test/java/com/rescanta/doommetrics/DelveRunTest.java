@@ -2,6 +2,7 @@ package com.rescanta.doommetrics;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -259,5 +260,88 @@ public class DelveRunTest
 		// Eight deep delves (8 through 15) in 23:26, not the single delve the old code counted.
 		assertEquals(20.48, run.runPace(8), DELTA);
 		assertEquals(33.20, run.deepPace(9), DELTA);
+	}
+
+
+	@Test
+	public void lootIsListedInTheOrderItWasFirstSeen()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		run.recordLoot(31109, "Mokhaiotl cloth", 1);
+		run.recordLoot(31130, "Dom", 1);
+		run.recordLoot(31113, "Eye of ayak", 1);
+
+		assertEquals(Arrays.asList("Mokhaiotl cloth", "Dom", "Eye of ayak"), run.getLoot());
+	}
+
+	/** A deep run can roll the same unique more than once, and both of them happened. */
+	@Test
+	public void aDropEarnedTwiceIsListedTwice()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		run.recordLoot(31109, "Mokhaiotl cloth", 2);
+
+		assertEquals(Arrays.asList("Mokhaiotl cloth", "Mokhaiotl cloth"), run.getLoot());
+	}
+
+	/**
+	 * The loot pile is read both on the claim click and on the game's claim script, and the pet is
+	 * announced in chat as well as being an item, so the sources overlap by design. Seeing the same
+	 * pile twice is not the same as earning its contents twice.
+	 */
+	@Test
+	public void seeingTheSamePileTwiceDoesNotInflateTheCount()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		run.recordLoot(31109, "Mokhaiotl cloth", 2);
+		run.recordLoot(31109, "Mokhaiotl cloth", 2);
+		run.recordLoot(31130, "Dom", 1);
+		run.recordLoot(31130, "Dom", 1);
+
+		assertEquals(Arrays.asList("Mokhaiotl cloth", "Mokhaiotl cloth", "Dom"), run.getLoot());
+	}
+
+	/** A pile that has grown since it was last read is the second drop landing in it. */
+	@Test
+	public void aPileSeenHoldingMoreRaisesTheCount()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		run.recordLoot(31088, "Avernic treads", 1);
+		run.recordLoot(31088, "Avernic treads", 3);
+
+		assertEquals(3, run.getLoot().size());
+	}
+
+	/** A read that saw fewer than a previous one is a partial view, not a drop being taken back. */
+	@Test
+	public void aPileSeenHoldingLessDoesNotLowerTheCount()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		run.recordLoot(31088, "Avernic treads", 2);
+		run.recordLoot(31088, "Avernic treads", 1);
+
+		assertEquals(2, run.getLoot().size());
+	}
+
+	/** A drop the item cache could not name is dropped rather than listed as a blank. */
+	@Test
+	public void anUnnamedDropIsNotListed()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		run.recordLoot(31088, null, 1);
+
+		assertTrue(run.getLoot().isEmpty());
+	}
+
+	@Test
+	public void aRunWithNoLootListsNone()
+	{
+		assertTrue(referenceRun().getLoot().isEmpty());
 	}
 }
