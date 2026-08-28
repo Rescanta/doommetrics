@@ -1,9 +1,11 @@
 package com.rescanta.doommetrics;
 
 import com.google.inject.Provides;
+import java.awt.image.BufferedImage;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -97,8 +99,31 @@ public class DoomMetricsPlugin extends Plugin
 	@Inject
 	private MilestoneStore milestoneStore;
 
+	@Inject
+	private RunHistoryStore runHistoryStore;
+
 	private DoomMetricsPanel panel;
 	private NavigationButton navButton;
+	/** Read on the Swing thread when the history window is built, cleared on shutdown. */
+	private volatile BufferedImage icon;
+
+	/**
+	 * The history window while it is open, or null. Swing thread only - it is created, read and
+	 * disposed there, so the client thread never touches a frame mid-layout.
+	 */
+	private HistoryWindow historyWindow;
+
+	/**
+	 * The last milestone snapshot pushed to the Swing thread, so a window opening between two runs
+	 * has a table to draw without reading the model the client thread owns. Swing thread only.
+	 */
+	private List<MilestoneTablePanel.Row> tableRows = Collections.emptyList();
+
+	/**
+	 * The depths the open window's chart is drawing, so a run finishing while it is up can be
+	 * added without re-reading the file. Swing thread only.
+	 */
+	private List<Integer> chartDelves = new ArrayList<>();
 
 	/** This character's lifetime table, reloaded whenever the profile changes. */
 	private final MilestoneTable milestones = new MilestoneTable();
@@ -134,10 +159,11 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		overlayManager.add(overlay);
 
-		panel = new DoomMetricsPanel();
+		icon = ImageUtil.loadImageResource(DoomMetricsPlugin.class, "panel_icon.png");
+		panel = new DoomMetricsPanel(this::openHistoryWindow);
 		navButton = NavigationButton.builder()
 			.tooltip("Doom Metrics")
-			.icon(ImageUtil.loadImageResource(DoomMetricsPlugin.class, "panel_icon.png"))
+			.icon(icon)
 			.priority(7)
 			.panel(panel)
 			.build();
@@ -154,6 +180,12 @@ public class DoomMetricsPlugin extends Plugin
 		clientToolbar.removeNavigation(navButton);
 		navButton = null;
 		panel = null;
+		icon = null;
+
+		// The window outlives the side panel unless it is taken down explicitly, and a disabled
+		// plugin leaving a frame on screen would go on drawing data it no longer maintains.
+		SwingUtilities.invokeLater(this::closeHistoryWindow);
+
 		reset();
 	}
 
@@ -544,10 +576,18 @@ public class DoomMetricsPlugin extends Plugin
 			ticksWithoutBoss = 0;
 		}
 
+		// Leaving the world ends the run outright: the game drops you outside the entrance and will
+		// not let you pick the delve back up, so there is nothing to come back to whether you
+		// hopped, logged out, or dropped. The depth reached is exact, so it counts as an exit.
+		//
+		// On a clean hop or logout the game clears DOM_CURRENT_LEVEL_TEMP as it puts you outside,
+		// and that lands first, so the run is already over by the time we get here. This is the
+		// backstop for a connection that drops without one - the varp never arrives, and without
+		// this the run would be lost.
 		if (run != null && (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING
 			|| state == GameState.CONNECTION_LOST))
 		{
-			endRun(EndReason.ABANDONED, -1);
+			endRun(EndReason.FINISHED, -1);
 		}
 
 		// Ticks stop at the login screen, so the panel would otherwise keep the stale run on show.
@@ -640,6 +680,8 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		lastRun = ended;
+
+		recordRun(ended, diedOnLevel);
 
 		if (!config.announceRunEnd() || ended.lastLevel() == 0)
 		{
@@ -742,11 +784,116 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		List<DoomMetricsPanel.Row> rows = new ArrayList<>();
-		milestones.getRows().forEach((delve, row) -> rows.add(new DoomMetricsPanel.Row(
+		List<MilestoneTablePanel.Row> rows = new ArrayList<>();
+		milestones.getRows().forEach((delve, row) -> rows.add(new MilestoneTablePanel.Row(
 			delve, row.kc, row.pbTicks, improvedThisSession.contains(delve))));
 
-		SwingUtilities.invokeLater(() -> target.setRows(rows));
+		SwingUtilities.invokeLater(() ->
+		{
+			// Held so a window opened later has a table to draw without reaching back into the
+			// model, which by then the client thread may already be writing to again.
+			tableRows = rows;
+			target.setRows(rows);
+
+			if (historyWindow != null)
+			{
+				historyWindow.setRows(rows);
+			}
+		});
+	}
+
+	/**
+	 * Opens the history window, or brings it forward if it is already up. Runs on the Swing
+	 * thread, from the side panel's button.
+	 */
+	private void openHistoryWindow()
+	{
+		if (historyWindow == null)
+		{
+			historyWindow = new HistoryWindow(icon, () -> historyWindow = null);
+			historyWindow.setRows(tableRows);
+			historyWindow.setDelves(chartDelves);
+		}
+
+		historyWindow.open(SwingUtilities.getWindowAncestor(panel));
+
+		// Re-read every time rather than trusting what is already drawn: the profile may have
+		// changed, or another client may have written runs since this one last looked.
+		loadHistory();
+	}
+
+	private void closeHistoryWindow()
+	{
+		HistoryWindow window = historyWindow;
+
+		if (window == null)
+		{
+			return;
+		}
+
+		// Cleared first so the frame's own close callback has nothing left to do.
+		historyWindow = null;
+		chartDelves = new ArrayList<>();
+		window.dispose();
+	}
+
+	/** Reads the whole history off disk and hands the chart the depths from it. */
+	private void loadHistory()
+	{
+		runHistoryStore.load(records ->
+		{
+			List<Integer> delves = new ArrayList<>(records.size());
+
+			for (RunRecord record : records)
+			{
+				delves.add(record.delve);
+			}
+
+			SwingUtilities.invokeLater(() ->
+			{
+				chartDelves = delves;
+
+				if (historyWindow != null)
+				{
+					historyWindow.setDelves(delves);
+				}
+			});
+		});
+	}
+
+	/**
+	 * Writes a finished run to the history file, and adds it to the chart if it is on screen.
+	 *
+	 * <p>Only runs that ended in a way we saw are recorded. An {@link EndReason#ABANDONED} run has
+	 * an ending we are guessing at, and its depth would be whatever the player happened to have
+	 * cleared when we lost sight of them rather than where they stopped. Everything else - a run
+	 * that {@link EndReason#FINISHED} or {@link EndReason#DIED} - stopped at a depth we watched
+	 * them reach.
+	 */
+	private void recordRun(DelveRun ended, int diedOnLevel)
+	{
+		RunRecord record = new RunRecord();
+		record.at = ended.getEndedAt().getEpochSecond();
+		record.delve = ended.lastLevel();
+		record.ticks = ended.isPartial() ? 0 : DoomFormat.toTicks(ended.clearedElapsed());
+		record.end = ended.getEndReason();
+		record.diedOn = Math.max(0, diedOnLevel);
+		record.partial = ended.isPartial();
+		record.loot = Collections.emptyList();
+
+		runHistoryStore.append(record);
+
+		int delve = record.delve;
+		SwingUtilities.invokeLater(() ->
+		{
+			if (historyWindow == null)
+			{
+				return;
+			}
+
+			chartDelves.add(delve);
+			historyWindow.setDelves(chartDelves);
+		});
 	}
 
 	private Double pace(DelveRun target)

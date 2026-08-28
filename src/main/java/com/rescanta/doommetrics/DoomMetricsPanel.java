@@ -2,17 +2,12 @@ package com.rescanta.doommetrics;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.util.Collections;
 import java.util.List;
-import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
-import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
@@ -20,32 +15,14 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 
 /**
- * The side panel: the run in progress on top, and under it the lifetime milestone table.
+ * The side panel: the run in progress on top, the lifetime milestone table under it, and a button
+ * that opens the history window.
  *
  * <p>Everything here runs on the Swing thread. The plugin hands it immutable snapshots rather than
  * live objects, so nothing the client thread is still writing to is ever read from a paint.
  */
 class DoomMetricsPanel extends PluginPanel
 {
-	/** One row of the milestone table, copied out of {@link MilestoneTable} for display. */
-	static final class Row
-	{
-		final int delve;
-		final int kc;
-		final int pbTicks;
-
-		/** Beaten since the client started, so the panel can point at what you just improved. */
-		final boolean improved;
-
-		Row(int delve, int kc, int pbTicks, boolean improved)
-		{
-			this.delve = delve;
-			this.kc = kc;
-			this.pbTicks = pbTicks;
-			this.improved = improved;
-		}
-	}
-
 	/** The three figures mirrored from the overlay, or null when there is no run to show. */
 	static final class Live
 	{
@@ -68,41 +45,24 @@ class DoomMetricsPanel extends PluginPanel
 		}
 	}
 
-	private static final Color STRIPE = new Color(36, 36, 36);
-
-	/**
-	 * How the three columns share the panel width.
-	 *
-	 * <p>Weights only divide the space left over once every cell has its preferred width, so these
-	 * hold their promise only because the whole table is a single grid. Laying each row out on its
-	 * own would let a long personal best in one row push that row's columns off the others.
-	 */
-	private static final double[] COLUMN_WEIGHTS = {0.30, 0.26, 0.44};
-
-	private static final Border CELL_PADDING = new EmptyBorder(2, 4, 2, 4);
-	private static final Border HEADER_PADDING = BorderFactory.createCompoundBorder(
-		BorderFactory.createMatteBorder(0, 0, 1, 0, ColorScheme.MEDIUM_GRAY_COLOR),
-		CELL_PADDING);
-
 	private final JPanel livePanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
-	private final JPanel tablePanel = new JPanel(new GridBagLayout());
+	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("Nothing banked yet.");
 
-	private final JLabel idleLabel = plain("No run in progress", SwingConstants.LEFT);
-	private final JLabel[] liveLeft = {plain("", SwingConstants.LEFT), plain("", SwingConstants.LEFT),
-		plain("", SwingConstants.LEFT)};
-	private final JLabel[] liveRight = {plain("", SwingConstants.RIGHT),
-		plain("", SwingConstants.RIGHT), plain("", SwingConstants.RIGHT)};
+	private final JLabel idleLabel = plain("No run in progress");
+	private final JLabel[] liveLeft = {plain(""), plain(""), plain("")};
+	private final JLabel[] liveRight = {right(""), right(""), right("")};
 
-	DoomMetricsPanel()
+	/** @param onOpenHistory invoked on the Swing thread when the history button is pressed */
+	DoomMetricsPanel(Runnable onOpenHistory)
 	{
 		setBackground(ColorScheme.DARK_GRAY_COLOR);
 		setLayout(new DynamicGridLayout(0, 1, 0, 10));
 
 		livePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		tablePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
 		add(section("Current run", livePanel));
 		add(section("Milestones", tablePanel));
+		add(historyButton(onOpenHistory));
 
 		setLive(null);
 		setRows(Collections.emptyList());
@@ -143,36 +103,22 @@ class DoomMetricsPanel extends PluginPanel
 	}
 
 	/** Rebuilds the milestone table. Called only when a row actually changed. */
-	void setRows(List<Row> rows)
+	void setRows(List<MilestoneTablePanel.Row> rows)
 	{
-		tablePanel.removeAll();
+		tablePanel.setRows(rows);
+	}
 
-		if (rows.isEmpty())
-		{
-			JLabel empty = plain("Nothing banked yet.", SwingConstants.LEFT);
-			empty.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-			empty.setBorder(CELL_PADDING);
-
-			GridBagConstraints constraints = new GridBagConstraints();
-			constraints.fill = GridBagConstraints.HORIZONTAL;
-			constraints.gridwidth = COLUMN_WEIGHTS.length;
-			constraints.weightx = 1;
-			tablePanel.add(empty, constraints);
-		}
-		else
-		{
-			addHeaderRow();
-
-			int index = 0;
-
-			for (Row row : rows)
-			{
-				addDataRow(row, index++);
-			}
-		}
-
-		tablePanel.revalidate();
-		tablePanel.repaint();
+	private static JButton historyButton(Runnable onOpenHistory)
+	{
+		JButton button = new JButton("Open history");
+		button.setFont(FontManager.getRunescapeBoldFont());
+		button.setForeground(ColorScheme.TEXT_COLOR);
+		button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		button.setBorder(new EmptyBorder(6, 8, 6, 8));
+		button.setFocusPainted(false);
+		button.setToolTipText("Show the milestone table and depth per run in their own window");
+		button.addActionListener(event -> onOpenHistory.run());
+		return button;
 	}
 
 	private static JPanel section(String title, JPanel content)
@@ -189,59 +135,6 @@ class DoomMetricsPanel extends PluginPanel
 		return wrapper;
 	}
 
-	private void addHeaderRow()
-	{
-		addRow(0, ColorScheme.DARK_GRAY_COLOR, HEADER_PADDING,
-			bold("Delve", SwingConstants.RIGHT),
-			bold("KC", SwingConstants.RIGHT),
-			bold("PB", SwingConstants.RIGHT));
-	}
-
-	private void addDataRow(Row data, int index)
-	{
-		JLabel delve = plain(Integer.toString(data.delve), SwingConstants.RIGHT);
-		JLabel kc = plain(Integer.toString(data.kc), SwingConstants.RIGHT);
-		JLabel pb = plain(DoomFormat.ticks(data.pbTicks), SwingConstants.RIGHT);
-
-		delve.setForeground(ColorScheme.TEXT_COLOR);
-
-		// A seeded row - reached before the plugin was watching - has nothing measured behind it.
-		kc.setForeground(data.kc == 0 ? ColorScheme.LIGHT_GRAY_COLOR : ColorScheme.TEXT_COLOR);
-		pb.setForeground(data.improved
-			? ColorScheme.PROGRESS_COMPLETE_COLOR
-			: data.pbTicks > 0 ? ColorScheme.TEXT_COLOR : ColorScheme.LIGHT_GRAY_COLOR);
-
-		addRow(index + 1, index % 2 == 0 ? ColorScheme.DARKER_GRAY_COLOR : STRIPE,
-			CELL_PADDING, delve, kc, pb);
-	}
-
-	/**
-	 * Adds one row of cells straight into the shared grid.
-	 *
-	 * <p>The cells carry the row's stripe themselves rather than sitting on a panel that paints it,
-	 * which is what lets every row live in one grid and so line its columns up with every other.
-	 */
-	private void addRow(int gridy, Color background, Border border, JLabel... cells)
-	{
-		GridBagConstraints constraints = new GridBagConstraints();
-		constraints.fill = GridBagConstraints.BOTH;
-		constraints.gridy = gridy;
-
-		// The gap the stripes used to be separated by, now that they tile the row themselves.
-		constraints.insets = new Insets(gridy == 0 ? 0 : 1, 0, 0, 0);
-
-		for (int i = 0; i < cells.length; i++)
-		{
-			cells[i].setOpaque(true);
-			cells[i].setBackground(background);
-			cells[i].setBorder(border);
-
-			constraints.gridx = i;
-			constraints.weightx = COLUMN_WEIGHTS[i];
-			tablePanel.add(cells[i], constraints);
-		}
-	}
-
 	private static JPanel pair(JLabel left, JLabel right, Color background)
 	{
 		JPanel panel = new JPanel(new BorderLayout());
@@ -251,22 +144,20 @@ class DoomMetricsPanel extends PluginPanel
 		return panel;
 	}
 
-	private static JLabel plain(String text, int alignment)
+	private static JLabel plain(String text)
 	{
-		return label(text, alignment, FontManager.getRunescapeSmallFont());
+		return label(text, SwingConstants.LEFT);
 	}
 
-	private static JLabel bold(String text, int alignment)
+	private static JLabel right(String text)
 	{
-		JLabel label = label(text, alignment, FontManager.getRunescapeBoldFont());
-		label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		return label;
+		return label(text, SwingConstants.RIGHT);
 	}
 
-	private static JLabel label(String text, int alignment, Font font)
+	private static JLabel label(String text, int alignment)
 	{
 		JLabel label = new JLabel(text, alignment);
-		label.setFont(font);
+		label.setFont(FontManager.getRunescapeSmallFont());
 		label.setForeground(ColorScheme.TEXT_COLOR);
 		return label;
 	}
