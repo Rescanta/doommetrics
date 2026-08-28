@@ -178,6 +178,18 @@ public class DoomMetricsPlugin extends Plugin
 	private DelveRun lastRun;
 
 	/**
+	 * Set while {@link #run} is being held open across a lost connection, and null the rest of the
+	 * time. See {@link ResumeCheck}.
+	 */
+	private ResumeCheck resumeCheck;
+
+	/**
+	 * The character {@link #run} was started on, so the run is written to their history even if the
+	 * client is logged in as somebody else by the time it ends.
+	 */
+	private String runProfile;
+
+	/**
 	 * When this session logged in, if we were watching at the time. Used to bound the start of a
 	 * run we joined part way through - see {@link DelveRun#pbElapsed()}.
 	 */
@@ -234,6 +246,8 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		run = null;
 		lastRun = null;
+		resumeCheck = null;
+		runProfile = null;
 		loginAt = null;
 		bossCount = 0;
 		ticksWithoutBoss = 0;
@@ -589,7 +603,28 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void handleRuneScapeProfileChanged(RuneScapeProfileChanged event)
 	{
+		closeRunFromAnotherCharacter();
 		loadMilestones();
+	}
+
+	/**
+	 * Closes out a run held open across a lost connection when the client comes back as somebody
+	 * else. Only a held run can still be here to see this - anything else ended before the login
+	 * screen did.
+	 *
+	 * <p>Left alone it would be settled by the alt's delve varplayer, which has nothing to say
+	 * about where the character who made the run got to. It ends where we last saw it instead.
+	 */
+	private void closeRunFromAnotherCharacter()
+	{
+		if (resumeCheck == null || run == null || runProfile == null
+			|| runProfile.equals(runHistoryStore.currentProfile()))
+		{
+			return;
+		}
+
+		log.debug("Back as another character, closing the run held open on the previous one");
+		endRun(EndReason.FINISHED, -1);
 	}
 
 	private void loadMilestones()
@@ -682,8 +717,47 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void handleGameTick(GameTick event)
 	{
+		checkResume();
 		trackAbandonedRun();
 		refreshLive();
+	}
+
+	/**
+	 * Settles a run held open across a lost connection, now that we are back in the world and can
+	 * see where the game has put us. Does nothing until then - game ticks only arrive once we are.
+	 */
+	private void checkResume()
+	{
+		if (resumeCheck == null)
+		{
+			return;
+		}
+
+		if (run == null)
+		{
+			// The delve varp beat us to it and ended the run on the way back in.
+			resumeCheck = null;
+			return;
+		}
+
+		ResumeCheck.Verdict verdict = resumeCheck.onTick(
+			client.getVarpValue(VarPlayerID.DOM_CURRENT_LEVEL_TEMP), run.lastLevel());
+
+		if (verdict == ResumeCheck.Verdict.WAIT)
+		{
+			return;
+		}
+
+		resumeCheck = null;
+
+		if (verdict == ResumeCheck.Verdict.INSIDE)
+		{
+			log.debug("Back inside on delve {}, the run carries on", run.currentLevel());
+			return;
+		}
+
+		log.debug("Back outside the cave, ending the run that was held open");
+		endRun(EndReason.FINISHED, -1);
 	}
 
 	private void trackAbandonedRun()
@@ -726,8 +800,9 @@ public class DoomMetricsPlugin extends Plugin
 		}
 		else if (state == GameState.LOGGED_IN && loginAt == null)
 		{
-			// Deliberately not refreshed on a world hop: the earlier of the two is the safer bound,
-			// and a hop ends any run that was in progress anyway.
+			// Deliberately not refreshed on a world hop, which never clears this: the earlier of
+			// the two logins is the safer bound. A run held open across a dropped connection is
+			// unaffected either way - it took its anchor when it started, and nothing moves it.
 			loginAt = Instant.now();
 
 			// In case the varp flood landed before the profile was ready.
@@ -742,18 +817,20 @@ public class DoomMetricsPlugin extends Plugin
 			ticksWithoutBoss = 0;
 		}
 
-		// Leaving the world ends the run outright: the game drops you outside the entrance and will
-		// not let you pick the delve back up, so there is nothing to come back to whether you
-		// hopped, logged out, or dropped. The depth reached is exact, so it counts as an exit.
+		// Leaving the world holds the run open rather than ending it, because leaving the world is
+		// not the same as leaving the cave.
 		//
-		// On a clean hop or logout the game clears DOM_CURRENT_LEVEL_TEMP as it puts you outside,
-		// and that lands first, so the run is already over by the time we get here. This is the
-		// backstop for a connection that drops without one - the varp never arrives, and without
-		// this the run would be lost.
-		if (run != null && (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING
-			|| state == GameState.CONNECTION_LOST))
+		// On a clean hop or logout the game clears DOM_CURRENT_LEVEL_TEMP as it puts you outside
+		// the entrance, and that lands first, so those runs are already over by the time we get
+		// here and this sees nothing. What reaches here is the connection that went without one,
+		// and that can still go either way: get back quickly enough and you are in the delve you
+		// were already in, with the run worth carrying on. ResumeCheck settles which, once we are
+		// logged in again and can see where the game has put us.
+		if (run != null && resumeCheck == null && (state == GameState.LOGIN_SCREEN
+			|| state == GameState.HOPPING || state == GameState.CONNECTION_LOST))
 		{
-			endRun(EndReason.FINISHED, -1);
+			resumeCheck = new ResumeCheck();
+			log.debug("Left the world on delve {}, holding the run open", run.currentLevel());
 		}
 
 		// Ticks stop at the login screen, so the panel would otherwise keep the stale run on show.
@@ -802,6 +879,8 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		run = new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null);
 		lastRun = null;
+		resumeCheck = null;
+		runProfile = runHistoryStore.currentProfile();
 		// Give the boss the full grace period to appear, whatever the counter was doing before.
 		ticksWithoutBoss = 0;
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
@@ -831,6 +910,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		DelveRun ended = run;
 		run = null;
+		resumeCheck = null;
 
 		if (ended == null)
 		{
@@ -1047,7 +1127,8 @@ public class DoomMetricsPlugin extends Plugin
 		record.partial = ended.isPartial();
 		record.loot = ended.getLoot();
 
-		runHistoryStore.append(record);
+		runHistoryStore.append(record,
+			runProfile != null ? runProfile : runHistoryStore.currentProfile());
 
 		int delve = record.delve;
 		SwingUtilities.invokeLater(() ->

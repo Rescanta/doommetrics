@@ -61,18 +61,27 @@ class RunHistoryStore
 	/** Whether a character is logged in, and so whether there is a file to read or write. */
 	boolean hasProfile()
 	{
-		return configManager.getRSProfileKey() != null;
+		return currentProfile() != null;
+	}
+
+	/** The character the client is on, or null when nobody is logged in. */
+	String currentProfile()
+	{
+		return configManager.getRSProfileKey();
 	}
 
 	/**
-	 * Appends one run to the current character's history.
+	 * Appends one run to the named character's history.
 	 *
-	 * <p>The file is resolved on the calling thread, so a profile change racing the write cannot
-	 * land the record under the wrong character.
+	 * <p>The caller names the character rather than letting this read whoever is logged in now,
+	 * because the two are not always the same. A run can outlive the login it was made on - one
+	 * interrupted by a dropped connection is held open until we can see where the player came back
+	 * to - and if they came back as somebody else, the run still belongs to the character who made
+	 * it. Resolving the file here would file it under the alt.
 	 */
-	void append(RunRecord record)
+	void append(RunRecord record, String profileKey)
 	{
-		File file = currentFile();
+		File file = fileFor(profileKey);
 
 		if (file == null)
 		{
@@ -105,8 +114,12 @@ class RunHistoryStore
 
 	private File currentFile()
 	{
-		String profile = configManager.getRSProfileKey();
-		return profile == null ? null : new File(directory, fileName(profile));
+		return fileFor(currentProfile());
+	}
+
+	private File fileFor(String profileKey)
+	{
+		return profileKey == null ? null : new File(directory, fileName(profileKey));
 	}
 
 	private void appendLine(File file, String line)
