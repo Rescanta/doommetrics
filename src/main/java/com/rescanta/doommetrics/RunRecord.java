@@ -54,8 +54,12 @@ class RunRecord
 	boolean incomplete;
 
 	/**
-	 * The unique drops from this run, by name. Empty until drop detection lands; the field is
-	 * written now so records from before then are the same shape as the ones after.
+	 * The notable drops from this run, by name, in the order they were seen. Empty for the many
+	 * runs that produce none.
+	 *
+	 * <p>Only the drops that make a trip worth remembering are listed, not every item claimed -
+	 * the supplies and currency are noise here. A drop earned twice on one trip is listed twice,
+	 * since a deep run really can roll the same unique more than once.
 	 */
 	List<String> loot;
 }

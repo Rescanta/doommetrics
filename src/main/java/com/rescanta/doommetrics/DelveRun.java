@@ -4,7 +4,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * One trip into the Doom of Mokhaiotl, from entering the cave until the player leaves or dies.
@@ -44,6 +46,32 @@ class DelveRun
 	}
 
 	private final List<Split> splits = new ArrayList<>();
+
+	/**
+	 * How many of each notable drop this trip earned, keyed by item id and in the order each was
+	 * first seen. A deep run really can roll the same unique twice, so these are counts rather
+	 * than a set.
+	 *
+	 * <p>Each count is the most the loot pile has been seen holding, not a running total of what
+	 * has been added to it. That is what makes the sources safe to overlap: the pile is read both
+	 * when the claim is clicked and when the game's claim script fires, and the pet arrives as a
+	 * chat line as well as possibly an item. Summing those reads would count one drop several
+	 * times over. Taking the largest cannot, because the pile never holds more than the run
+	 * earned.
+	 */
+	private final Map<Integer, Drop> loot = new LinkedHashMap<>();
+
+	private static final class Drop
+	{
+		private final String name;
+		private int quantity;
+
+		private Drop(String name, int quantity)
+		{
+			this.name = name;
+			this.quantity = quantity;
+		}
+	}
 
 	private Instant startedAt;
 
@@ -109,6 +137,51 @@ class DelveRun
 		lastClearedAt = at;
 		currentLevel = level + 1;
 		return split;
+	}
+
+	/**
+	 * Notes that this trip has been seen holding {@code quantity} of a notable drop.
+	 *
+	 * <p>Reporting the same quantity again leaves the run as it was, so a caller never has to know
+	 * whether another source got there first. Reporting a larger one raises the count: that is how
+	 * a second cloth out of a deeper delve gets counted, and it is the only way a count ever moves.
+	 */
+	void recordLoot(int itemId, String name, int quantity)
+	{
+		if (name == null || quantity <= 0)
+		{
+			return;
+		}
+
+		Drop drop = loot.get(itemId);
+
+		if (drop == null)
+		{
+			loot.put(itemId, new Drop(name, quantity));
+		}
+		else if (quantity > drop.quantity)
+		{
+			drop.quantity = quantity;
+		}
+	}
+
+	/**
+	 * The notable drops from this trip, by name, in the order each was first seen. A drop earned
+	 * twice is listed twice - the names are the record, so the count has to live in them.
+	 */
+	List<String> getLoot()
+	{
+		List<String> names = new ArrayList<>();
+
+		for (Drop drop : loot.values())
+		{
+			for (int i = 0; i < drop.quantity; i++)
+			{
+				names.add(drop.name);
+			}
+		}
+
+		return names;
 	}
 
 	void end(EndReason reason, Instant at, int diedOnLevel)
