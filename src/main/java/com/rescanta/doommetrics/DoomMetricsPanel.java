@@ -45,12 +45,36 @@ class DoomMetricsPanel extends PluginPanel
 		}
 	}
 
+	/**
+	 * The two deep delve rates, already formatted. Either may be {@code "-"}: the session has no
+	 * answer until a run banks a deep delve, and neither has a brand new character.
+	 */
+	static final class Rates
+	{
+		final String session;
+		final String sessionTooltip;
+		final String lifetime;
+		final String lifetimeTooltip;
+
+		Rates(String session, String sessionTooltip, String lifetime, String lifetimeTooltip)
+		{
+			this.session = session;
+			this.sessionTooltip = sessionTooltip;
+			this.lifetime = lifetime;
+			this.lifetimeTooltip = lifetimeTooltip;
+		}
+	}
+
 	private final JPanel livePanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
+	private final JPanel ratesPanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
 	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("Nothing banked yet.");
 
 	private final JLabel idleLabel = plain("No run in progress");
 	private final JLabel[] liveLeft = {plain(""), plain(""), plain("")};
 	private final JLabel[] liveRight = {right(""), right(""), right("")};
+
+	private final JLabel sessionValue = right("-");
+	private final JLabel lifetimeValue = right("-");
 
 	/** @param onOpenHistory invoked on the Swing thread when the history button is pressed */
 	DoomMetricsPanel(Runnable onOpenHistory)
@@ -60,12 +84,35 @@ class DoomMetricsPanel extends PluginPanel
 
 		livePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
+		// Built once and only ever retexted, unlike the live section - these two rows are always
+		// the same two rows, so there is nothing for a rebuild to change.
+		ratesPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		ratesPanel.add(pair(rateLabel("Session"), sessionValue, ColorScheme.DARK_GRAY_COLOR));
+		ratesPanel.add(pair(rateLabel("Lifetime"), lifetimeValue, ColorScheme.DARK_GRAY_COLOR));
+
 		add(section("Current run", livePanel));
+		add(section("Deep delve rate", ratesPanel));
 		add(section("Milestones", tablePanel));
 		add(historyButton(onOpenHistory));
 
 		setLive(null);
+		setRates(null);
 		setRows(Collections.emptyList());
+	}
+
+	/** Repaints the two rate figures. A null snapshot blanks both. */
+	void setRates(Rates rates)
+	{
+		apply(sessionValue, rates == null ? null : rates.session,
+			rates == null ? null : rates.sessionTooltip);
+		apply(lifetimeValue, rates == null ? null : rates.lifetime,
+			rates == null ? null : rates.lifetimeTooltip);
+	}
+
+	private static void apply(JLabel label, String value, String tooltip)
+	{
+		label.setText(value == null ? "-" : value);
+		label.setToolTipText(tooltip);
 	}
 
 	/** Repaints the three live figures. A null snapshot collapses the section to one idle line. */
@@ -106,6 +153,13 @@ class DoomMetricsPanel extends PluginPanel
 	void setRows(List<MilestoneTablePanel.Row> rows)
 	{
 		tablePanel.setRows(rows);
+	}
+
+	private static JLabel rateLabel(String text)
+	{
+		JLabel label = plain(text);
+		label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		return label;
 	}
 
 	private static JButton historyButton(Runnable onOpenHistory)

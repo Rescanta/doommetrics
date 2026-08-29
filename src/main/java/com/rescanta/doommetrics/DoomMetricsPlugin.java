@@ -116,6 +116,20 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private static final long SLOW_HANDLER_NANOS = Duration.ofMillis(5).toNanos();
 
+	/**
+	 * How long a gap between runs ends the session.
+	 *
+	 * <p>A session is a sitting, not a login: banking, restocking and walking back are all part of
+	 * the sitting, and a run started straight after the last one carries on the same figure. Half
+	 * an hour is long enough that nothing you do between two runs will break it, and short enough
+	 * that coming back to the game tomorrow starts you clean rather than averaging you against
+	 * yesterday.
+	 *
+	 * <p>This only decides which runs share a session figure. Nothing is lost when one ends - every
+	 * run is banked to the lifetime total as it finishes, whatever session it belonged to.
+	 */
+	private static final Duration SESSION_IDLE = Duration.ofMinutes(30);
+
 	@Inject
 	private Client client;
 
@@ -136,6 +150,9 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Inject
 	private MilestoneStore milestoneStore;
+
+	@Inject
+	private TotalsStore totalsStore;
 
 	@Inject
 	private RunHistoryStore runHistoryStore;
@@ -171,6 +188,21 @@ public class DoomMetricsPlugin extends Plugin
 
 	/** Milestones whose personal best has been beaten since the client started. */
 	private final Set<Integer> improvedThisSession = new HashSet<>();
+
+	/** This character's lifetime deep delve rate, reloaded whenever the profile changes. */
+	private DelveTotals lifetime = new DelveTotals();
+
+	/** The runs of the current sitting. See {@link #SESSION_IDLE}. */
+	private DelveTotals session = new DelveTotals();
+
+	/**
+	 * When the session's most recent run ended, or null while one is in progress or before the
+	 * session has any run in it at all. What {@link #SESSION_IDLE} is measured from.
+	 */
+	private Instant sessionEndedAt;
+
+	/** The character the session belongs to, so an alt's runs never join it. */
+	private String sessionProfile;
 
 	private DelveRun run;
 
@@ -224,6 +256,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		reset();
 		loadMilestones();
+		loadTotals();
 	}
 
 	@Override
@@ -251,6 +284,9 @@ public class DoomMetricsPlugin extends Plugin
 		loginAt = null;
 		bossCount = 0;
 		ticksWithoutBoss = 0;
+		session = new DelveTotals();
+		sessionEndedAt = null;
+		sessionProfile = null;
 	}
 
 	/**
@@ -605,6 +641,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		closeRunFromAnotherCharacter();
 		loadMilestones();
+		loadTotals();
 	}
 
 	/**
@@ -641,6 +678,48 @@ public class DoomMetricsPlugin extends Plugin
 		improvedThisSession.clear();
 		seedFromDeepestLevel();
 		refreshTable();
+	}
+
+	private void loadTotals()
+	{
+		if (!totalsStore.hasProfile())
+		{
+			// Logged out, so there is no character to read. Leave the last figure on show rather
+			// than blanking the panel the moment you log out.
+			return;
+		}
+
+		DelveTotals loaded = totalsStore.load();
+		lifetime = loaded == null ? new DelveTotals() : loaded;
+		startSessionForCurrentCharacter();
+		refreshLive();
+	}
+
+	/**
+	 * Starts the session over when the client comes back as a different character.
+	 *
+	 * <p>Every other figure in the panel is the logged in character's own, and a session rate that
+	 * had quietly summed two players' runs together would belong to neither of them. Only a change
+	 * of character does this - logging the same one back in carries the sitting on, which is the
+	 * point of measuring the gap in wall clock rather than in logins.
+	 */
+	private void startSessionForCurrentCharacter()
+	{
+		String profile = runHistoryStore.currentProfile();
+
+		if (profile == null || profile.equals(sessionProfile))
+		{
+			return;
+		}
+
+		if (sessionProfile != null)
+		{
+			log.debug("New character, starting the session rate over");
+		}
+
+		sessionProfile = profile;
+		session = new DelveTotals();
+		sessionEndedAt = null;
 	}
 
 	/**
@@ -883,7 +962,84 @@ public class DoomMetricsPlugin extends Plugin
 		runProfile = runHistoryStore.currentProfile();
 		// Give the boss the full grace period to appear, whatever the counter was doing before.
 		ticksWithoutBoss = 0;
+		openSession();
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
+	}
+
+	/**
+	 * Puts the run about to start into a session: the one already going if the last run was recent
+	 * enough, or a fresh one if the player has been away longer than {@link #SESSION_IDLE}.
+	 */
+	private void openSession()
+	{
+		startSessionForCurrentCharacter();
+
+		if (sessionEndedAt != null && !sessionAlive(Instant.now()))
+		{
+			log.debug("Session lapsed, starting the session rate over");
+			session = new DelveTotals();
+		}
+
+		// Cleared either way: a run is in progress, so there is no idle gap to be measuring.
+		sessionEndedAt = null;
+	}
+
+	/** Whether the last run ended recently enough that the session it belonged to is still going. */
+	private boolean sessionAlive(Instant now)
+	{
+		return sessionEndedAt != null
+			&& Duration.between(sessionEndedAt, now).compareTo(SESSION_IDLE) < 0;
+	}
+
+	/**
+	 * Adds a finished run to the session and lifetime rates.
+	 *
+	 * <p>Every run counts, including the ones the history file leaves out. An {@link
+	 * EndReason#ABANDONED} run is one we lost sight of rather than one that did not happen: the
+	 * delves it banked and the time it took to bank them are both real up to the last clear we saw,
+	 * and that pair is exactly what a rate is made of. A partial run is charged the deliberately
+	 * pessimistic span its personal bests are measured over - see {@link DelveRun#pbElapsed()} - so
+	 * joining a trip half way through can only ever drag the rate down, never flatter it.
+	 *
+	 * <p>A run that never banked a clear is left out entirely. There is no time to charge for it:
+	 * the span every figure here is built on ends at the last clear, and it has none.
+	 */
+	private void bankRun(DelveRun ended)
+	{
+		// Whatever came of the run, the sitting's idle clock restarts from the moment it ended.
+		sessionEndedAt = ended.getEndedAt();
+
+		if (ended.lastLevel() == 0)
+		{
+			return;
+		}
+
+		int deep = ended.deepCleared(config.deepDelveLevel());
+		long ticks = DoomFormat.toTicks(ended.pbElapsed());
+
+		if (ticks <= 0)
+		{
+			return;
+		}
+
+		session.add(deep, ticks);
+
+		// The lifetime figure can only be written to the character that is logged in, and a run
+		// held open across a lost connection can outlive the login that made it. Rather than file
+		// somebody else's delves against this character, such a run is left in the session figure
+		// alone - and the session is started over for the new character on its way past anyway.
+		if (!totalsStore.hasProfile()
+			|| (runProfile != null && !runProfile.equals(runHistoryStore.currentProfile())))
+		{
+			log.debug("Not banking the run to a lifetime total - it belongs to another character");
+			return;
+		}
+
+		lifetime.add(deep, ticks);
+		totalsStore.save(lifetime);
+
+		log.debug("Banked {} deep delves in {} ticks (session {}/{}, lifetime {}/{})",
+			deep, ticks, session.deep, session.ticks, lifetime.deep, lifetime.ticks);
 	}
 
 	/**
@@ -919,6 +1075,10 @@ public class DoomMetricsPlugin extends Plugin
 
 		ended.end(reason, Instant.now(), diedOnLevel);
 		log.debug("Doom run ended: {} after {} delves", reason, ended.lastLevel());
+
+		// Ahead of the abandoned check: a run we lost sight of still banked the delves we watched
+		// it bank, even though its ending is too uncertain to write down as history.
+		bankRun(ended);
 
 		if (reason == EndReason.ABANDONED)
 		{
@@ -974,17 +1134,66 @@ public class DoomMetricsPlugin extends Plugin
 
 		DelveRun display = getDisplayRun();
 		DoomMetricsPanel.Live live = display == null ? null : liveSnapshot(display);
-		String key = live == null ? "" : String.join("|", live.delveLabel, live.delveValue,
-			live.timeLabel, live.timeValue, live.paceLabel, live.paceValue);
+		DoomMetricsPanel.Rates rates = ratesSnapshot();
+		String key = (live == null ? "" : String.join("|", live.delveLabel, live.delveValue,
+			live.timeLabel, live.timeValue, live.paceLabel, live.paceValue))
+			+ "|" + rates.session + "|" + rates.lifetime;
 
-		// The timer only moves once a second, so most ticks have nothing to redraw.
+		// The timer only moves once a second, so most ticks have nothing to redraw. The two rates
+		// move less again - neither can change until a delve is cleared or a run ends.
 		if (key.equals(lastLiveKey))
 		{
 			return;
 		}
 
 		lastLiveKey = key;
-		SwingUtilities.invokeLater(() -> target.setLive(live));
+		SwingUtilities.invokeLater(() ->
+		{
+			target.setLive(live);
+			target.setRates(rates);
+		});
+	}
+
+	/**
+	 * The two deep delve rates, as strings for the panel to draw.
+	 *
+	 * <p>The session figure counts the run in progress as it goes, rather than waiting for it to
+	 * end. It is built from the same two numbers the run would be banked with, so what the panel
+	 * shows during a run is what banking it will leave behind, and a sitting holding one run reads
+	 * exactly what that run's Run pace does.
+	 */
+	private DoomMetricsPanel.Rates ratesSnapshot()
+	{
+		Instant now = Instant.now();
+		DelveTotals live;
+
+		if (run != null)
+		{
+			live = session.plus(run.deepCleared(config.deepDelveLevel()),
+				DoomFormat.toTicks(run.pbElapsed()));
+		}
+		else
+		{
+			// Between sittings there is no session to report on, so the row goes blank rather than
+			// leaving this morning's rate up as though it were still being earned.
+			live = sessionAlive(now) ? session : null;
+		}
+
+		return new DoomMetricsPanel.Rates(
+			live == null ? null : DoomFormat.pace(live.kph()),
+			live == null ? null : tooltip(live),
+			DoomFormat.pace(lifetime.kph()),
+			tooltip(lifetime));
+	}
+
+	/** What a rate is made of, so the figure above it can be checked rather than taken on trust. */
+	private static String tooltip(DelveTotals totals)
+	{
+		return totals.isEmpty()
+			? "Nothing banked yet"
+			: String.format("%d deep %s in %s of run time",
+				totals.deep, totals.deep == 1 ? "delve" : "delves",
+				DoomFormat.tickDuration(totals.ticks));
 	}
 
 	/** The overlay's three rows, as strings, for the panel to draw. */

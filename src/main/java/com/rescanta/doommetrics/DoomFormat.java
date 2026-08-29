@@ -60,4 +60,13 @@ final class DoomFormat
 	{
 		return ticks <= 0 ? "-" : preciseDuration(Duration.ofMillis(ticks * TICK_MILLIS));
 	}
+
+	/**
+	 * A span of ticks as hours, minutes and seconds. Used for the summed run time behind a rate,
+	 * where the tenth {@link #ticks} shows would be noise against a total measured in hours.
+	 */
+	static String tickDuration(long ticks)
+	{
+		return ticks <= 0 ? "-" : duration(Duration.ofMillis(ticks * TICK_MILLIS));
+	}
 }
