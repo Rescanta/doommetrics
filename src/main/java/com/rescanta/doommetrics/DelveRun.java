@@ -270,12 +270,31 @@ class DelveRun
 	}
 
 	/**
+	 * How many delves at or past {@code fromLevel} this run banked - what a deep delve rate counts,
+	 * whether that rate covers this run alone or a lifetime of them.
+	 */
+	int deepCleared(int fromLevel)
+	{
+		int deep = 0;
+
+		for (Split split : splits)
+		{
+			if (split.level >= fromLevel)
+			{
+				deep++;
+			}
+		}
+
+		return deep;
+	}
+
+	/**
 	 * Deep delves banked per hour of run time, counting the shallow delves against you.
 	 * Delve 8 counts towards the numerator even though it is excluded from {@link #deepPace}.
 	 */
 	Double runPace(int deepDelveLevel)
 	{
-		long deep = splits.stream().filter(s -> s.level >= deepDelveLevel).count();
+		int deep = deepCleared(deepDelveLevel);
 		double seconds = clearedElapsed().toMillis() / 1000.0;
 
 		if (deep == 0 || seconds <= 0)
