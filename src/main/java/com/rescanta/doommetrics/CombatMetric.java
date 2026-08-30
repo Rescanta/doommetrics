@@ -1,5 +1,7 @@
 package com.rescanta.doommetrics;
 
+import java.awt.Color;
+
 /**
  * The sustain and burst figures tracked across a delve, a sitting and a lifetime.
  *
@@ -29,42 +31,74 @@ enum CombatMetric
 	/** Which heading a metric sits under, so the panel groups like with like. */
 	enum Group
 	{
-		SPELL_HEAL("Spell healing"),
-		SPEC_HEAL("Spec healing"),
-		PRAYER("Prayer restored"),
-		DAMAGE("Spec damage");
+		SPELL_HEAL("Spell healing", Unit.HITPOINTS),
+		SPEC_HEAL("Spec healing", Unit.HITPOINTS),
+		PRAYER("Prayer restored", Unit.PRAYER),
+		DAMAGE("Spec damage", Unit.DAMAGE);
 
 		private final String heading;
+		private final Unit unit;
 
-		Group(String heading)
+		Group(String heading, Unit unit)
 		{
 			this.heading = heading;
+			this.unit = unit;
 		}
 
 		String heading()
 		{
 			return heading;
 		}
+
+		/**
+		 * What the group's figures are counted in. Every metric under a heading shares it, which
+		 * is what makes a combined line addable at all - and what lets that line be drawn in the
+		 * same colour as the separate lines it stands in for.
+		 */
+		Unit unit()
+		{
+			return unit;
+		}
 	}
 
 	/** What a metric is counted in. Two metrics only share a chart axis if they share a unit. */
 	enum Unit
 	{
-		HITPOINTS("hitpoints healed"),
-		PRAYER("prayer points restored"),
-		DAMAGE("damage dealt");
+		HITPOINTS("hitpoints healed", new Color(0xFF6B6B)),
+		PRAYER("prayer points restored", new Color(0x6FB7FF)),
+		DAMAGE("damage dealt", new Color(0xFFC145));
 
 		private final String description;
+		private final Color color;
 
-		Unit(String description)
+		Unit(String description, Color color)
 		{
 			this.description = description;
+			this.color = color;
 		}
 
 		/** What a number in this unit is, spelled out - "1,204 hitpoints healed". */
 		String description()
 		{
 			return description;
+		}
+
+		/**
+		 * The colour every figure counted in this unit is drawn in, on the overlay and in the
+		 * panel's table alike.
+		 *
+		 * <p>Hung on the unit rather than on the metric because what is worth telling apart at a
+		 * glance is what a number measures, not what produced it: eight counters in eight colours
+		 * is a legend to memorise, whereas three say outright that this line is hitpoints, that
+		 * one is prayer and that one is damage. Sources within a unit are told apart by their
+		 * labels, which is what the labels are there for.
+		 *
+		 * <p>Kept light enough to carry on RuneLite's dark panel and on the overlay's translucent
+		 * background, and clear of the muted grey a zero is drawn in.
+		 */
+		Color color()
+		{
+			return color;
 		}
 	}
 
