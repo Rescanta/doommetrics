@@ -2,6 +2,7 @@ package com.rescanta.doommetrics;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import javax.swing.JButton;
@@ -46,6 +47,41 @@ class DoomMetricsPanel extends PluginPanel
 			this.timeValue = timeValue;
 			this.paceLabel = paceLabel;
 			this.paceValue = paceValue;
+		}
+
+		/**
+		 * The three live rows of a run, formatted for drawing. The overlay draws the same figures
+		 * itself from the run; this is the panel's copy of them.
+		 */
+		static Live of(DelveRun display, PaceMode mode)
+		{
+			String delveLabel;
+			String delveValue;
+
+			if (!display.isFinished())
+			{
+				delveLabel = "Delve";
+				delveValue = Integer.toString(display.currentLevel());
+			}
+			else if (display.getEndReason() == EndReason.DIED)
+			{
+				delveLabel = "Died on";
+				delveValue = "Delve " + display.getDiedOnLevel();
+			}
+			else
+			{
+				delveLabel = "Cleared";
+				delveValue = Integer.toString(display.lastLevel());
+			}
+
+			return new Live(
+				delveLabel,
+				delveValue,
+				// The asterisk marks a run we joined part way through, whose start time is a guess.
+				display.isPartial() ? "Time*" : "Time",
+				DoomFormat.duration(display.displayElapsed(Instant.now())),
+				mode.toString(),
+				DoomFormat.pace(display.pace(mode)));
 		}
 	}
 

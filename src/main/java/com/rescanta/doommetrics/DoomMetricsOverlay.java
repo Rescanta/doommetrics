@@ -28,8 +28,9 @@ class DoomMetricsOverlay extends OverlayPanel
 	private final DoomMetricsPlugin plugin;
 	private final DoomMetricsConfig config;
 
+	/** Package-private rather than private so the preview harness can build one without Guice. */
 	@Inject
-	private DoomMetricsOverlay(DoomMetricsPlugin plugin, DoomMetricsConfig config)
+	DoomMetricsOverlay(DoomMetricsPlugin plugin, DoomMetricsConfig config)
 	{
 		super(plugin);
 		this.plugin = plugin;
