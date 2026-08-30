@@ -73,6 +73,12 @@ class DelveRun
 		}
 	}
 
+	/**
+	 * What this trip's gear and spellbook gave back: healing, prayer and spec damage, by source.
+	 * See {@link CombatTracker} for what does and does not get counted.
+	 */
+	private final CombatTotals combat = new CombatTotals();
+
 	private Instant startedAt;
 
 	/** True when the run was already underway when we started watching, so times are incomplete. */
@@ -182,6 +188,21 @@ class DelveRun
 		}
 
 		return names;
+	}
+
+	/** Credits an attributed heal, prayer restore or spec hit to this trip. */
+	void recordCombat(CombatMetric metric, long amount)
+	{
+		combat.add(metric, amount);
+	}
+
+	/**
+	 * This trip's combat tally. Live while the run is, so the panel reads what has been counted so
+	 * far rather than waiting for the trip to end.
+	 */
+	CombatTotals getCombat()
+	{
+		return combat;
 	}
 
 	void end(EndReason reason, Instant at, int diedOnLevel)

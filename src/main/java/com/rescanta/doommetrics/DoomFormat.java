@@ -38,6 +38,49 @@ final class DoomFormat
 			: String.format(Locale.US, "%d:%02d.%d", minutes, seconds, tenths % 10);
 	}
 
+	/**
+	 * A plain count with thousands separated, for anywhere there is room to read the whole number.
+	 * A lifetime of delving reaches seven figures of damage, and {@code 1,204,318} is legible where
+	 * {@code 1204318} is not.
+	 */
+	static String count(long value)
+	{
+		return String.format(Locale.US, "%,d", value);
+	}
+
+	/**
+	 * A count shortened to three or four characters, for a chart's gridline labels where the
+	 * separated form would not fit.
+	 *
+	 * <p>Deliberately truncating rather than rounding: a gridline is a floor the dots above it are
+	 * read against, and {@code 12k} rounded up from 12,600 would sit above dots it is meant to sit
+	 * under. One decimal is kept below ten thousand, where the step between gridlines is often
+	 * small enough that whole thousands would repeat a label.
+	 */
+	static String compact(long value)
+	{
+		long magnitude = Math.abs(value);
+
+		if (magnitude < 1_000)
+		{
+			return Long.toString(value);
+		}
+
+		if (magnitude < 10_000)
+		{
+			return String.format(Locale.US, "%.1fk", value / 100 / 10d);
+		}
+
+		if (magnitude < 1_000_000)
+		{
+			return value / 1_000 + "k";
+		}
+
+		return magnitude < 10_000_000
+			? String.format(Locale.US, "%.1fm", value / 100_000 / 10d)
+			: value / 1_000_000 + "m";
+	}
+
 	static String pace(Double perHour)
 	{
 		return perHour == null ? "-" : String.format(Locale.US, "%.1f/hr", perHour);

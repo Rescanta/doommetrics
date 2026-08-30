@@ -67,6 +67,7 @@ class DoomMetricsPanel extends PluginPanel
 
 	private final JPanel livePanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
 	private final JPanel ratesPanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
+	private final CombatTablePanel combatPanel = new CombatTablePanel();
 	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("Nothing banked yet.");
 
 	private final JLabel idleLabel = plain("No run in progress");
@@ -92,11 +93,15 @@ class DoomMetricsPanel extends PluginPanel
 
 		add(section("Current run", livePanel));
 		add(section("Deep delve rate", ratesPanel));
+		// Above the milestone table, where it is read against the run in progress rather than
+		// against a lifetime of them - the figures here are this sitting's, not the character's.
+		add(section("This session", combatPanel));
 		add(section("Milestones", tablePanel));
 		add(historyButton(onOpenHistory));
 
 		setLive(null);
 		setRates(null);
+		setCombat(null);
 		setRows(Collections.emptyList());
 	}
 
@@ -147,6 +152,16 @@ class DoomMetricsPanel extends PluginPanel
 
 		livePanel.revalidate();
 		livePanel.repaint();
+	}
+
+	/**
+	 * Repaints the sitting's combat figures, the run in progress included. A null tally reads as
+	 * all zeroes - between sittings there is nothing being earned, and that is not the same as
+	 * leaving this morning's numbers up as though there were.
+	 */
+	void setCombat(CombatTotals totals)
+	{
+		combatPanel.setTotals(totals);
 	}
 
 	/** Rebuilds the milestone table. Called only when a row actually changed. */
