@@ -16,38 +16,50 @@ import java.awt.Color;
  */
 enum CombatMetric
 {
-	BLOOD_BARRAGE_HEAL(Group.SPELL_HEAL, "bloodBarrage", "Blood barrage", "Blood barrage heal", Unit.HITPOINTS),
-	OTHER_SPELL_HEAL(Group.SPELL_HEAL, "otherSpell", "Other spells", "Other spell heal", Unit.HITPOINTS),
+	BLOOD_BARRAGE_HEAL(Group.SPELL_HEAL, "bloodBarrage", "Blood barrage", "Barrage", Unit.HITPOINTS),
+	OTHER_SPELL_HEAL(Group.SPELL_HEAL, "otherSpell", "Other spells", "Other spells", Unit.HITPOINTS),
 
-	AGS_HEAL(Group.SPEC_HEAL, "agsHeal", "Ancient godsword", "AGS heal", Unit.HITPOINTS),
-	BLOWPIPE_HEAL(Group.SPEC_HEAL, "bpHeal", "Blowpipe", "Blowpipe heal", Unit.HITPOINTS),
-	OTHER_SPEC_HEAL(Group.SPEC_HEAL, "otherSpecHeal", "Other specs", "Other spec heal", Unit.HITPOINTS),
+	AGS_HEAL(Group.SPEC_HEAL, "agsHeal", "Ancient godsword", "AGS", Unit.HITPOINTS),
+	BLOWPIPE_HEAL(Group.SPEC_HEAL, "bpHeal", "Blowpipe", "BP", Unit.HITPOINTS),
+	OTHER_SPEC_HEAL(Group.SPEC_HEAL, "otherSpecHeal", "Other specs", "Other specs", Unit.HITPOINTS),
 
-	ELDRITCH_PRAYER(Group.PRAYER, "eldritchPrayer", "Eldritch staff", "Eldritch prayer", Unit.PRAYER),
+	ELDRITCH_PRAYER(Group.PRAYER, "eldritchPrayer", "Eldritch staff", "Eldritch", Unit.PRAYER),
 
-	ZCB_DAMAGE(Group.DAMAGE, "zcbDamage", "Zaryte crossbow", "ZCB damage", Unit.DAMAGE),
-	OTHER_SPEC_DAMAGE(Group.DAMAGE, "otherSpecDamage", "Other specs", "Other spec damage", Unit.DAMAGE);
+	ZCB_DAMAGE(Group.DAMAGE, "zcbDamage", "Zaryte crossbow", "ZCB", Unit.DAMAGE),
+	OTHER_SPEC_DAMAGE(Group.DAMAGE, "otherSpecDamage", "Other specs", "Other dmg", Unit.DAMAGE);
 
 	/** Which heading a metric sits under, so the panel groups like with like. */
 	enum Group
 	{
-		SPELL_HEAL("Spell healing", Unit.HITPOINTS),
-		SPEC_HEAL("Spec healing", Unit.HITPOINTS),
-		PRAYER("Prayer restored", Unit.PRAYER),
-		DAMAGE("Spec damage", Unit.DAMAGE);
+		SPELL_HEAL("Spell healing", "Spell heals", Unit.HITPOINTS),
+		SPEC_HEAL("Spec healing", "Spec heals", Unit.HITPOINTS),
+		PRAYER("Prayer restored", "Prayer", Unit.PRAYER),
+		DAMAGE("Spec damage", "Spec dmg", Unit.DAMAGE);
 
 		private final String heading;
+		private final String overlayHeading;
 		private final Unit unit;
 
-		Group(String heading, Unit unit)
+		Group(String heading, String overlayHeading, Unit unit)
 		{
 			this.heading = heading;
+			this.overlayHeading = overlayHeading;
 			this.unit = unit;
 		}
 
 		String heading()
 		{
 			return heading;
+		}
+
+		/**
+		 * How the group reads on the overlay when its metrics are drawn as one line - shorter than
+		 * the panel's heading for the same reason {@link #overlayLabel()} is, and kept honest by
+		 * the same measure.
+		 */
+		String overlayHeading()
+		{
+			return overlayHeading;
 		}
 
 		/**
@@ -140,10 +152,20 @@ enum CombatMetric
 	 * How the metric reads on the overlay, where the lines stand on their own with no heading over
 	 * them and no room for one.
 	 *
-	 * <p>Says what is being counted as well as what caused it, because the cause alone does not
-	 * settle it: an ancient godsword spec both heals and hits, "Other specs" is a row under two
-	 * different headings, and a blood barrage that healed 400 and one that dealt 400 are the same
-	 * three words otherwise.
+	 * <p>Short, because the whole row - the label, the figure and the space between them - has to
+	 * fit the width every overlay in the client starts at, with the widest figure a run can put on
+	 * a counter beside it: five figures, which nothing a delve can do exceeds.
+	 *
+	 * <p>A label that does not fit is not merely cramped. The panel wraps it onto a second line,
+	 * squeezes the figure into the last third of the width and then draws it back over the label,
+	 * so "Blood barrage heal" and 25,400 come out as "Blood barrag25,400".
+	 * {@code DoomMetricsOverlayTest} measures every one of them against that width.
+	 *
+	 * <p>What the shortening gives up is saying outright what is being counted, and what pays for
+	 * it is the colour: a figure is drawn in the colour of its unit, so a red one is hitpoints and
+	 * a yellow one is damage without a word being spent on it - see {@link Unit#color()}. Where
+	 * two rows would otherwise read identically the word stays, which is why the two catch-alls
+	 * are "Other specs" and "Other dmg" rather than "Other specs" twice.
 	 */
 	String overlayLabel()
 	{
