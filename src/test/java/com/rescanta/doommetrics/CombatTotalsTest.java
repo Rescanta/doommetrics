@@ -165,6 +165,19 @@ public class CombatTotalsTest
 		}
 	}
 
+	/** The overlay draws these with no heading over them, so each has to stand on its own. */
+	@Test
+	public void overlayLabelsAreDistinct()
+	{
+		Set<String> labels = new HashSet<>();
+
+		for (CombatMetric metric : CombatMetric.values())
+		{
+			assertTrue("duplicate overlay label " + metric.overlayLabel(),
+				labels.add(metric.overlayLabel()));
+		}
+	}
+
 	/** The panel builds its headings by watching the group change, so groups must not interleave. */
 	@Test
 	public void metricsAreDeclaredGroupedTogether()

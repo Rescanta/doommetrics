@@ -25,6 +25,19 @@ import java.util.Map;
  */
 class DelveRun
 {
+	/**
+	 * The first delve that counts as deep - the numerator of every deep delve count and of
+	 * {@link PaceMode#RUN_THROUGHPUT}, and the floor for the chat messages.
+	 */
+	static final int DEEP_DELVE_LEVEL = 8;
+
+	/**
+	 * The first delve included in the {@link PaceMode#DEEP_AVERAGE} mean. One past
+	 * {@link #DEEP_DELVE_LEVEL} because delve 8 has a different amount of health to 9 and above,
+	 * so averaging it in reads as a pace nobody is actually sustaining.
+	 */
+	static final int PACE_AVERAGE_FROM_LEVEL = 9;
+
 	static final class Split
 	{
 		final int level;
@@ -291,16 +304,16 @@ class DelveRun
 	}
 
 	/**
-	 * How many delves at or past {@code fromLevel} this run banked - what a deep delve rate counts,
-	 * whether that rate covers this run alone or a lifetime of them.
+	 * How many delves at or past {@link #DEEP_DELVE_LEVEL} this run banked - what a deep delve rate
+	 * counts, whether that rate covers this run alone or a lifetime of them.
 	 */
-	int deepCleared(int fromLevel)
+	int deepCleared()
 	{
 		int deep = 0;
 
 		for (Split split : splits)
 		{
-			if (split.level >= fromLevel)
+			if (split.level >= DEEP_DELVE_LEVEL)
 			{
 				deep++;
 			}
@@ -313,9 +326,9 @@ class DelveRun
 	 * Deep delves banked per hour of run time, counting the shallow delves against you.
 	 * Delve 8 counts towards the numerator even though it is excluded from {@link #deepPace}.
 	 */
-	Double runPace(int deepDelveLevel)
+	Double runPace()
 	{
-		int deep = deepCleared(deepDelveLevel);
+		int deep = deepCleared();
 		double seconds = clearedElapsed().toMillis() / 1000.0;
 
 		if (deep == 0 || seconds <= 0)
@@ -327,18 +340,18 @@ class DelveRun
 	}
 
 	/**
-	 * Pace implied by the mean length of the delves at or past {@code fromLevel}. Delve 8 is
-	 * normally excluded here because it has a different amount of health to 9 and above, which
+	 * Pace implied by the mean length of the delves at or past {@link #PACE_AVERAGE_FROM_LEVEL}.
+	 * Delve 8 is excluded here because it has a different amount of health to 9 and above, which
 	 * would drag the average off the speed you are actually sustaining.
 	 */
-	Double deepPace(int fromLevel)
+	Double deepPace()
 	{
 		long count = 0;
 		long millis = 0;
 
 		for (Split split : splits)
 		{
-			if (split.level >= fromLevel)
+			if (split.level >= PACE_AVERAGE_FROM_LEVEL)
 			{
 				count++;
 				millis += split.segment.toMillis();
@@ -354,11 +367,9 @@ class DelveRun
 		return 3600.0 / meanSeconds;
 	}
 
-	Double pace(PaceMode mode, int deepDelveLevel, int paceAverageFromLevel)
+	Double pace(PaceMode mode)
 	{
-		return mode == PaceMode.RUN_THROUGHPUT
-			? runPace(deepDelveLevel)
-			: deepPace(paceAverageFromLevel);
+		return mode == PaceMode.RUN_THROUGHPUT ? runPace() : deepPace();
 	}
 
 	List<Split> getSplits()

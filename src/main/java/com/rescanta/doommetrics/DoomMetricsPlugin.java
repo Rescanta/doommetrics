@@ -286,6 +286,17 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private Instant sessionEndedAt;
 
+	/**
+	 * When the session's first run started, or null before the session has a run in it at all.
+	 * What the panel's session length is measured from.
+	 *
+	 * <p>Wall clock rather than summed run time, because it answers a different question from the
+	 * rate under it: the rate is what the time inside runs bought, and the length is how long you
+	 * have been at it - banking, restocking and walking back included, because those are the
+	 * sitting too. Reading the two together is what tells you where an evening went.
+	 */
+	private Instant sessionStartedAt;
+
 	/** The character the session belongs to, so an alt's runs never join it. */
 	private String sessionProfile;
 
@@ -376,6 +387,7 @@ public class DoomMetricsPlugin extends Plugin
 		prayerPoints = 0;
 		hitpoints = 0;
 		sessionEndedAt = null;
+		sessionStartedAt = null;
 		sessionProfile = null;
 	}
 
@@ -1172,6 +1184,7 @@ public class DoomMetricsPlugin extends Plugin
 		session = new DelveTotals();
 		sessionCombat = new CombatTotals();
 		sessionEndedAt = null;
+		sessionStartedAt = null;
 	}
 
 	/**
@@ -1419,15 +1432,19 @@ public class DoomMetricsPlugin extends Plugin
 		combatTracker.reset();
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
-		openSession();
+		openSession(startedAt);
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
 	}
 
 	/**
 	 * Puts the run about to start into a session: the one already going if the last run was recent
 	 * enough, or a fresh one if the player has been away longer than {@link #SESSION_IDLE}.
+	 *
+	 * @param startedAt when the run about to start began, which is where a fresh session's length
+	 *                  is measured from. A run we joined part way through dates the sitting from
+	 *                  where we picked it up rather than from a start nobody saw.
 	 */
-	private void openSession()
+	private void openSession(Instant startedAt)
 	{
 		startSessionForCurrentCharacter();
 
@@ -1436,6 +1453,12 @@ public class DoomMetricsPlugin extends Plugin
 			log.debug("Session lapsed, starting the session rate over");
 			session = new DelveTotals();
 			sessionCombat = new CombatTotals();
+			sessionStartedAt = null;
+		}
+
+		if (sessionStartedAt == null)
+		{
+			sessionStartedAt = startedAt;
 		}
 
 		// Cleared either way: a run is in progress, so there is no idle gap to be measuring.
@@ -1478,7 +1501,7 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		int deep = ended.deepCleared(config.deepDelveLevel());
+		int deep = ended.deepCleared();
 		long ticks = DoomFormat.toTicks(ended.pbElapsed());
 
 		if (ticks <= 0)
@@ -1543,7 +1566,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		int interval = config.chatIntervalDelves();
 
-		if (interval <= 0 || level < config.deepDelveLevel() || level % interval != 0)
+		if (interval <= 0 || level < DelveRun.DEEP_DELVE_LEVEL || level % interval != 0)
 		{
 			return;
 		}
@@ -1628,15 +1651,15 @@ public class DoomMetricsPlugin extends Plugin
 
 		DelveRun display = getDisplayRun();
 		DoomMetricsPanel.Live live = display == null ? null : liveSnapshot(display);
-		DoomMetricsPanel.Rates rates = ratesSnapshot();
+		DoomMetricsPanel.Stats stats = statsSnapshot();
 		boolean showCombat = run != null || sessionAlive(Instant.now());
 		String key = (live == null ? "" : String.join("|", live.delveLabel, live.delveValue,
 			live.timeLabel, live.timeValue, live.paceLabel, live.paceValue))
-			+ "|" + rates.session + "|" + rates.lifetime + "|" + combatKey(showCombat);
+			+ "|" + stats.key() + "|" + combatKey(showCombat);
 
-		// The timer only moves once a second, so most ticks have nothing to redraw. The two rates
-		// move less again - neither can change until a delve is cleared or a run ends - and the
-		// combat figures only move when something heals or hits.
+		// The timers only move once a second, so most ticks have nothing to redraw. The rates move
+		// less again - neither can change until a delve is cleared or a run ends - and the combat
+		// figures only move when something heals or hits.
 		if (key.equals(lastLiveKey))
 		{
 			return;
@@ -1651,7 +1674,7 @@ public class DoomMetricsPlugin extends Plugin
 		SwingUtilities.invokeLater(() ->
 		{
 			target.setLive(live);
-			target.setRates(rates);
+			target.setStats(stats);
 			target.setCombat(combat);
 		});
 	}
@@ -1693,35 +1716,56 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * The two deep delve rates, as strings for the panel to draw.
+	 * The sitting's figures and the character's, as strings for the panel to draw.
 	 *
-	 * <p>The session figure counts the run in progress as it goes, rather than waiting for it to
-	 * end. It is built from the same two numbers the run would be banked with, so what the panel
-	 * shows during a run is what banking it will leave behind, and a sitting holding one run reads
-	 * exactly what that run's Run pace does.
+	 * <p>The session figures count the run in progress as it goes, rather than waiting for it to
+	 * end. They are built from the same two numbers the run would be banked with, so what the
+	 * panel shows during a run is what banking it will leave behind, and a sitting holding one run
+	 * reads exactly what that run's Run pace does.
+	 *
+	 * <p>The lifetime figures cannot move while a run is in progress - a run joins them only once
+	 * it is banked - so what is shown there is always the character as they stood when this sitting
+	 * began, and the session block beside it is what is being added to them.
 	 */
-	private DoomMetricsPanel.Rates ratesSnapshot()
+	private DoomMetricsPanel.Stats statsSnapshot()
 	{
 		Instant now = Instant.now();
 		DelveTotals live;
 
 		if (run != null)
 		{
-			live = session.plus(run.deepCleared(config.deepDelveLevel()),
-				DoomFormat.toTicks(run.pbElapsed()));
+			live = session.plus(run.deepCleared(), DoomFormat.toTicks(run.pbElapsed()));
 		}
 		else
 		{
-			// Between sittings there is no session to report on, so the row goes blank rather than
-			// leaving this morning's rate up as though it were still being earned.
+			// Between sittings there is no session to report on, so the rows go blank rather than
+			// leaving this morning's figures up as though they were still being earned.
 			live = sessionAlive(now) ? session : null;
 		}
 
-		return new DoomMetricsPanel.Rates(
+		return new DoomMetricsPanel.Stats(
+			live == null ? null : sessionLength(now),
 			live == null ? null : DoomFormat.pace(live.kph()),
 			live == null ? null : tooltip(live),
+			live == null ? null : DoomFormat.count(live.deep),
 			DoomFormat.pace(lifetime.kph()),
-			tooltip(lifetime));
+			tooltip(lifetime),
+			lifetime.isEmpty() ? null : DoomFormat.count(lifetime.deep));
+	}
+
+	/**
+	 * How long this sitting has been going, or null before it has a run in it.
+	 *
+	 * <p>Keeps counting between runs, because the gap between two runs is part of the sitting the
+	 * same way the runs are. It stops when the sitting does: once the gap passes {@link
+	 * #SESSION_IDLE} the whole session block goes blank rather than showing a clock still running
+	 * on an evening that has ended.
+	 */
+	private String sessionLength(Instant now)
+	{
+		return sessionStartedAt == null
+			? null
+			: DoomFormat.duration(Duration.between(sessionStartedAt, now));
 	}
 
 	/** What a rate is made of, so the figure above it can be checked rather than taken on trust. */
@@ -1762,7 +1806,7 @@ public class DoomMetricsPlugin extends Plugin
 			delveLabel,
 			delveValue,
 			// The asterisk marks a run we joined part way through, whose start time is a guess.
-			display.isPartial() ? "Run*" : "Run",
+			display.isPartial() ? "Time*" : "Time",
 			DoomFormat.duration(display.displayElapsed(Instant.now())),
 			mode.toString(),
 			DoomFormat.pace(pace(display)));
@@ -1895,7 +1939,7 @@ public class DoomMetricsPlugin extends Plugin
 
 	private Double pace(DelveRun target)
 	{
-		return target.pace(config.paceMode(), config.deepDelveLevel(), config.paceAverageFromLevel());
+		return target.pace(config.paceMode());
 	}
 
 	private static boolean isDoomBoss(int npcId)

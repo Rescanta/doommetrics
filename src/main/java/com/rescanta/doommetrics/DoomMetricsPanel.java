@@ -15,8 +15,12 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 
 /**
- * The side panel: the run in progress on top, the lifetime milestone table under it, and a button
- * that opens the history window.
+ * The side panel: the run in progress on top, the sitting under it, the character's lifetime under
+ * that, then the lifetime milestone table and a button that opens the history window.
+ *
+ * <p>The sitting and the lifetime are kept apart rather than interleaved, because they answer
+ * different questions - how this evening is going, and what the character has done over all of
+ * them - and a reader comparing the two wants each under a heading that says which it is.
  *
  * <p>Everything here runs on the Swing thread. The plugin hands it immutable snapshots rather than
  * live objects, so nothing the client thread is still writing to is ever read from a paint.
@@ -46,27 +50,43 @@ class DoomMetricsPanel extends PluginPanel
 	}
 
 	/**
-	 * The two deep delve rates, already formatted. Either may be {@code "-"}: the session has no
-	 * answer until a run banks a deep delve, and neither has a brand new character.
+	 * The sitting's figures and the character's, already formatted. Any of them may be null, which
+	 * reads as {@code "-"}: between sittings there is nothing to report on the session, and a brand
+	 * new character has no lifetime rate until a run banks a deep delve.
 	 */
-	static final class Rates
+	static final class Stats
 	{
-		final String session;
+		final String sessionLength;
+		final String sessionPace;
 		final String sessionTooltip;
-		final String lifetime;
+		final String sessionDeep;
+		final String lifetimePace;
 		final String lifetimeTooltip;
+		final String lifetimeDeep;
 
-		Rates(String session, String sessionTooltip, String lifetime, String lifetimeTooltip)
+		Stats(String sessionLength, String sessionPace, String sessionTooltip, String sessionDeep,
+			String lifetimePace, String lifetimeTooltip, String lifetimeDeep)
 		{
-			this.session = session;
+			this.sessionLength = sessionLength;
+			this.sessionPace = sessionPace;
 			this.sessionTooltip = sessionTooltip;
-			this.lifetime = lifetime;
+			this.sessionDeep = sessionDeep;
+			this.lifetimePace = lifetimePace;
 			this.lifetimeTooltip = lifetimeTooltip;
+			this.lifetimeDeep = lifetimeDeep;
+		}
+
+		/** Enough of the snapshot to tell one repaint from the next. */
+		String key()
+		{
+			return sessionLength + "|" + sessionPace + "|" + sessionDeep
+				+ "|" + lifetimePace + "|" + lifetimeDeep;
 		}
 	}
 
 	private final JPanel livePanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
-	private final JPanel ratesPanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
+	private final JPanel sessionPanel = new JPanel(new DynamicGridLayout(0, 1, 0, 6));
+	private final JPanel lifetimePanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
 	private final CombatTablePanel combatPanel = new CombatTablePanel();
 	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("Nothing banked yet.");
 
@@ -74,8 +94,11 @@ class DoomMetricsPanel extends PluginPanel
 	private final JLabel[] liveLeft = {plain(""), plain(""), plain("")};
 	private final JLabel[] liveRight = {right(""), right(""), right("")};
 
-	private final JLabel sessionValue = right("-");
-	private final JLabel lifetimeValue = right("-");
+	private final JLabel sessionLength = right("-");
+	private final JLabel sessionPace = right("-");
+	private final JLabel sessionDeep = right("-");
+	private final JLabel lifetimePace = right("-");
+	private final JLabel lifetimeDeep = right("-");
 
 	/** @param onOpenHistory invoked on the Swing thread when the history button is pressed */
 	DoomMetricsPanel(Runnable onOpenHistory)
@@ -85,39 +108,61 @@ class DoomMetricsPanel extends PluginPanel
 
 		livePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-		// Built once and only ever retexted, unlike the live section - these two rows are always
-		// the same two rows, so there is nothing for a rebuild to change.
-		ratesPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		ratesPanel.add(pair(rateLabel("Session"), sessionValue, ColorScheme.DARK_GRAY_COLOR));
-		ratesPanel.add(pair(rateLabel("Lifetime"), lifetimeValue, ColorScheme.DARK_GRAY_COLOR));
+		// Built once and only ever retexted, unlike the live section - these are always the same
+		// rows, so there is nothing for a rebuild to change.
+		sessionPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		sessionPanel.add(rows(
+			row("Length", sessionLength,
+				"How long this sitting has been going, from its first run to now"),
+			row("Deep pace", sessionPace, null),
+			row("Deep delves", sessionDeep, "Delves cleared this sitting at or past the deep "
+				+ "level, the run in progress included")));
+		sessionPanel.add(combatPanel);
+
+		lifetimePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		lifetimePanel.add(row("Deep pace", lifetimePace, null));
+		lifetimePanel.add(row("Deep delves", lifetimeDeep,
+			"Every delve this character has cleared at or past the deep level"));
 
 		add(section("Current run", livePanel));
-		add(section("Deep delve rate", ratesPanel));
-		// Above the milestone table, where it is read against the run in progress rather than
-		// against a lifetime of them - the figures here are this sitting's, not the character's.
-		add(section("This session", combatPanel));
+		// The sitting above the character's lifetime, and the milestone table below both: what is
+		// being earned right now is what a player glances at mid-run, and what they have earned
+		// over a lifetime is what they scroll to.
+		add(section("This session", sessionPanel));
+		add(section("Lifetime", lifetimePanel));
 		add(section("Milestones", tablePanel));
 		add(historyButton(onOpenHistory));
 
 		setLive(null);
-		setRates(null);
+		setStats(null);
 		setCombat(null);
 		setRows(Collections.emptyList());
 	}
 
-	/** Repaints the two rate figures. A null snapshot blanks both. */
-	void setRates(Rates rates)
+	/** Repaints the sitting's and the character's figures. A null snapshot blanks all of them. */
+	void setStats(Stats stats)
 	{
-		apply(sessionValue, rates == null ? null : rates.session,
-			rates == null ? null : rates.sessionTooltip);
-		apply(lifetimeValue, rates == null ? null : rates.lifetime,
-			rates == null ? null : rates.lifetimeTooltip);
+		apply(sessionLength, stats == null ? null : stats.sessionLength, null);
+		apply(sessionPace, stats == null ? null : stats.sessionPace,
+			stats == null ? null : stats.sessionTooltip);
+		apply(sessionDeep, stats == null ? null : stats.sessionDeep, null);
+		apply(lifetimePace, stats == null ? null : stats.lifetimePace,
+			stats == null ? null : stats.lifetimeTooltip);
+		apply(lifetimeDeep, stats == null ? null : stats.lifetimeDeep, null);
 	}
 
+	/**
+	 * Retexts one value cell. A null tooltip leaves whatever the cell already had, so the fixed
+	 * explanations set once at build time are not wiped by a snapshot that has nothing to add.
+	 */
 	private static void apply(JLabel label, String value, String tooltip)
 	{
 		label.setText(value == null ? "-" : value);
-		label.setToolTipText(tooltip);
+
+		if (tooltip != null)
+		{
+			label.setToolTipText(tooltip);
+		}
 	}
 
 	/** Repaints the three live figures. A null snapshot collapses the section to one idle line. */
@@ -170,11 +215,26 @@ class DoomMetricsPanel extends PluginPanel
 		tablePanel.setRows(rows);
 	}
 
-	private static JLabel rateLabel(String text)
+	/** Several rows stacked tight, for a block that shares a section with a table below it. */
+	private static JPanel rows(JPanel... content)
+	{
+		JPanel panel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
+		panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+		for (JPanel row : content)
+		{
+			panel.add(row);
+		}
+
+		return panel;
+	}
+
+	private static JPanel row(String text, JLabel value, String tooltip)
 	{
 		JLabel label = plain(text);
 		label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		return label;
+		label.setToolTipText(tooltip);
+		return pair(label, value, ColorScheme.DARK_GRAY_COLOR);
 	}
 
 	private static JButton historyButton(Runnable onOpenHistory)

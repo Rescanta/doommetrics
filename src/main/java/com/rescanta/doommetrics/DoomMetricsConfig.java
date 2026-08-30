@@ -12,8 +12,16 @@ public interface DoomMetricsConfig extends Config
 	String GROUP = "doom-of-mokhaiotl-metrics";
 
 	@ConfigSection(
+		name = "Counters",
+		description = "Extra overlay lines for what your gear gives back",
+		position = 50,
+		closedByDefault = true
+	)
+	String countersSection = "counters";
+
+	@ConfigSection(
 		name = "Advanced",
-		description = "Which delves count as deep, and diagnostics",
+		description = "Diagnostics",
 		position = 100,
 		closedByDefault = true
 	)
@@ -105,32 +113,114 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "deepDelveLevel",
-		name = "Deep delve from",
-		description = "The first delve that counts as deep. Gates the chat messages, and is the"
-			+ " numerator for Run pace. Delve 8 counts as deep even though it is excluded from"
-			+ " the Deep pace average.",
-		position = 101,
-		section = advancedSection
+		keyName = "metricGrouping",
+		name = "Group counters",
+		description = "How the counters ticked below are drawn."
+			+ "<br>Combined sums them into one line per heading, so ticking the ancient godsword"
+			+ " and the blowpipe gives a single Spec healing figure."
+			+ "<br>Separate gives each its own line.",
+		position = 51,
+		section = countersSection
 	)
-	@Range(min = 1, max = 20)
-	default int deepDelveLevel()
+	default MetricDisplay metricGrouping()
 	{
-		return 8;
+		return MetricDisplay.SEPARATE;
 	}
 
 	@ConfigItem(
-		keyName = "paceAverageFromLevel",
-		name = "Average pace from",
-		description = "The first delve included in the Deep pace average. Defaults to 9 because"
-			+ " delve 8 has a different amount of health to 9 and above.",
-		position = 102,
-		section = advancedSection
+		keyName = "showBloodBarrage",
+		name = "Blood barrage heal",
+		description = "Count the hitpoints blood spells have healed you for.",
+		position = 52,
+		section = countersSection
 	)
-	@Range(min = 1, max = 20)
-	default int paceAverageFromLevel()
+	default boolean showBloodBarrage()
 	{
-		return 9;
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showOtherSpell",
+		name = "Other spell heal",
+		description = "Count the hitpoints your other spells have healed you for.",
+		position = 53,
+		section = countersSection
+	)
+	default boolean showOtherSpell()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showAgsHeal",
+		name = "AGS heal",
+		description = "Count the hitpoints the ancient godsword spec has healed you for.",
+		position = 54,
+		section = countersSection
+	)
+	default boolean showAgsHeal()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showBpHeal",
+		name = "Blowpipe heal",
+		description = "Count the hitpoints the blowpipe spec has healed you for.",
+		position = 55,
+		section = countersSection
+	)
+	default boolean showBpHeal()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showOtherSpecHeal",
+		name = "Other spec heal",
+		description = "Count the hitpoints your other special attacks have healed you for.",
+		position = 56,
+		section = countersSection
+	)
+	default boolean showOtherSpecHeal()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showEldritchPrayer",
+		name = "Eldritch prayer",
+		description = "Count the prayer points the eldritch staff spec has restored.",
+		position = 57,
+		section = countersSection
+	)
+	default boolean showEldritchPrayer()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showZcbDamage",
+		name = "ZCB damage",
+		description = "Count the damage the zaryte crossbow spec has dealt.",
+		position = 58,
+		section = countersSection
+	)
+	default boolean showZcbDamage()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showOtherSpecDamage",
+		name = "Other spec damage",
+		description = "Count the damage your other special attacks have dealt.",
+		position = 59,
+		section = countersSection
+	)
+	default boolean showOtherSpecDamage()
+	{
+		return false;
 	}
 
 	@ConfigItem(
