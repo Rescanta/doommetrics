@@ -24,6 +24,7 @@ import net.runelite.client.config.ConfigManager;
 class TotalsStore
 {
 	private static final String KEY_TOTALS = "delveTotals";
+	private static final String KEY_COMBAT = "combatTotals";
 
 	private final ConfigManager configManager;
 	private final Gson gson;
@@ -50,6 +51,52 @@ class TotalsStore
 	void save(DelveTotals totals)
 	{
 		configManager.setRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_TOTALS, encode(totals));
+	}
+
+	/**
+	 * The stored combat tally for the current character, or null if there is nothing to read.
+	 *
+	 * <p>Kept beside the delve rate and for the same reasons: it is an aggregate that stops
+	 * growing - eight numbers, whatever the character has done - so writing it costs the same on
+	 * the ten thousandth run as on the first, and an alt keeps its own.
+	 */
+	CombatTotals loadCombat()
+	{
+		return decodeCombat(
+			configManager.getRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_COMBAT));
+	}
+
+	void saveCombat(CombatTotals totals)
+	{
+		configManager.setRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_COMBAT,
+			gson.toJson(totals));
+	}
+
+	CombatTotals decodeCombat(String json)
+	{
+		if (json == null || json.isEmpty())
+		{
+			return null;
+		}
+
+		try
+		{
+			CombatTotals totals = gson.fromJson(json, CombatTotals.class);
+
+			if (totals == null)
+			{
+				return null;
+			}
+
+			totals.sanitise();
+			return totals;
+		}
+		catch (JsonSyntaxException e)
+		{
+			// Better to start over than to wedge the panel on a value that cannot be parsed.
+			log.warn("Discarding unreadable lifetime combat totals", e);
+			return null;
+		}
 	}
 
 	String encode(DelveTotals totals)

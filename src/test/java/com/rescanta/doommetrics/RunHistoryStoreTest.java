@@ -51,6 +51,42 @@ public class RunHistoryStoreTest
 		assertEquals(Arrays.asList("Eye of ayak", "Mokhaiotl cloth"), restored.loot);
 	}
 
+	@Test
+	public void aRunsCombatFiguresSurviveTheRoundTrip()
+	{
+		RunRecord original = record(60, EndReason.FINISHED);
+		original.combat = new CombatTotals();
+		original.combat.add(CombatMetric.BLOOD_BARRAGE_HEAL, 412);
+		original.combat.add(CombatMetric.ZCB_DAMAGE, 1804);
+
+		RunRecord restored = store.decode(store.encode(original));
+
+		assertNotNull(restored);
+		assertNotNull(restored.combat);
+		assertEquals(CombatTotals.VERSION, restored.combat.v);
+		assertEquals(412, restored.combat.get(CombatMetric.BLOOD_BARRAGE_HEAL));
+		assertEquals(1804, restored.combat.get(CombatMetric.ZCB_DAMAGE));
+
+		// A metric that never fired takes no space in the line at all.
+		assertEquals(0, restored.combat.get(CombatMetric.AGS_HEAL));
+		assertFalse(store.encode(original).contains(CombatMetric.AGS_HEAL.key()));
+	}
+
+	/**
+	 * Runs written before combat tracking existed have no such block, and reading one back must
+	 * leave the rest of the record intact rather than failing the line.
+	 */
+	@Test
+	public void aRunFromBeforeCombatWasTrackedStillReads()
+	{
+		RunRecord restored = store.decode(
+			"{\"v\":1,\"at\":1756339200,\"delve\":42,\"ticks\":4210,\"end\":\"FINISHED\"}");
+
+		assertNotNull(restored);
+		assertEquals(42, restored.delve);
+		assertNull(restored.combat);
+	}
+
 	/** One record per line is the whole contract, so an encoded record must not contain one. */
 	@Test
 	public void anEncodedRunIsASingleLine()

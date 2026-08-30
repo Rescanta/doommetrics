@@ -16,31 +16,42 @@ import java.util.Set;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Actor;
+import net.runelite.api.ActorSpotAnim;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
+import net.runelite.api.Hitsplat;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
+import net.runelite.api.NPC;
 import net.runelite.api.ScriptID;
+import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.GraphicChanged;
+import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.events.ScriptPreFired;
+import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
+import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.OverlayMenuClicked;
@@ -130,6 +141,47 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private static final Duration SESSION_IDLE = Duration.ofMinutes(30);
 
+	/**
+	 * What the game says when a blood spell takes health off something and gives it to you.
+	 *
+	 * <p>This is the signal, and it took a run's log to find out why nothing else was. The heal is
+	 * not a hitsplat, the cast animation is shared by every ancient spell, and the impact graphic -
+	 * the obvious answer, and the one tried first - is never reported to us at all: a whole session
+	 * of barraging produced not one blood impact on any actor or on the ground. The line in the
+	 * chat is the only thing the game says out loud, and it says it on the tick of the heal, every
+	 * time.
+	 *
+	 * <p>Matched on the middle of the line because it comes both ways round - "your opponent's"
+	 * for one target and "your opponents'" for several - and the apostrophe moves between them.
+	 *
+	 * <p>What it does not say is which blood spell it was, so all of them read as the barrage. The
+	 * amulet of blood fury says the same line off a melee hit and would land here too. Both are the
+	 * right way round for the only place this plugin runs: a delve is barrage territory, nobody
+	 * brings a fury to it, and a figure that is occasionally something else is worth far more than
+	 * a row that stays at zero.
+	 */
+	private static final String BLOOD_DRAIN = "drain some of your opponent";
+
+	/**
+	 * Healing spell impacts still worth watching on an actor, for the spells that heal without
+	 * saying so - the Sanguinesti staff above all.
+	 *
+	 * <p>The blood spells are listed too, as a fallback for a version of the game that reports what
+	 * this one does not. Only graphics a player can produce are here: the ids that merely have
+	 * "blood" in the name belong to NPC attacks and quest scenes, and a boss playing one of its own
+	 * would open a window that then took the credit for a real heal.
+	 */
+	private static final int[] OTHER_HEAL_SPELL_IMPACTS = {
+		SpotanimID.BLOOD_RUSH_IMPACT,
+		SpotanimID.SPELL_BLOOD_BURST_IMPACT,
+		SpotanimID.BLOOD_BLITZ_IMPACT,
+		SpotanimID.SANGUINESTI_STAFF_IMPACT,
+		SpotanimID.SANGUINESTI_STAFF_IMPACT_JUSTICIAR
+	};
+
+	/** The name of the thing whose damage is not counted - see {@link #countsAsDamage}. */
+	private static final String VOLATILE_EARTH = "volatile earth";
+
 	@Inject
 	private Client client;
 
@@ -160,6 +212,9 @@ public class DoomMetricsPlugin extends Plugin
 	@Inject
 	private ItemManager itemManager;
 
+	@Inject
+	private ClientThread clientThread;
+
 	private DoomMetricsPanel panel;
 	private NavigationButton navButton;
 	/** Read on the Swing thread when the history window is built, cleared on shutdown. */
@@ -178,10 +233,16 @@ public class DoomMetricsPlugin extends Plugin
 	private List<MilestoneTablePanel.Row> tableRows = Collections.emptyList();
 
 	/**
-	 * The depths the open window's chart is drawing, so a run finishing while it is up can be
+	 * The history the open window's chart is drawing, so a run finishing while it is up can be
 	 * added without re-reading the file. Swing thread only.
 	 */
-	private List<Integer> chartDelves = new ArrayList<>();
+	private RunSeries chartSeries = RunSeries.empty();
+
+	/**
+	 * The last lifetime combat snapshot pushed to the Swing thread, so a window opening between two
+	 * runs has figures to draw without reading the tally the client thread owns. Swing thread only.
+	 */
+	private CombatTotals windowCombat = new CombatTotals();
 
 	/** This character's lifetime table, reloaded whenever the profile changes. */
 	private final MilestoneTable milestones = new MilestoneTable();
@@ -194,6 +255,30 @@ public class DoomMetricsPlugin extends Plugin
 
 	/** The runs of the current sitting. See {@link #SESSION_IDLE}. */
 	private DelveTotals session = new DelveTotals();
+
+	/** This character's lifetime healing, prayer and spec damage, banked run by run. */
+	private CombatTotals lifetimeCombat = new CombatTotals();
+
+	/** The same figures for the current sitting, thrown away when the sitting is. */
+	private CombatTotals sessionCombat = new CombatTotals();
+
+	/**
+	 * Works out what caused each heal, prayer restore and spec hitsplat. Fed only while a run is in
+	 * progress, so nothing that happens outside the cave is ever counted.
+	 */
+	private final CombatTracker combatTracker = new CombatTracker(this::recordCombat);
+
+	/**
+	 * The special attack energy as we last saw it. A spec is a drop in this - it only ever climbs
+	 * on its own - and the weapon held when it drops is what fired.
+	 */
+	private int specEnergy;
+
+	/** The boosted prayer level as we last saw it, so a restore can be read as the difference. */
+	private int prayerPoints;
+
+	/** The boosted hitpoints level as we last saw it, for the same reason. */
+	private int hitpoints;
 
 	/**
 	 * When the session's most recent run ended, or null while one is in progress or before the
@@ -285,6 +370,11 @@ public class DoomMetricsPlugin extends Plugin
 		bossCount = 0;
 		ticksWithoutBoss = 0;
 		session = new DelveTotals();
+		sessionCombat = new CombatTotals();
+		combatTracker.reset();
+		specEnergy = 0;
+		prayerPoints = 0;
+		hitpoints = 0;
 		sessionEndedAt = null;
 		sessionProfile = null;
 	}
@@ -325,6 +415,15 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void handleChatMessage(ChatMessage event)
 	{
+		// Ahead of the type check: the drain line is spam, not a game message, and spam is where
+		// it will stay.
+		if (run != null && event.getMessage().contains(BLOOD_DRAIN))
+		{
+			combatTracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, client.getTickCount());
+			log.debug("Blood spell drained at tick {}", client.getTickCount());
+			return;
+		}
+
 		if (event.getType() != ChatMessageType.GAMEMESSAGE)
 		{
 			return;
@@ -581,6 +680,251 @@ public class DoomMetricsPlugin extends Plugin
 		}
 	}
 
+	/**
+	 * Every hitsplat of yours on something else, offered to the tracker to identify. Only while a
+	 * run is in progress: what your gear does in the bank is not what this plugin is about.
+	 */
+	@Subscribe
+	public void onHitsplatApplied(HitsplatApplied event)
+	{
+		long started = System.nanoTime();
+		handleHitsplatApplied(event);
+		reportSlow("onHitsplatApplied", started);
+	}
+
+	private void handleHitsplatApplied(HitsplatApplied event)
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		Hitsplat hitsplat = event.getHitsplat();
+		boolean onMe = event.getActor() == client.getLocalPlayer();
+		int tick = client.getTickCount();
+
+		// Damage only. Healing is read off the hitpoints level instead - see onStatChanged - and
+		// reading it in both places would count every heal twice.
+		if (!onMe && hitsplat.isMine())
+		{
+			// Passed on as a zero rather than skipped when it is a hit that does not count: the
+			// spec still spent itself on it, and a budget left unspent would be taken by the
+			// auto-attack behind it instead.
+			int amount = countsAsDamage(event.getActor()) ? hitsplat.getAmount() : 0;
+			logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
+			combatTracker.damaged(amount, tick);
+		}
+	}
+
+	/**
+	 * Whether a hit on {@code target} is worth adding to a damage figure.
+	 *
+	 * <p>The volatile earth that comes up before the shockwaves is not a health bar anybody is
+	 * racing. It guarantees a max hit, and two of them have to be broken to raise the shield that
+	 * keeps you alive - which is what makes it the best thing in the delve to spend a blowpipe or
+	 * an eldritch spec on, and what makes counting the damage misleading. A delve's spec damage
+	 * would read as though the work had been done there.
+	 *
+	 * <p>Only the damage is dropped. The heal and the prayer that spec was fired for are counted
+	 * exactly as they always were, which is the whole reason it was fired at that target.
+	 */
+	private boolean countsAsDamage(Actor target)
+	{
+		if (!(target instanceof NPC))
+		{
+			return true;
+		}
+
+		NPC npc = (NPC) target;
+		String name = npc.getName();
+
+		// By name as well as by id, for the same reason the spec weapons are: the id list is what
+		// this version knew, and a form it did not know would quietly start counting again.
+		if (npc.getId() == NpcID.DOM_SHOCKWAVE_SHIELD
+			|| npc.getId() == NpcID.DOM_SHOCKWAVE_PATH_NODE
+			|| (name != null && name.toLowerCase().contains(VOLATILE_EARTH)))
+		{
+			log.debug("Not counting damage to {} ({})", name, npc.getId());
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Says what the tracker is about to do with an effect, including when the answer is nothing.
+	 *
+	 * <p>A figure reading low is almost always something being dropped rather than something being
+	 * miscounted, and a dropped effect leaves no other trace - so the line that says "this heal
+	 * matched no open window" is the one worth having when a row will not move.
+	 *
+	 * <p>"Held" is not the same as dropped: a cause noticed later in the same tick still claims it,
+	 * and a "Counted" line follows when one does.
+	 */
+	private void logAttribution(SpecEffect.Kind kind, int amount, int tick)
+	{
+		if (!config.debugLogging())
+		{
+			return;
+		}
+
+		CombatMetric metric = combatTracker.wouldCredit(kind, tick);
+		log.debug("{} of {} at tick {} -> {}", kind, amount, tick,
+			metric == null ? "nothing open, held for this tick" : metric.key());
+	}
+
+	/**
+	 * Hitpoints and prayer points going up, offered to the tracker in case a spec or a spell put
+	 * them there.
+	 *
+	 * <p>This is where healing is read, and it is not a matter of taste. A heal on your own head
+	 * is not a hitsplat anybody outside the client ever sees - blood spells, the blowpipe's spec
+	 * and Blood Sacrifice all simply raise the number, and a tracker watching for a green splat
+	 * counted none of them. The prayer side proved it by working from the first run: the same
+	 * signal, read the same way.
+	 *
+	 * <p>The level is tracked rather than the event's own figure because a restore is the size of
+	 * the step, not the number it landed on. Only a rise is offered - drain and damage are not
+	 * restores, and they still have to be recorded here so the next rise is measured from where
+	 * they left off.
+	 *
+	 * <p>What this cannot see is a heal that had nowhere to go. Healing at full hitpoints moves no
+	 * level and is counted as nothing, which is the honest reading - the gear gave back nothing
+	 * that was not already there - and one more reason every figure here is a floor.
+	 */
+	@Subscribe
+	public void onStatChanged(StatChanged event)
+	{
+		long started = System.nanoTime();
+		handleStatChanged(event);
+		reportSlow("onStatChanged", started);
+	}
+
+	private void handleStatChanged(StatChanged event)
+	{
+		if (event.getSkill() == Skill.PRAYER)
+		{
+			int was = prayerPoints;
+			prayerPoints = event.getBoostedLevel();
+
+			// No floor on where the rise started: an Eldritch spec fired on an empty prayer book is
+			// exactly the case this is for, and a guard against zero would drop the one that matters
+			// most. The run has to be in progress and the spec has to have been fired a tick or two
+			// ago, which is what keeps the login flood out.
+			if (run != null && prayerPoints > was)
+			{
+				int tick = client.getTickCount();
+				logAttribution(SpecEffect.Kind.PRAYER, prayerPoints - was, tick);
+				combatTracker.prayerGained(prayerPoints - was, tick);
+			}
+		}
+		else if (event.getSkill() == Skill.HITPOINTS)
+		{
+			int was = hitpoints;
+			hitpoints = event.getBoostedLevel();
+
+			if (run != null && hitpoints > was)
+			{
+				int tick = client.getTickCount();
+				logAttribution(SpecEffect.Kind.HEAL, hitpoints - was, tick);
+				combatTracker.healed(hitpoints - was, tick);
+			}
+		}
+	}
+
+	/**
+	 * A healing spell landing on something, for the spells that name themselves that way. The blood
+	 * spells announce themselves in the chat instead - see {@link #BLOOD_DRAIN}.
+	 */
+	@Subscribe
+	public void onGraphicChanged(GraphicChanged event)
+	{
+		long started = System.nanoTime();
+		handleGraphicChanged(event);
+		reportSlow("onGraphicChanged", started);
+	}
+
+	private void handleGraphicChanged(GraphicChanged event)
+	{
+		Actor actor = event.getActor();
+
+		if (run == null || actor == null)
+		{
+			return;
+		}
+
+		// Logged for the caster too, even though only the target's graphics are attributed - if an
+		// impact id turns out to be wrong, the player's own graphics are where the right one is.
+		logSpotAnims(actor);
+
+		if (actor == client.getLocalPlayer())
+		{
+			return;
+		}
+
+		if (hasAny(actor, OTHER_HEAL_SPELL_IMPACTS))
+		{
+			combatTracker.spellHit(CombatMetric.OTHER_SPELL_HEAL, client.getTickCount());
+		}
+	}
+
+	/**
+	 * Names every graphic on an actor while it changes.
+	 *
+	 * <p>Which id a spell's impact actually uses is the one thing here that cannot be established
+	 * from outside the game: the cache has a dozen constants with "blood" in the name and no way to
+	 * tell which of them a barrage plays today. This turns one run with the toggle on into the
+	 * answer, and costs nothing with it off - RuneLite logs at INFO, where the line is never built.
+	 */
+	private void logSpotAnims(Actor actor)
+	{
+		if (!config.debugLogging())
+		{
+			return;
+		}
+
+		StringBuilder ids = new StringBuilder();
+
+		for (ActorSpotAnim spotAnim : actor.getSpotAnims())
+		{
+			ids.append(ids.length() == 0 ? "" : ",").append(spotAnim.getId());
+		}
+
+		if (ids.length() > 0)
+		{
+			log.debug("Spotanim {} on {} at tick {}", ids, actor.getName(), client.getTickCount());
+		}
+	}
+
+	private static boolean hasAny(Actor actor, int[] spotAnims)
+	{
+		for (int spotAnim : spotAnims)
+		{
+			if (actor.hasSpotAnim(spotAnim))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/** Credits an attributed amount to the run in progress. The tracker's only way out. */
+	private void recordCombat(CombatMetric metric, long amount)
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		run.recordCombat(metric, amount);
+
+		if (config.debugLogging())
+		{
+			log.debug("Counted {} to {} on delve {}", amount, metric.key(), run.currentLevel());
+		}
+	}
+
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
@@ -592,6 +936,12 @@ public class DoomMetricsPlugin extends Plugin
 	private void handleVarbitChanged(VarbitChanged event)
 	{
 		int varpId = event.getVarpId();
+
+		if (varpId == VarPlayerID.SA_ENERGY)
+		{
+			specialAttackEnergyChanged(event.getValue());
+			return;
+		}
 
 		if (varpId < DOM_VARP_FIRST || varpId > DOM_VARP_LAST)
 		{
@@ -627,6 +977,81 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			seedFromDeepestLevel();
 		}
+	}
+
+	/**
+	 * Notices a special attack being fired, and tells the tracker what fired it.
+	 *
+	 * <p>A drop in the energy is the signal. It is the only one that cannot be faked by something
+	 * else: the bar climbs on its own and is only ever spent deliberately, so a fall means a spec,
+	 * whatever weapon it was and whatever animation the weapon plays. The equipped weapon is read
+	 * on the same tick, which is what tells a Zaryte spec from a blowpipe one.
+	 *
+	 * <p>Recorded even outside a run, so the first spec of a trip is measured against the energy we
+	 * really had rather than against zero.
+	 */
+	private void specialAttackEnergyChanged(int energy)
+	{
+		int was = specEnergy;
+		specEnergy = energy;
+
+		if (run == null || energy >= was)
+		{
+			return;
+		}
+
+		// The tick the spec was fired on, captured now: this event runs before the player and the
+		// equipment are updated for the tick, so the weapon has to be read a step later, by which
+		// point the client's own tick counter may have moved on.
+		int tick = client.getTickCount();
+
+		clientThread.invokeLater(() ->
+		{
+			if (run == null)
+			{
+				return;
+			}
+
+			int itemId = equippedWeapon();
+			SpecWeapon weapon = SpecWeapon.forItem(itemId, itemName(itemId));
+
+			if (weapon == null)
+			{
+				// Nothing in hand, so whatever moved the bar was not a spec we can attribute.
+				log.debug("Special attack energy fell with nothing equipped, ignoring it");
+				return;
+			}
+
+			combatTracker.specFired(weapon, tick);
+			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
+				run.currentLevel(), weapon, itemId, itemName(itemId), tick);
+		});
+	}
+
+	/** The item id in the weapon slot, or 0 when the slot is empty or unreadable. */
+	private int equippedWeapon()
+	{
+		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
+
+		if (worn == null)
+		{
+			return 0;
+		}
+
+		Item weapon = worn.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
+		return weapon == null ? 0 : weapon.getId();
+	}
+
+	/** An item's name from the cache, or null when there is nothing to name. */
+	private String itemName(int itemId)
+	{
+		if (itemId <= 0)
+		{
+			return null;
+		}
+
+		ItemComposition item = itemManager.getItemComposition(itemId);
+		return item == null ? null : item.getName();
 	}
 
 	@Subscribe
@@ -691,8 +1116,34 @@ public class DoomMetricsPlugin extends Plugin
 
 		DelveTotals loaded = totalsStore.load();
 		lifetime = loaded == null ? new DelveTotals() : loaded;
+
+		CombatTotals loadedCombat = totalsStore.loadCombat();
+		lifetimeCombat = loadedCombat == null ? new CombatTotals() : loadedCombat;
+
 		startSessionForCurrentCharacter();
 		refreshLive();
+		refreshLifetimeCombat();
+	}
+
+	/**
+	 * Pushes the lifetime combat figures over to the Swing thread. Called from the client thread,
+	 * which owns the tally, so a copy crosses rather than the tally itself.
+	 */
+	private void refreshLifetimeCombat()
+	{
+		CombatTotals totals = lifetimeCombat.copy();
+
+		SwingUtilities.invokeLater(() ->
+		{
+			// Held so a window opened later has figures to draw without reaching back into a tally
+			// the client thread may already be writing to again.
+			windowCombat = totals;
+
+			if (historyWindow != null)
+			{
+				historyWindow.setLifetimeCombat(totals);
+			}
+		});
 	}
 
 	/**
@@ -719,6 +1170,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		sessionProfile = profile;
 		session = new DelveTotals();
+		sessionCombat = new CombatTotals();
 		sessionEndedAt = null;
 	}
 
@@ -962,6 +1414,11 @@ public class DoomMetricsPlugin extends Plugin
 		runProfile = runHistoryStore.currentProfile();
 		// Give the boss the full grace period to appear, whatever the counter was doing before.
 		ticksWithoutBoss = 0;
+		// A spec fired on the way in belongs to nothing we are counting, and its window must not
+		// be left open to swallow the first heal of the trip.
+		combatTracker.reset();
+		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
+		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
 		openSession();
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
 	}
@@ -978,6 +1435,7 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			log.debug("Session lapsed, starting the session rate over");
 			session = new DelveTotals();
+			sessionCombat = new CombatTotals();
 		}
 
 		// Cleared either way: a run is in progress, so there is no idle gap to be measuring.
@@ -1008,6 +1466,12 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		// Whatever came of the run, the sitting's idle clock restarts from the moment it ended.
 		sessionEndedAt = ended.getEndedAt();
+
+		// Ahead of every other test here, and deliberately so. The combat figures are counts of
+		// things that provably happened, not a rate with a denominator, so none of the reasons a
+		// run can fail to contribute to a rate apply: a run that cleared nothing still healed you,
+		// and a trip we only saw half of still healed you for the half we saw.
+		bankCombat(ended.getCombat());
 
 		if (ended.lastLevel() == 0)
 		{
@@ -1043,6 +1507,35 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
+	 * Adds a finished run's combat figures to the sitting and to the character's lifetime.
+	 *
+	 * <p>The lifetime copy is guarded the same way the delve rate's is: a run held open across a
+	 * dropped connection can outlive the login that made it, and filing one character's healing
+	 * against another's lifetime would be worse than not filing it at all. Such a run stays in the
+	 * sitting's figure alone, and the sitting is started over for the new character anyway.
+	 */
+	private void bankCombat(CombatTotals ended)
+	{
+		if (ended == null || ended.isEmpty())
+		{
+			return;
+		}
+
+		sessionCombat.addAll(ended);
+
+		if (!totalsStore.hasProfile()
+			|| (runProfile != null && !runProfile.equals(runHistoryStore.currentProfile())))
+		{
+			log.debug("Not banking combat totals to a lifetime - they belong to another character");
+			return;
+		}
+
+		lifetimeCombat.addAll(ended);
+		totalsStore.saveCombat(lifetimeCombat);
+		refreshLifetimeCombat();
+	}
+
+	/**
 	 * Posts elapsed time and pace when the delve number is a multiple of the configured interval.
 	 * Shallow delves are skipped, so an interval of 5 reports at delve 10, 15, 20 and so on.
 	 */
@@ -1067,6 +1560,7 @@ public class DoomMetricsPlugin extends Plugin
 		DelveRun ended = run;
 		run = null;
 		resumeCheck = null;
+		combatTracker.reset();
 
 		if (ended == null)
 		{
@@ -1135,23 +1629,67 @@ public class DoomMetricsPlugin extends Plugin
 		DelveRun display = getDisplayRun();
 		DoomMetricsPanel.Live live = display == null ? null : liveSnapshot(display);
 		DoomMetricsPanel.Rates rates = ratesSnapshot();
+		boolean showCombat = run != null || sessionAlive(Instant.now());
 		String key = (live == null ? "" : String.join("|", live.delveLabel, live.delveValue,
 			live.timeLabel, live.timeValue, live.paceLabel, live.paceValue))
-			+ "|" + rates.session + "|" + rates.lifetime;
+			+ "|" + rates.session + "|" + rates.lifetime + "|" + combatKey(showCombat);
 
 		// The timer only moves once a second, so most ticks have nothing to redraw. The two rates
-		// move less again - neither can change until a delve is cleared or a run ends.
+		// move less again - neither can change until a delve is cleared or a run ends - and the
+		// combat figures only move when something heals or hits.
 		if (key.equals(lastLiveKey))
 		{
 			return;
 		}
 
 		lastLiveKey = key;
+
+		// Built only once something has actually moved, so an idle tick allocates nothing to hand
+		// across to a panel that would draw the same eight numbers again.
+		CombatTotals combat = showCombat ? combatSnapshot() : null;
+
 		SwingUtilities.invokeLater(() ->
 		{
 			target.setLive(live);
 			target.setRates(rates);
+			target.setCombat(combat);
 		});
+	}
+
+	/**
+	 * The sitting's combat figures, the run in progress counted as it goes rather than only once it
+	 * ends - so what the panel shows during a run is what banking it will leave behind.
+	 */
+	private CombatTotals combatSnapshot()
+	{
+		return run == null ? sessionCombat.copy() : sessionCombat.plus(run.getCombat());
+	}
+
+	/**
+	 * Enough of the sitting's tally to tell one repaint from the next, read straight out of the two
+	 * tallies rather than out of a snapshot of them - the point is to decide whether a snapshot is
+	 * worth taking.
+	 *
+	 * <p>Empty between sittings, which is also what the panel is shown: there is nothing being
+	 * earned, and leaving this morning's numbers up would say otherwise.
+	 */
+	private String combatKey(boolean showCombat)
+	{
+		if (!showCombat)
+		{
+			return "";
+		}
+
+		StringBuilder key = new StringBuilder();
+
+		for (CombatMetric metric : CombatMetric.values())
+		{
+			long amount = sessionCombat.get(metric)
+				+ (run == null ? 0 : run.getCombat().get(metric));
+			key.append(amount).append(',');
+		}
+
+		return key.toString();
 	}
 
 	/**
@@ -1267,7 +1805,8 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			historyWindow = new HistoryWindow(icon, () -> historyWindow = null);
 			historyWindow.setRows(tableRows);
-			historyWindow.setDelves(chartDelves);
+			historyWindow.setSeries(chartSeries);
+			historyWindow.setLifetimeCombat(windowCombat);
 		}
 
 		historyWindow.open(SwingUtilities.getWindowAncestor(panel));
@@ -1288,29 +1827,29 @@ public class DoomMetricsPlugin extends Plugin
 
 		// Cleared first so the frame's own close callback has nothing left to do.
 		historyWindow = null;
-		chartDelves = new ArrayList<>();
+		chartSeries = RunSeries.empty();
 		window.dispose();
 	}
 
-	/** Reads the whole history off disk and hands the chart the depths from it. */
+	/**
+	 * Reads the whole history off disk and hands the chart every figure it can plot from it.
+	 *
+	 * <p>Reduced to per-metric lists here, on the executor thread, rather than each time the
+	 * dropdown moves - switching metric should not cost a pass over a lifetime of runs.
+	 */
 	private void loadHistory()
 	{
 		runHistoryStore.load(records ->
 		{
-			List<Integer> delves = new ArrayList<>(records.size());
-
-			for (RunRecord record : records)
-			{
-				delves.add(record.delve);
-			}
+			RunSeries series = RunSeries.of(records);
 
 			SwingUtilities.invokeLater(() ->
 			{
-				chartDelves = delves;
+				chartSeries = series;
 
 				if (historyWindow != null)
 				{
-					historyWindow.setDelves(delves);
+					historyWindow.setSeries(series);
 				}
 			});
 		});
@@ -1335,11 +1874,13 @@ public class DoomMetricsPlugin extends Plugin
 		record.diedOn = Math.max(0, diedOnLevel);
 		record.partial = ended.isPartial();
 		record.loot = ended.getLoot();
+		// Left out entirely for the many runs that attribute nothing, rather than written as eight
+		// zeroes on every line of the file.
+		record.combat = ended.getCombat().isEmpty() ? null : ended.getCombat().copy();
 
 		runHistoryStore.append(record,
 			runProfile != null ? runProfile : runHistoryStore.currentProfile());
 
-		int delve = record.delve;
 		SwingUtilities.invokeLater(() ->
 		{
 			if (historyWindow == null)
@@ -1347,8 +1888,8 @@ public class DoomMetricsPlugin extends Plugin
 				return;
 			}
 
-			chartDelves.add(delve);
-			historyWindow.setDelves(chartDelves);
+			chartSeries = chartSeries.plus(record);
+			historyWindow.setSeries(chartSeries);
 		});
 	}
 

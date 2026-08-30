@@ -49,4 +49,29 @@ public class DoomFormatTest
 		assertEquals("1:00:00.0", DoomFormat.ticks(6000));
 		assertEquals("2:52:00.0", DoomFormat.ticks(17_200));
 	}
+
+	@Test
+	public void countsAreGroupedSoALifetimeIsLegible()
+	{
+		assertEquals("0", DoomFormat.count(0));
+		assertEquals("940", DoomFormat.count(940));
+		assertEquals("1,204,318", DoomFormat.count(1_204_318));
+	}
+
+	/**
+	 * A gridline is a floor the dots above it are read against, so a label has to round down. A
+	 * shortened 12,600 reading "13k" would sit above dots it is meant to sit under.
+	 */
+	@Test
+	public void shortenedCountsNeverRoundUpPastTheirValue()
+	{
+		assertEquals("940", DoomFormat.compact(940));
+		assertEquals("1.0k", DoomFormat.compact(1_000));
+		assertEquals("9.9k", DoomFormat.compact(9_999));
+		assertEquals("12k", DoomFormat.compact(12_600));
+		assertEquals("999k", DoomFormat.compact(999_999));
+		assertEquals("1.0m", DoomFormat.compact(1_000_000));
+		assertEquals("9.9m", DoomFormat.compact(9_999_999));
+		assertEquals("12m", DoomFormat.compact(12_600_000));
+	}
 }
