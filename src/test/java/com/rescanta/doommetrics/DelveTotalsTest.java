@@ -100,10 +100,10 @@ public class DelveTotalsTest
 		}
 
 		DelveTotals session = new DelveTotals();
-		session.add(run.deepCleared(8), DoomFormat.toTicks(run.pbElapsed()));
+		session.add(run.deepCleared(), DoomFormat.toTicks(run.pbElapsed()));
 
 		assertEquals(12, session.deep);
-		assertEquals(run.runPace(8), session.kph(), DELTA);
+		assertEquals(run.runPace(), session.kph(), DELTA);
 	}
 
 	@Test
