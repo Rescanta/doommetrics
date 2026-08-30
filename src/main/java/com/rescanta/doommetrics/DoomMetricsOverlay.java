@@ -136,7 +136,7 @@ class DoomMetricsOverlay extends OverlayPanel
 			// has no line rather than a zero: nothing was asked for, so nothing is being answered.
 			if (shown)
 			{
-				addAmount(group.heading(), total, group.unit());
+				addAmount(group.overlayHeading(), total, group.unit());
 			}
 		}
 	}
