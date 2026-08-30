@@ -1650,7 +1650,9 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		DelveRun display = getDisplayRun();
-		DoomMetricsPanel.Live live = display == null ? null : liveSnapshot(display);
+		DoomMetricsPanel.Live live = display == null
+			? null
+			: DoomMetricsPanel.Live.of(display, config.paceMode());
 		DoomMetricsPanel.Stats stats = statsSnapshot();
 		boolean showCombat = run != null || sessionAlive(Instant.now());
 		String key = (live == null ? "" : String.join("|", live.delveLabel, live.delveValue,
@@ -1776,40 +1778,6 @@ public class DoomMetricsPlugin extends Plugin
 			: String.format("%d deep %s in %s of run time",
 				totals.deep, totals.deep == 1 ? "delve" : "delves",
 				DoomFormat.tickDuration(totals.ticks));
-	}
-
-	/** The overlay's three rows, as strings, for the panel to draw. */
-	private DoomMetricsPanel.Live liveSnapshot(DelveRun display)
-	{
-		String delveLabel;
-		String delveValue;
-
-		if (!display.isFinished())
-		{
-			delveLabel = "Delve";
-			delveValue = Integer.toString(display.currentLevel());
-		}
-		else if (display.getEndReason() == EndReason.DIED)
-		{
-			delveLabel = "Died on";
-			delveValue = "Delve " + display.getDiedOnLevel();
-		}
-		else
-		{
-			delveLabel = "Cleared";
-			delveValue = Integer.toString(display.lastLevel());
-		}
-
-		PaceMode mode = config.paceMode();
-
-		return new DoomMetricsPanel.Live(
-			delveLabel,
-			delveValue,
-			// The asterisk marks a run we joined part way through, whose start time is a guess.
-			display.isPartial() ? "Time*" : "Time",
-			DoomFormat.duration(display.displayElapsed(Instant.now())),
-			mode.toString(),
-			DoomFormat.pace(pace(display)));
 	}
 
 	private void refreshTable()
