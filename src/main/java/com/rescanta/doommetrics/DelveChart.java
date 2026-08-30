@@ -17,8 +17,13 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
 /**
- * Depth per run over a character's whole history: one dot per run, with a rolling average through
- * them.
+ * One figure per run over a character's whole history: one dot per run, with a rolling average
+ * through them.
+ *
+ * <p>Which figure is the reader's choice - how deep the run got, how much the blood barrages healed
+ * for, how much the Zaryte specs hit for. The chart does not know which of those it is holding; the
+ * {@link ChartSeries} it is given carries its own axis, so the only thing that changes when the
+ * reader picks another metric is the numbers up the side.
  *
  * <p>A plain line through every run is unreadable past a few hundred points - it fills in as a
  * solid band and the trend disappears into it. Dots let the density show through, and the average
@@ -50,13 +55,10 @@ class DelveChart extends JPanel
 	private static final BasicStroke TREND_STROKE =
 		new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
-	private static final int PAD_LEFT = 44;
+	private static final int PAD_LEFT = 52;
 	private static final int PAD_RIGHT = 12;
 	private static final int PAD_TOP = 34;
 	private static final int PAD_BOTTOM = 34;
-
-	/** Y gridlines land on the same tens the milestone table is cut at, never anything finer. */
-	private static final int Y_STEP_FLOOR = 10;
 
 	/** How close the pointer must get to a run before its tooltip is offered. */
 	private static final int HOVER_RADIUS = 24;
@@ -64,12 +66,13 @@ class DelveChart extends JPanel
 	/** Below this many runs the dots stand on their own and no trend is drawn through them. */
 	private static final int MIN_RUNS_FOR_TREND = 30;
 
-	private List<Integer> delves = Collections.emptyList();
+	private ChartSeries series = ChartSeries.empty();
+	private List<Integer> values = Collections.emptyList();
 	private double[] trend = new double[0];
 	private int window;
 	private int yMin;
-	private int yMax = Y_STEP_FLOOR;
-	private int yStep = Y_STEP_FLOOR;
+	private int yMax = 1;
+	private int yStep = 1;
 
 	DelveChart()
 	{
@@ -79,21 +82,19 @@ class DelveChart extends JPanel
 		ToolTipManager.sharedInstance().registerComponent(this);
 	}
 
-	/** @param delves the deepest delve cleared in each run, oldest first */
-	void setDelves(List<Integer> delves)
+	/** @param series the value to plot for each recorded run, oldest first */
+	void setSeries(ChartSeries series)
 	{
-		this.delves = delves;
-		this.window = windowFor(delves.size());
-		this.trend = window == 0 ? new double[0] : rollingAverage(delves, window);
+		this.series = series;
+		this.values = series.values();
+		this.window = windowFor(values.size());
+		this.trend = window == 0 ? new double[0] : rollingAverage(values, window);
 
-		if (!delves.isEmpty())
+		if (!values.isEmpty())
 		{
-			// Dots encode depth by position, not by length, so the axis does not have to reach
-			// zero - and on a character who never ends a run under delve forty, an axis that did
-			// would spend most of its height on empty space and flatten the part worth reading.
-			int low = Collections.min(delves);
-			int high = Collections.max(delves);
-			this.yStep = Math.max(Y_STEP_FLOOR, niceStep(high - low, 8));
+			int low = series.axis().isFromZero() ? 0 : Collections.min(values);
+			int high = Math.max(low, Collections.max(values));
+			this.yStep = Math.max(series.axis().stepFloor(), niceStep(high - low, 8));
 
 			// Both ends land on a gridline, which also keeps the deepest run off the very top of
 			// the plot where it would otherwise sit under the legend.
@@ -160,7 +161,7 @@ class DelveChart extends JPanel
 			g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
 			g2.setFont(FontManager.getRunescapeSmallFont());
 
-			if (delves.isEmpty())
+			if (values.isEmpty())
 			{
 				drawEmpty(g2);
 				return;
@@ -193,14 +194,14 @@ class DelveChart extends JPanel
 		int bottom = getHeight() - PAD_BOTTOM;
 		FontMetrics metrics = g2.getFontMetrics();
 
-		for (int delve = yMin; delve <= yMax; delve += yStep)
+		for (int value = yMin; value <= yMax; value += yStep)
 		{
-			int y = yFor(delve);
+			int y = yFor(value);
 
 			g2.setColor(GRID_COLOR);
 			g2.drawLine(left, y, right, y);
 
-			String text = "d" + delve;
+			String text = series.axis().gridLabel(value);
 			g2.setColor(ColorScheme.LIGHT_GRAY_COLOR);
 			g2.drawString(text, left - 6 - metrics.stringWidth(text), y + metrics.getAscent() / 2);
 		}
@@ -209,9 +210,9 @@ class DelveChart extends JPanel
 		g2.drawLine(left, top, left, bottom);
 		g2.drawLine(left, bottom, right, bottom);
 
-		int step = xLabelStep(delves.size());
+		int step = xLabelStep(values.size());
 
-		for (int run = step; run <= delves.size(); run += step)
+		for (int run = step; run <= values.size(); run += step)
 		{
 			int x = xFor(run - 1);
 			String text = Integer.toString(run);
@@ -255,9 +256,9 @@ class DelveChart extends JPanel
 	{
 		g2.setColor(RUN_FILL);
 
-		for (int i = 0; i < delves.size(); i++)
+		for (int i = 0; i < values.size(); i++)
 		{
-			g2.fillOval(xFor(i) - DOT / 2, yFor(delves.get(i)) - DOT / 2, DOT, DOT);
+			g2.fillOval(xFor(i) - DOT / 2, yFor(values.get(i)) - DOT / 2, DOT, DOT);
 		}
 	}
 
@@ -284,7 +285,7 @@ class DelveChart extends JPanel
 	/**
 	 * Two series means a legend, always. It also names the averaging window, which is the one
 	 * thing about the orange line a reader cannot work out from looking at it. With no trend line
-	 * there is only one series, and the run count stands alone as a caption.
+	 * there is only one series, and the metric and run count stand alone as a caption.
 	 */
 	private void drawLegend(Graphics2D g2)
 	{
@@ -297,7 +298,7 @@ class DelveChart extends JPanel
 		g2.fillOval(x, y - DOT, DOT + 2, DOT + 2);
 		x += DOT + 8;
 
-		String runs = delves.size() + (delves.size() == 1 ? " run" : " runs");
+		String runs = series.label() + " - " + values.size() + (values.size() == 1 ? " run" : " runs");
 		g2.setColor(ColorScheme.LIGHT_GRAY_COLOR);
 		g2.drawString(runs, x, y);
 
@@ -322,14 +323,13 @@ class DelveChart extends JPanel
 	public String getToolTipText(MouseEvent event)
 	{
 		int index = nearestRun(event.getX(), event.getY());
-		return index < 0 ? null
-			: "Run " + (index + 1) + ": delve " + delves.get(index);
+		return index < 0 ? null : series.describe(index);
 	}
 
 	/** The run whose dot is closest to the pointer, or -1 if none is within reach. */
 	private int nearestRun(int px, int py)
 	{
-		if (delves.isEmpty())
+		if (values.isEmpty())
 		{
 			return -1;
 		}
@@ -337,10 +337,10 @@ class DelveChart extends JPanel
 		int best = -1;
 		long bestDistance = (long) HOVER_RADIUS * HOVER_RADIUS;
 
-		for (int i = 0; i < delves.size(); i++)
+		for (int i = 0; i < values.size(); i++)
 		{
 			long dx = xFor(i) - px;
-			long dy = yFor(delves.get(i)) - py;
+			long dy = yFor(values.get(i)) - py;
 			long distance = dx * dx + dy * dy;
 
 			if (distance <= bestDistance)
@@ -358,19 +358,19 @@ class DelveChart extends JPanel
 		int left = PAD_LEFT;
 		int right = getWidth() - PAD_RIGHT;
 
-		if (delves.size() <= 1)
+		if (values.size() <= 1)
 		{
 			return (left + right) / 2;
 		}
 
-		return left + (int) Math.round((double) index / (delves.size() - 1) * (right - left));
+		return left + (int) Math.round((double) index / (values.size() - 1) * (right - left));
 	}
 
-	private int yFor(double delve)
+	private int yFor(double value)
 	{
 		int top = PAD_TOP;
 		int bottom = getHeight() - PAD_BOTTOM;
-		double fraction = (delve - yMin) / Math.max(1, yMax - yMin);
+		double fraction = (value - yMin) / Math.max(1, yMax - yMin);
 		return bottom - (int) Math.round(fraction * (bottom - top));
 	}
 }

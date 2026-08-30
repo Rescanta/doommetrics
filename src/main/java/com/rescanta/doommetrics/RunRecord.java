@@ -62,4 +62,14 @@ class RunRecord
 	 * since a deep run really can roll the same unique more than once.
 	 */
 	List<String> loot;
+
+	/**
+	 * What this run's gear and spellbook gave back, by source - see {@link CombatMetric}. Null for
+	 * runs written before this was recorded, and for runs where nothing could be attributed.
+	 *
+	 * <p>This is what lets the history chart plot a metric per run rather than only in aggregate.
+	 * The lifetime figure is kept separately in config, so this is not what a total is read from -
+	 * which is why an older run missing it costs a point on a chart and nothing else.
+	 */
+	CombatTotals combat;
 }
