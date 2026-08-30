@@ -110,7 +110,7 @@ class DoomMetricsOverlay extends OverlayPanel
 			{
 				if (isShown(metric))
 				{
-					addAmount(metric.overlayLabel(), combat.get(metric));
+					addAmount(metric.overlayLabel(), combat.get(metric), metric.unit());
 				}
 			}
 
@@ -135,7 +135,7 @@ class DoomMetricsOverlay extends OverlayPanel
 			// has no line rather than a zero: nothing was asked for, so nothing is being answered.
 			if (shown)
 			{
-				addAmount(group.heading(), total);
+				addAmount(group.heading(), total, group.unit());
 			}
 		}
 	}
@@ -173,12 +173,20 @@ class DoomMetricsOverlay extends OverlayPanel
 		}
 	}
 
-	private void addAmount(String left, long amount)
+	/**
+	 * Draws one counter, its figure in the colour of whatever it is counted in, so which lines are
+	 * hitpoints, which are prayer and which are damage is legible without reading the labels.
+	 *
+	 * <p>A zero stays grey rather than taking a faint tint of its unit: a counter that has not
+	 * fired is being drawn back deliberately, and the whole point of the colour is that it marks
+	 * out a figure worth reading.
+	 */
+	private void addAmount(String left, long amount, CombatMetric.Unit unit)
 	{
 		panelComponent.getChildren().add(LineComponent.builder()
 			.left(left)
 			.right(DoomFormat.count(amount))
-			.rightColor(amount > 0 ? Color.WHITE : DIMMED)
+			.rightColor(amount > 0 ? unit.color() : DIMMED)
 			.build());
 	}
 
