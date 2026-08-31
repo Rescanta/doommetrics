@@ -169,6 +169,8 @@ public class PreviewWindow
 			() -> config.showDelveNumber, on -> config.showDelveNumber = on));
 		stack.add(toggle("Run timer", () -> config.showRunTimer, on -> config.showRunTimer = on));
 		stack.add(toggle("Pace", () -> config.showPace, on -> config.showPace = on));
+		stack.add(toggle("Target delve",
+			() -> config.showTargetDelve, on -> config.showTargetDelve = on));
 		stack.add(labelled("Pace mode", pacePicker));
 		stack.add(labelled("Counters", groupingPicker));
 
@@ -228,7 +230,7 @@ public class PreviewWindow
 	private void refresh()
 	{
 		plugin.run = scene.run;
-		panel.setLive(scene.live(config.paceMode));
+		panel.setLive(scene.live(config));
 		panel.setStats(scene.stats);
 		panel.setCombat(scene.panelCombat());
 		canvas.repaint();

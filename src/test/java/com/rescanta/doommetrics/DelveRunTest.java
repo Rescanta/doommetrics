@@ -204,6 +204,84 @@ public class DelveRunTest
 		assertEquals(6.0, run.runPace(), DELTA);
 	}
 
+	/**
+	 * The reference run sits on delve 20 having cleared each of the last twelve in 1:30, so the
+	 * time to a target is a flat 1:30 a delve less however long the current one has been going.
+	 */
+	@Test
+	public void predictsTheTimeToATargetFromTheDeepAverage()
+	{
+		DelveRun run = referenceRun();
+
+		// Delve 21 is the one in progress, so 30 delves stand between the run and delve 50.
+		assertEquals(Duration.ofMinutes(45), run.untilTarget(50, at(1680)));
+
+		// Half a minute into delve 21, and the estimate is half a minute shorter.
+		assertEquals(Duration.ofSeconds(2670), run.untilTarget(50, at(1710)));
+	}
+
+	/** No target set is not a target of nothing - there is simply no figure to give. */
+	@Test
+	public void predictsNothingWithoutATarget()
+	{
+		assertNull(referenceRun().untilTarget(0, at(1680)));
+	}
+
+	@Test
+	public void predictsNothingUntilANineIsCleared()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.complete(8, at(600), null);
+
+		assertNull(run.untilTarget(50, at(650)));
+	}
+
+	/** A dead run has no time left to run, whether or not it got where it was going. */
+	@Test
+	public void predictsNothingOnceTheRunIsOver()
+	{
+		DelveRun run = referenceRun();
+		run.enterLevel(21);
+		run.end(EndReason.DIED, at(1700), 21);
+
+		assertNull(run.untilTarget(50, at(1700)));
+		assertFalse(run.hasReached(50));
+		assertTrue(run.hasReached(20));
+	}
+
+	@Test
+	public void aReachedTargetHasNoTimeLeftToPredict()
+	{
+		DelveRun run = referenceRun();
+
+		assertTrue(run.hasReached(20));
+		assertTrue(run.hasReached(15));
+		assertFalse(run.hasReached(21));
+		assertNull(run.untilTarget(20, at(1680)));
+		assertNull(run.untilTarget(15, at(1680)));
+	}
+
+	/**
+	 * A delve that overruns the average stalls the estimate on what the delves after it must take,
+	 * rather than counting down into nothing and jumping back up on the clear.
+	 */
+	@Test
+	public void anOverrunningDelveStallsTheEstimateRatherThanReversingIt()
+	{
+		DelveRun run = referenceRun();
+
+		// Three delves to go at 1:30 each, less the 1:29 delve 21 has been going: 3:01.
+		assertEquals(Duration.ofSeconds(181), run.untilTarget(23, at(1680 + 89)));
+
+		// Past 1:30 the estimate holds at the two delves still to come after this one.
+		assertEquals(Duration.ofMinutes(3), run.untilTarget(23, at(1680 + 91)));
+		assertEquals(Duration.ofMinutes(3), run.untilTarget(23, at(1680 + 600)));
+
+		// And a target one delve out floors at nothing rather than going backwards.
+		assertEquals(Duration.ZERO, run.untilTarget(21, at(1680 + 600)));
+	}
+
 	@Test
 	public void dyingReportsTheTimeThroughThePreviousDelve()
 	{

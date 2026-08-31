@@ -127,7 +127,7 @@ public class PreviewShots
 		{
 		});
 
-		panel.setLive(scene.live(scene.config.paceMode));
+		panel.setLive(scene.live(scene.config));
 		panel.setStats(scene.stats);
 		panel.setCombat(scene.panelCombat());
 		panel.setRows(scene.rows);

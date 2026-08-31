@@ -22,6 +22,24 @@ final class DoomFormat
 	}
 
 	/**
+	 * What a predicted time to a target delve reads as: the span itself, {@code Reached} once the
+	 * target is behind you, or a dash while there is no deep average to predict from.
+	 *
+	 * <p>Here rather than at either call site because the overlay and the side panel both draw this
+	 * figure from the run themselves, and the one thing they must not do is word the same state
+	 * differently.
+	 */
+	static String prediction(Duration remaining, boolean reached)
+	{
+		if (reached)
+		{
+			return "Reached";
+		}
+
+		return remaining == null ? "-" : duration(remaining);
+	}
+
+	/**
 	 * Same as {@link #duration} but with tenths, for the per-delve times the game hands us to that
 	 * precision. A delve that took 90.6 seconds reads {@code 1:30.6}.
 	 */
