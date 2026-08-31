@@ -65,10 +65,17 @@ final class PreviewScene
 		this.series = series;
 	}
 
-	/** The panel's three live rows, or null when there is no run to draw. */
-	DoomMetricsPanel.Live live(PaceMode mode)
+	/**
+	 * The panel's live rows, or null when there is no run to draw. Read out of whichever config is
+	 * driving the preview rather than the scene's own, so a knob turned in the window moves the
+	 * side panel and the overlay together.
+	 */
+	DoomMetricsPanel.Live live(PreviewConfig from)
 	{
-		return run == null ? null : DoomMetricsPanel.Live.of(run, mode);
+		return run == null
+			? null
+			: DoomMetricsPanel.Live.of(run, from.paceMode,
+				from.showTargetDelve ? from.targetDelve : 0);
 	}
 
 	/** The sitting's figures with the run in progress counted in, as the panel is handed them. */

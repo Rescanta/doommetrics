@@ -584,7 +584,7 @@ public class DoomMetricsPlugin extends Plugin
 		log.debug("Delve {} cleared in {} (segment {})",
 			level, DoomFormat.preciseDuration(fight), DoomFormat.duration(split.segment));
 
-		announceInterval(level, split);
+		announceClear(level, split);
 		recordMilestone(level);
 	}
 
@@ -1561,17 +1561,31 @@ public class DoomMetricsPlugin extends Plugin
 	/**
 	 * Posts elapsed time and pace when the delve number is a multiple of the configured interval.
 	 * Shallow delves are skipped, so an interval of 5 reports at delve 10, 15, 20 and so on.
+	 *
+	 * <p>Landing on the target delve is reported whatever the interval says, including when the
+	 * messages are switched off altogether. A target of 52 read against an interval of 5 would
+	 * otherwise pass in silence, and the one delve of a run you asked to be told about is a poor
+	 * one to leave unannounced. The delves in between it are still the interval's business.
 	 */
-	private void announceInterval(int level, DelveRun.Split split)
+	private void announceClear(int level, DelveRun.Split split)
 	{
 		int interval = config.chatIntervalDelves();
+		int target = targetDelve();
 
-		if (interval <= 0 || level < DelveRun.DEEP_DELVE_LEVEL || level % interval != 0)
+		// Exactly the target rather than at or past it, so a run we joined already deeper than the
+		// target does not open with an announcement of an arrival nobody watched.
+		boolean reached = level == target;
+		boolean scheduled = interval > 0
+			&& level >= DelveRun.DEEP_DELVE_LEVEL
+			&& level % interval == 0;
+
+		if (!reached && !scheduled)
 		{
 			return;
 		}
 
-		sendChat(String.format("Delve %d in %s | %s elapsed | %s",
+		sendChat(String.format("%sDelve %d in %s | %s elapsed | %s",
+			reached ? "Target reached | " : "",
 			level,
 			DoomFormat.preciseDuration(split.fight == null ? split.segment : split.fight),
 			DoomFormat.duration(run.clearedElapsed()),
@@ -1652,11 +1666,10 @@ public class DoomMetricsPlugin extends Plugin
 		DelveRun display = getDisplayRun();
 		DoomMetricsPanel.Live live = display == null
 			? null
-			: DoomMetricsPanel.Live.of(display, config.paceMode());
+			: DoomMetricsPanel.Live.of(display, config.paceMode(), targetDelve());
 		DoomMetricsPanel.Stats stats = statsSnapshot();
 		boolean showCombat = run != null || sessionAlive(Instant.now());
-		String key = (live == null ? "" : String.join("|", live.delveLabel, live.delveValue,
-			live.timeLabel, live.timeValue, live.paceLabel, live.paceValue))
+		String key = (live == null ? "" : live.key())
 			+ "|" + stats.key() + "|" + combatKey(showCombat);
 
 		// The timers only move once a second, so most ticks have nothing to redraw. The rates move
@@ -1908,6 +1921,15 @@ public class DoomMetricsPlugin extends Plugin
 	private Double pace(DelveRun target)
 	{
 		return target.pace(config.paceMode());
+	}
+
+	/**
+	 * The delve being aimed for, or 0 when the target is switched off - the one form the panel and
+	 * the announcement both read it in, so neither has to test the checkbox for itself.
+	 */
+	private int targetDelve()
+	{
+		return config.showTargetDelve() ? config.targetDelve() : 0;
 	}
 
 	private static boolean isDoomBoss(int npcId)

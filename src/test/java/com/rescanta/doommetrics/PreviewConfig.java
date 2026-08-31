@@ -20,6 +20,8 @@ class PreviewConfig implements DoomMetricsConfig
 	boolean showDelveNumber = true;
 	boolean showRunTimer = true;
 	boolean showPace = true;
+	boolean showTargetDelve = false;
+	int targetDelve = 50;
 
 	PreviewConfig()
 	{
@@ -57,6 +59,8 @@ class PreviewConfig implements DoomMetricsConfig
 		showDelveNumber = other.showDelveNumber;
 		showRunTimer = other.showRunTimer;
 		showPace = other.showPace;
+		showTargetDelve = other.showTargetDelve;
+		targetDelve = other.targetDelve;
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
@@ -92,6 +96,18 @@ class PreviewConfig implements DoomMetricsConfig
 	public boolean showPace()
 	{
 		return showPace;
+	}
+
+	@Override
+	public boolean showTargetDelve()
+	{
+		return showTargetDelve;
+	}
+
+	@Override
+	public int targetDelve()
+	{
+		return targetDelve;
 	}
 
 	@Override

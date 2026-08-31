@@ -54,12 +54,19 @@ public class DoomMetricsOverlayTest
 
 		// The rows above the counters, at the widest each of them gets: a delve deeper than anyone
 		// has reached, a run longer than anyone sits through, and a pace nobody will ever hold.
-		assertFits(metrics, "Died on", "Delve 200");
-		assertFits(metrics, "Cleared", "200");
-		assertFits(metrics, "Delve", "200");
+		String deepest = Integer.toString(DoomMetricsConfig.MAX_DELVE);
+		assertFits(metrics, "Died on", "Delve " + deepest);
+		assertFits(metrics, "Cleared", deepest);
+		assertFits(metrics, "Delve", deepest);
 		assertFits(metrics, "Time*", DoomFormat.duration(Duration.ofHours(10)));
 		assertFits(metrics, PaceMode.DEEP_AVERAGE.toString(), "999.9/hr");
 		assertFits(metrics, PaceMode.RUN_THROUGHPUT.toString(), "999.9/hr");
+
+		// The target rows, at the deepest target that can be set and the longest wait it implies -
+		// "Predicted" is the widest label the overlay has, so it is the one worth measuring.
+		assertFits(metrics, "Target", deepest);
+		assertFits(metrics, "Predicted", DoomFormat.duration(Duration.ofHours(99)));
+		assertFits(metrics, "Predicted", DoomFormat.prediction(null, true));
 	}
 
 	@Test

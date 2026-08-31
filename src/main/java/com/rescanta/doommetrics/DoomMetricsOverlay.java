@@ -72,17 +72,27 @@ class DoomMetricsOverlay extends OverlayPanel
 			addLine("Delve", Integer.toString(run.currentLevel()));
 		}
 
+		Instant now = Instant.now();
+
 		if (config.showRunTimer())
 		{
 			// The asterisk marks a run we joined part way through, whose start time is a guess.
 			addLine(run.isPartial() ? "Time*" : "Time",
-				DoomFormat.duration(run.displayElapsed(Instant.now())));
+				DoomFormat.duration(run.displayElapsed(now)));
 		}
 
 		if (config.showPace())
 		{
 			PaceMode mode = config.paceMode();
 			addLine(mode.toString(), DoomFormat.pace(run.pace(mode)));
+		}
+
+		if (config.showTargetDelve())
+		{
+			int target = config.targetDelve();
+			addLine("Target", Integer.toString(target));
+			addLine("Predicted",
+				DoomFormat.prediction(run.untilTarget(target, now), run.hasReached(target)));
 		}
 
 		addCombatLines(run.getCombat());
