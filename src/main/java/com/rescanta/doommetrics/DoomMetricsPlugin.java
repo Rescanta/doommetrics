@@ -67,8 +67,9 @@ import net.runelite.client.util.ImageUtil;
 @Slf4j
 @PluginDescriptor(
 	name = "Doom of Mokhaiotl Metrics",
-	description = "Times each delve and shows your deep delve completions per hour",
-	tags = {"doom", "mokhaiotl", "delve", "timer", "pace", "pvm"}
+	description = "Times each delve, shows your deep delve rate, and keeps a lifetime record of"
+		+ " every run",
+	tags = {"doom", "mokhaiotl", "delve", "timer", "pace", "pvm", "metrics", "history", "stats"}
 )
 public class DoomMetricsPlugin extends Plugin
 {
