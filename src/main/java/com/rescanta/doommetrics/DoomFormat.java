@@ -22,6 +22,34 @@ final class DoomFormat
 	}
 
 	/**
+	 * The same clock shortened to fit an infobox square, where {@link #duration} would be drawn
+	 * wider than the box it sits in once a run passes the hour.
+	 *
+	 * <p>Under the hour it is the clock unchanged - {@code 14:18} is already short. Past it the
+	 * seconds are dropped and the hours are marked, so an hour and twenty-three minutes reads
+	 * {@code 1h23} rather than {@code 1:23}, which the minutes and seconds above it would make
+	 * unreadable: {@code 1:23} has already been on screen once this run, meaning something else.
+	 *
+	 * <p>Past ten hours the minutes go too, because a two figure hour beside them is wider than
+	 * the box and a square that will not hold its own figure is worse than one that rounds it.
+	 * Nothing is lost that matters at that point, and the exact time is in the tooltip throughout.
+	 */
+	static String compactDuration(Duration duration)
+	{
+		long total = Math.max(0, duration.getSeconds());
+		long hours = total / 3600;
+
+		if (hours >= 10)
+		{
+			return hours + "h";
+		}
+
+		return hours > 0
+			? String.format(Locale.US, "%dh%02d", hours, (total % 3600) / 60)
+			: duration(duration);
+	}
+
+	/**
 	 * What a predicted time to a target delve reads as: the span itself, {@code Reached} once the
 	 * target is behind you, or a dash while there is no deep average to predict from.
 	 *
@@ -102,6 +130,16 @@ final class DoomFormat
 	static String pace(Double perHour)
 	{
 		return perHour == null ? "-" : String.format(Locale.US, "%.1f/hr", perHour);
+	}
+
+	/**
+	 * A pace with the unit left off, for the infobox square. The {@code /hr} is a third of the
+	 * width of the box and says the same thing every time it is drawn, so it goes in the tooltip
+	 * and the square keeps the part that moves.
+	 */
+	static String compactPace(Double perHour)
+	{
+		return perHour == null ? "-" : String.format(Locale.US, "%.1f", perHour);
 	}
 
 	/** A game tick, the unit the milestone table stores its personal bests in. */
