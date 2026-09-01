@@ -85,7 +85,11 @@ class CombatTablePanel extends JPanel
 			long amount = totals == null ? 0 : totals.get(metric);
 			JLabel value = values[metric.ordinal()];
 			value.setText(DoomFormat.count(amount));
-			value.setForeground(amount > 0 ? ColorScheme.TEXT_COLOR : ColorScheme.LIGHT_GRAY_COLOR);
+			// Coloured by what it counts, matching the overlay's lines, so the two read as the
+			// same figures. A zero stays muted - see CombatMetric.Unit#color.
+			value.setForeground(amount > 0
+				? metric.unit().color()
+				: ColorScheme.LIGHT_GRAY_COLOR);
 			value.setToolTipText(amount > 0
 				? DoomFormat.count(amount) + " " + metric.unit().description()
 				: "Nothing counted yet");
@@ -96,7 +100,9 @@ class CombatTablePanel extends JPanel
 	{
 		JLabel heading = label(group.heading(), SwingConstants.LEFT,
 			FontManager.getRunescapeBoldFont());
-		heading.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		// The heading takes its group's colour so a block of rows can be found by colour alone,
+		// and so the two healing headings read as one thing measured two ways.
+		heading.setForeground(group.unit().color());
 
 		JLabel filler = label("", SwingConstants.RIGHT, FontManager.getRunescapeBoldFont());
 

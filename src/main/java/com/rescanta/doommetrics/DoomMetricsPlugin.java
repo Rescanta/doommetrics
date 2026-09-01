@@ -54,6 +54,7 @@ import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.InfoBoxMenuClicked;
 import net.runelite.client.events.OverlayMenuClicked;
 import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.game.ItemManager;
@@ -62,13 +63,15 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
 import net.runelite.client.util.ImageUtil;
 
 @Slf4j
 @PluginDescriptor(
 	name = "Doom of Mokhaiotl Metrics",
-	description = "Times each delve and shows your deep delve completions per hour",
-	tags = {"doom", "mokhaiotl", "delve", "timer", "pace", "pvm"}
+	description = "Times each delve, shows your deep delve rate, and keeps a lifetime record of"
+		+ " every run",
+	tags = {"doom", "mokhaiotl", "delve", "timer", "pace", "pvm", "metrics", "history", "stats"}
 )
 public class DoomMetricsPlugin extends Plugin
 {
@@ -86,7 +89,8 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private static final int ABANDON_TICKS = 100;
 
-	private static final String CLEAR_OPTION = "Clear";
+	/** Package-private so the infobox can carry the same option the overlay does. */
+	static final String CLEAR_OPTION = "Clear";
 
 	/**
 	 * The drops worth writing against a run. Everything else the Doom hands out is supplies and
@@ -198,6 +202,9 @@ public class DoomMetricsPlugin extends Plugin
 	private DoomMetricsOverlay overlay;
 
 	@Inject
+	private InfoBoxManager infoBoxManager;
+
+	@Inject
 	private ClientToolbar clientToolbar;
 
 	@Inject
@@ -217,6 +224,10 @@ public class DoomMetricsPlugin extends Plugin
 
 	private DoomMetricsPanel panel;
 	private NavigationButton navButton;
+
+	/** The square, up for as long as the plugin is. It decides for itself when to draw. */
+	private DoomMetricsInfoBox infoBox;
+
 	/** Read on the Swing thread when the history window is built, cleared on shutdown. */
 	private volatile BufferedImage icon;
 
@@ -350,6 +361,9 @@ public class DoomMetricsPlugin extends Plugin
 			.build();
 		clientToolbar.addNavigation(navButton);
 
+		infoBox = new DoomMetricsInfoBox(icon, this, config);
+		infoBoxManager.addInfoBox(infoBox);
+
 		reset();
 		loadMilestones();
 		loadTotals();
@@ -359,6 +373,8 @@ public class DoomMetricsPlugin extends Plugin
 	protected void shutDown()
 	{
 		overlayManager.remove(overlay);
+		infoBoxManager.removeInfoBox(infoBox);
+		infoBox = null;
 		clientToolbar.removeNavigation(navButton);
 		navButton = null;
 		panel = null;
@@ -584,7 +600,7 @@ public class DoomMetricsPlugin extends Plugin
 		log.debug("Delve {} cleared in {} (segment {})",
 			level, DoomFormat.preciseDuration(fight), DoomFormat.duration(split.segment));
 
-		announceInterval(level, split);
+		announceClear(level, split);
 		recordMilestone(level);
 	}
 
@@ -1397,6 +1413,23 @@ public class DoomMetricsPlugin extends Plugin
 		}
 	}
 
+	@Subscribe
+	public void onInfoBoxMenuClicked(InfoBoxMenuClicked event)
+	{
+		long started = System.nanoTime();
+		handleInfoBoxMenuClicked(event);
+		reportSlow("onInfoBoxMenuClicked", started);
+	}
+
+	/** The same Clear the overlay carries, for the display style where the overlay is not drawn. */
+	private void handleInfoBoxMenuClicked(InfoBoxMenuClicked event)
+	{
+		if (event.getInfoBox() == infoBox && CLEAR_OPTION.equals(event.getEntry().getOption()))
+		{
+			lastRun = null;
+		}
+	}
+
 	/**
 	 * Logs a handler that ran long, so a stutter can be pinned on this plugin or ruled out.
 	 *
@@ -1561,17 +1594,31 @@ public class DoomMetricsPlugin extends Plugin
 	/**
 	 * Posts elapsed time and pace when the delve number is a multiple of the configured interval.
 	 * Shallow delves are skipped, so an interval of 5 reports at delve 10, 15, 20 and so on.
+	 *
+	 * <p>Landing on the target delve is reported whatever the interval says, including when the
+	 * messages are switched off altogether. A target of 52 read against an interval of 5 would
+	 * otherwise pass in silence, and the one delve of a run you asked to be told about is a poor
+	 * one to leave unannounced. The delves in between it are still the interval's business.
 	 */
-	private void announceInterval(int level, DelveRun.Split split)
+	private void announceClear(int level, DelveRun.Split split)
 	{
 		int interval = config.chatIntervalDelves();
+		int target = targetDelve();
 
-		if (interval <= 0 || level < DelveRun.DEEP_DELVE_LEVEL || level % interval != 0)
+		// Exactly the target rather than at or past it, so a run we joined already deeper than the
+		// target does not open with an announcement of an arrival nobody watched.
+		boolean reached = level == target;
+		boolean scheduled = interval > 0
+			&& level >= DelveRun.DEEP_DELVE_LEVEL
+			&& level % interval == 0;
+
+		if (!reached && !scheduled)
 		{
 			return;
 		}
 
-		sendChat(String.format("Delve %d in %s | %s elapsed | %s",
+		sendChat(String.format("%sDelve %d in %s | %s elapsed | %s",
+			reached ? "Target reached | " : "",
 			level,
 			DoomFormat.preciseDuration(split.fight == null ? split.segment : split.fight),
 			DoomFormat.duration(run.clearedElapsed()),
@@ -1650,11 +1697,12 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		DelveRun display = getDisplayRun();
-		DoomMetricsPanel.Live live = display == null ? null : liveSnapshot(display);
+		DoomMetricsPanel.Live live = display == null
+			? null
+			: DoomMetricsPanel.Live.of(display, config.paceMode(), targetDelve());
 		DoomMetricsPanel.Stats stats = statsSnapshot();
 		boolean showCombat = run != null || sessionAlive(Instant.now());
-		String key = (live == null ? "" : String.join("|", live.delveLabel, live.delveValue,
-			live.timeLabel, live.timeValue, live.paceLabel, live.paceValue))
+		String key = (live == null ? "" : live.key())
 			+ "|" + stats.key() + "|" + combatKey(showCombat);
 
 		// The timers only move once a second, so most ticks have nothing to redraw. The rates move
@@ -1776,40 +1824,6 @@ public class DoomMetricsPlugin extends Plugin
 			: String.format("%d deep %s in %s of run time",
 				totals.deep, totals.deep == 1 ? "delve" : "delves",
 				DoomFormat.tickDuration(totals.ticks));
-	}
-
-	/** The overlay's three rows, as strings, for the panel to draw. */
-	private DoomMetricsPanel.Live liveSnapshot(DelveRun display)
-	{
-		String delveLabel;
-		String delveValue;
-
-		if (!display.isFinished())
-		{
-			delveLabel = "Delve";
-			delveValue = Integer.toString(display.currentLevel());
-		}
-		else if (display.getEndReason() == EndReason.DIED)
-		{
-			delveLabel = "Died on";
-			delveValue = "Delve " + display.getDiedOnLevel();
-		}
-		else
-		{
-			delveLabel = "Cleared";
-			delveValue = Integer.toString(display.lastLevel());
-		}
-
-		PaceMode mode = config.paceMode();
-
-		return new DoomMetricsPanel.Live(
-			delveLabel,
-			delveValue,
-			// The asterisk marks a run we joined part way through, whose start time is a guess.
-			display.isPartial() ? "Time*" : "Time",
-			DoomFormat.duration(display.displayElapsed(Instant.now())),
-			mode.toString(),
-			DoomFormat.pace(pace(display)));
 	}
 
 	private void refreshTable()
@@ -1940,6 +1954,15 @@ public class DoomMetricsPlugin extends Plugin
 	private Double pace(DelveRun target)
 	{
 		return target.pace(config.paceMode());
+	}
+
+	/**
+	 * The delve being aimed for, or 0 when the target is switched off - the one form the panel and
+	 * the announcement both read it in, so neither has to test the checkbox for itself.
+	 */
+	private int targetDelve()
+	{
+		return config.showTargetDelve() ? config.targetDelve() : 0;
 	}
 
 	private static boolean isDoomBoss(int npcId)

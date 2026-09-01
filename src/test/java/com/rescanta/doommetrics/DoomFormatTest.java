@@ -31,6 +31,18 @@ public class DoomFormatTest
 		assertEquals("3.9/hr", DoomFormat.pace(3.94));
 	}
 
+	/** The three states of a target: on the way, arrived, and nothing yet to predict from. */
+	@Test
+	public void predictionSaysWhichOfTheThreeStatesATargetIsIn()
+	{
+		assertEquals("45:00", DoomFormat.prediction(Duration.ofMinutes(45), false));
+		assertEquals("Reached", DoomFormat.prediction(null, true));
+		assertEquals("-", DoomFormat.prediction(null, false));
+
+		// Arriving wins over any time left over, so the two can never be shown contradicting.
+		assertEquals("Reached", DoomFormat.prediction(Duration.ofMinutes(45), true));
+	}
+
 	/** The game's own unit: 151 ticks is the 1:30.60 it reported for that delve. */
 	@Test
 	public void ticksRoundToTheNearestTick()

@@ -2,6 +2,7 @@ package com.rescanta.doommetrics;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import javax.swing.JButton;
@@ -27,25 +28,86 @@ import net.runelite.client.ui.PluginPanel;
  */
 class DoomMetricsPanel extends PluginPanel
 {
-	/** The three figures mirrored from the overlay, or null when there is no run to show. */
+	/** The figures mirrored from the overlay, or null when there is no run to show. */
 	static final class Live
 	{
-		final String delveLabel;
-		final String delveValue;
-		final String timeLabel;
-		final String timeValue;
-		final String paceLabel;
-		final String paceValue;
+		/** How many rows a run can fill: delve, time, pace, and the target pair. */
+		static final int ROWS = 5;
 
-		Live(String delveLabel, String delveValue, String timeLabel, String timeValue,
-			String paceLabel, String paceValue)
+		/** Row labels in draw order, a null label meaning that row is switched off. */
+		final String[] labels;
+
+		final String[] values;
+
+		private Live(String[] labels, String[] values)
 		{
-			this.delveLabel = delveLabel;
-			this.delveValue = delveValue;
-			this.timeLabel = timeLabel;
-			this.timeValue = timeValue;
-			this.paceLabel = paceLabel;
-			this.paceValue = paceValue;
+			this.labels = labels;
+			this.values = values;
+		}
+
+		/**
+		 * The live rows of a run, formatted for drawing. The overlay draws the same figures itself
+		 * from the run; this is the panel's copy of them.
+		 *
+		 * @param target the delve being aimed for, or 0 when the target rows are switched off
+		 */
+		static Live of(DelveRun display, PaceMode mode, int target)
+		{
+			String delveLabel;
+			String delveValue;
+
+			if (!display.isFinished())
+			{
+				delveLabel = "Delve";
+				delveValue = Integer.toString(display.currentLevel());
+			}
+			else if (display.getEndReason() == EndReason.DIED)
+			{
+				delveLabel = "Died on";
+				delveValue = "Delve " + display.getDiedOnLevel();
+			}
+			else
+			{
+				delveLabel = "Cleared";
+				delveValue = Integer.toString(display.lastLevel());
+			}
+
+			Instant now = Instant.now();
+
+			return new Live(
+				new String[]{
+					delveLabel,
+					// The asterisk marks a run joined part way through, whose start is a guess.
+					display.isPartial() ? "Time*" : "Time",
+					mode.toString(),
+					target > 0 ? "Target" : null,
+					target > 0 ? "Predicted" : null,
+				},
+				new String[]{
+					delveValue,
+					DoomFormat.duration(display.displayElapsed(now)),
+					DoomFormat.pace(display.pace(mode)),
+					target > 0 ? Integer.toString(target) : null,
+					target > 0 ? DoomFormat.prediction(display.untilTarget(target, now),
+						display.hasReached(target)) : null,
+				});
+		}
+
+		/**
+		 * Enough of the snapshot to tell one repaint from the next. Built from the rows themselves
+		 * rather than named off a list of fields, so a row added later cannot be left out of it and
+		 * silently stop the panel redrawing.
+		 */
+		String key()
+		{
+			StringBuilder key = new StringBuilder();
+
+			for (int i = 0; i < labels.length; i++)
+			{
+				key.append(labels[i]).append('|').append(values[i]).append('|');
+			}
+
+			return key.toString();
 		}
 	}
 
@@ -91,8 +153,8 @@ class DoomMetricsPanel extends PluginPanel
 	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("Nothing banked yet.");
 
 	private final JLabel idleLabel = plain("No run in progress");
-	private final JLabel[] liveLeft = {plain(""), plain(""), plain("")};
-	private final JLabel[] liveRight = {right(""), right(""), right("")};
+	private final JLabel[] liveLeft = labels(SwingConstants.LEFT);
+	private final JLabel[] liveRight = labels(SwingConstants.RIGHT);
 
 	private final JLabel sessionLength = right("-");
 	private final JLabel sessionPace = right("-");
@@ -165,7 +227,20 @@ class DoomMetricsPanel extends PluginPanel
 		}
 	}
 
-	/** Repaints the three live figures. A null snapshot collapses the section to one idle line. */
+	/** One reusable widget per live row, retexted rather than rebuilt as the figures move. */
+	private static JLabel[] labels(int alignment)
+	{
+		JLabel[] labels = new JLabel[Live.ROWS];
+
+		for (int i = 0; i < labels.length; i++)
+		{
+			labels[i] = label("", alignment);
+		}
+
+		return labels;
+	}
+
+	/** Repaints the live figures. A null snapshot collapses the section to one idle line. */
 	void setLive(Live live)
 	{
 		livePanel.removeAll();
@@ -177,19 +252,16 @@ class DoomMetricsPanel extends PluginPanel
 		}
 		else
 		{
-			String[] labels = {live.delveLabel, live.timeLabel, live.paceLabel};
-			String[] values = {live.delveValue, live.timeValue, live.paceValue};
-
-			for (int i = 0; i < labels.length; i++)
+			for (int i = 0; i < live.labels.length; i++)
 			{
-				if (labels[i] == null)
+				if (live.labels[i] == null)
 				{
 					continue;
 				}
 
-				liveLeft[i].setText(labels[i]);
+				liveLeft[i].setText(live.labels[i]);
 				liveLeft[i].setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-				liveRight[i].setText(values[i]);
+				liveRight[i].setText(live.values[i]);
 				liveRight[i].setForeground(ColorScheme.TEXT_COLOR);
 				livePanel.add(pair(liveLeft[i], liveRight[i], ColorScheme.DARK_GRAY_COLOR));
 			}

@@ -11,6 +11,16 @@ public interface DoomMetricsConfig extends Config
 {
 	String GROUP = "doom-of-mokhaiotl-metrics";
 
+	/**
+	 * The deepest delve anything here has to account for: the ceiling on a target, and the widest
+	 * delve number the overlay is measured against.
+	 *
+	 * <p>Well clear of the record rather than level with it. The record was 260 when this was
+	 * written and only moves one way as better gear arrives, and a plugin that has to be updated to
+	 * keep up with it is a plugin that will one day quietly refuse to show someone their own delve.
+	 */
+	int MAX_DELVE = 1000;
+
 	@ConfigSection(
 		name = "Counters",
 		description = "Extra overlay lines for what your gear gives back",
@@ -66,6 +76,38 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "displayStyle",
+		name = "Display",
+		description = "What the plugin draws over the game while a run is on."
+			+ "<br>Panel is the overlay of lines, built from the switches below."
+			+ "<br>Infobox is a single square holding the one figure picked underneath, with the"
+			+ " rest of it in the tooltip."
+			+ "<br>Off draws nothing. Delves are still timed and everything is still counted, and"
+			+ " the side panel and the chat messages carry on as they were.",
+		position = 8
+	)
+	default DisplayStyle displayStyle()
+	{
+		return DisplayStyle.PANEL;
+	}
+
+	@ConfigItem(
+		keyName = "infoboxFigure",
+		name = "Infobox figure",
+		description = "Which single figure the infobox square holds. Only used when Display is set"
+			+ " to Infobox."
+			+ "<br>The counters here are independent of the counter checkboxes below, which choose"
+			+ " what the panel draws."
+			+ "<br>Time to target counts down to the delve set under Target delve, whether or not"
+			+ " Show target delve is switched on.",
+		position = 9
+	)
+	default InfoBoxFigure infoboxFigure()
+	{
+		return InfoBoxFigure.DELVE;
+	}
+
+	@ConfigItem(
 		keyName = "showDelveNumber",
 		name = "Show delve number",
 		description = "Show the delve you are currently on in the overlay.",
@@ -96,6 +138,34 @@ public interface DoomMetricsConfig extends Config
 	default boolean showPace()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		keyName = "showTargetDelve",
+		name = "Show target delve",
+		description = "Show the delve you are aiming for and how long it is predicted to take, in"
+			+ " the overlay and the side panel."
+			+ "<br>Reaching it is always announced in chat, whatever the chat interval is set to.",
+		position = 14
+	)
+	default boolean showTargetDelve()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "targetDelve",
+		name = "Target delve",
+		description = "The delve to aim for. The predicted time is what your delve 9+ average says"
+			+ " the delves between here and there will take, so it appears once this run has"
+			+ " cleared a delve 9."
+			+ "<br>Delves get slower the deeper they go, so a distant target reads short.",
+		position = 15
+	)
+	@Range(min = 10, max = MAX_DELVE)
+	default int targetDelve()
+	{
+		return 50;
 	}
 
 	@ConfigItem(

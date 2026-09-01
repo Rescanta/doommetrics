@@ -1,12 +1,10 @@
 package com.rescanta.doommetrics;
 
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.time.Instant;
 import javax.inject.Inject;
 import net.runelite.api.MenuAction;
-import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayMenuEntry;
 import net.runelite.client.ui.overlay.OverlayPanel;
@@ -16,9 +14,6 @@ import net.runelite.client.ui.overlay.components.TitleComponent;
 
 class DoomMetricsOverlay extends OverlayPanel
 {
-	/** A figure still sitting at zero, drawn back rather than hidden. */
-	private static final Color DIMMED = ColorScheme.LIGHT_GRAY_COLOR;
-
 	// Held rather than fetched, because values() hands out a fresh copy of the array every call and
 	// these are walked several times a frame.
 	private static final CombatMetric.Group[] GROUPS = CombatMetric.Group.values();
@@ -28,8 +23,9 @@ class DoomMetricsOverlay extends OverlayPanel
 	private final DoomMetricsPlugin plugin;
 	private final DoomMetricsConfig config;
 
+	/** Package-private rather than private so the preview harness can build one without Guice. */
 	@Inject
-	private DoomMetricsOverlay(DoomMetricsPlugin plugin, DoomMetricsConfig config)
+	DoomMetricsOverlay(DoomMetricsPlugin plugin, DoomMetricsConfig config)
 	{
 		super(plugin);
 		this.plugin = plugin;
@@ -44,6 +40,13 @@ class DoomMetricsOverlay extends OverlayPanel
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
+		// The other two styles are drawn by the infobox, or not at all. Answered before the run is
+		// asked for, so a player who has switched the panel off pays nothing for it every frame.
+		if (config.displayStyle() != DisplayStyle.PANEL)
+		{
+			return null;
+		}
+
 		DelveRun run = plugin.getDisplayRun();
 		if (run == null)
 		{
@@ -71,17 +74,27 @@ class DoomMetricsOverlay extends OverlayPanel
 			addLine("Delve", Integer.toString(run.currentLevel()));
 		}
 
+		Instant now = Instant.now();
+
 		if (config.showRunTimer())
 		{
 			// The asterisk marks a run we joined part way through, whose start time is a guess.
 			addLine(run.isPartial() ? "Time*" : "Time",
-				DoomFormat.duration(run.displayElapsed(Instant.now())));
+				DoomFormat.duration(run.displayElapsed(now)));
 		}
 
 		if (config.showPace())
 		{
 			PaceMode mode = config.paceMode();
 			addLine(mode.toString(), DoomFormat.pace(run.pace(mode)));
+		}
+
+		if (config.showTargetDelve())
+		{
+			int target = config.targetDelve();
+			addLine("Target", Integer.toString(target));
+			addLine("Predicted",
+				DoomFormat.prediction(run.untilTarget(target, now), run.hasReached(target)));
 		}
 
 		addCombatLines(run.getCombat());
@@ -110,7 +123,7 @@ class DoomMetricsOverlay extends OverlayPanel
 			{
 				if (isShown(metric))
 				{
-					addAmount(metric.overlayLabel(), combat.get(metric));
+					addAmount(metric.overlayLabel(), combat.get(metric), metric.unit());
 				}
 			}
 
@@ -135,7 +148,7 @@ class DoomMetricsOverlay extends OverlayPanel
 			// has no line rather than a zero: nothing was asked for, so nothing is being answered.
 			if (shown)
 			{
-				addAmount(group.heading(), total);
+				addAmount(group.overlayHeading(), total, group.unit());
 			}
 		}
 	}
@@ -173,12 +186,20 @@ class DoomMetricsOverlay extends OverlayPanel
 		}
 	}
 
-	private void addAmount(String left, long amount)
+	/**
+	 * Draws one counter, its figure in the colour of whatever it is counted in, so which lines are
+	 * hitpoints, which are prayer and which are damage is legible without reading the labels.
+	 *
+	 * <p>A zero stays grey rather than taking a faint tint of its unit: a counter that has not
+	 * fired is being drawn back deliberately, and the whole point of the colour is that it marks
+	 * out a figure worth reading.
+	 */
+	private void addAmount(String left, long amount, CombatMetric.Unit unit)
 	{
 		panelComponent.getChildren().add(LineComponent.builder()
 			.left(left)
 			.right(DoomFormat.count(amount))
-			.rightColor(amount > 0 ? Color.WHITE : DIMMED)
+			.rightColor(amount > 0 ? unit.color() : DoomColors.DIMMED)
 			.build());
 	}
 
