@@ -340,11 +340,15 @@ class DelveRun
 	}
 
 	/**
-	 * Pace implied by the mean length of the delves at or past {@link #PACE_AVERAGE_FROM_LEVEL}.
-	 * Delve 8 is excluded here because it has a different amount of health to 9 and above, which
-	 * would drag the average off the speed you are actually sustaining.
+	 * The mean length of the delves at or past {@link #PACE_AVERAGE_FROM_LEVEL}, or null until one
+	 * has been cleared. Delve 8 is excluded because it has a different amount of health to 9 and
+	 * above, which would drag the average off the speed you are actually sustaining.
+	 *
+	 * <p>Both {@link #deepPace} and {@link #untilTarget} are built on this rather than working the
+	 * average out for themselves, so the time predicted to a target and the pace shown beside it
+	 * can never disagree about how long a delve is taking.
 	 */
-	Double deepPace()
+	Duration meanDeepSegment()
 	{
 		long count = 0;
 		long millis = 0;
@@ -358,13 +362,56 @@ class DelveRun
 			}
 		}
 
-		if (count == 0 || millis <= 0)
+		return count == 0 || millis <= 0 ? null : Duration.ofMillis(millis / count);
+	}
+
+	/** Pace implied by {@link #meanDeepSegment}, or null while there is no mean to imply one. */
+	Double deepPace()
+	{
+		Duration mean = meanDeepSegment();
+		return mean == null ? null : 3600.0 / (mean.toMillis() / 1000.0);
+	}
+
+	/** Whether this run has cleared the delve it was aiming for. */
+	boolean hasReached(int target)
+	{
+		return target > 0 && lastLevel() >= target;
+	}
+
+	/**
+	 * How much longer this run has to go to reach {@code target}, at the speed its deep delves have
+	 * been going. Null when there is no answer to give: no target set, the target already reached,
+	 * the run over, or no delve 9+ cleared yet to average over.
+	 *
+	 * <p>The delve in progress is charged against the estimate as it goes, so the figure counts
+	 * down second by second rather than sitting still between clears. A delve that overruns the
+	 * average would otherwise drive the estimate below what the delves still to come must take, so
+	 * it floors at exactly that: the figure stalls for as long as you are over, then resumes on the
+	 * clear. Without the floor it would count down into nothing and jump back up, which reads as
+	 * the estimate getting worse the closer you get.
+	 *
+	 * <p>Two things a flat average cannot know are left in deliberately, because every other figure
+	 * here is a flat average and a prediction that quietly corrected for them would be the odd one
+	 * out: delves 1-8 are quicker than the mean, so a target set during the warm-up reads long, and
+	 * delves get slower the deeper they go, so a distant target reads short.
+	 */
+	Duration untilTarget(int target, Instant now)
+	{
+		if (target <= 0 || isFinished() || hasReached(target))
 		{
 			return null;
 		}
 
-		double meanSeconds = millis / 1000.0 / count;
-		return 3600.0 / meanSeconds;
+		Duration mean = meanDeepSegment();
+
+		if (mean == null)
+		{
+			return null;
+		}
+
+		long remaining = target - lastLevel();
+		long millis = remaining * mean.toMillis() - Duration.between(lastClearedAt, now).toMillis();
+		return Duration.ofMillis(Math.max(millis, (remaining - 1) * mean.toMillis()));
 	}
 
 	Double pace(PaceMode mode)
