@@ -84,6 +84,32 @@ the linger to 0 to hide it straight away. Each row can be turned off.
 A run the plugin joined part way through - by being enabled mid trip - labels its timer `Time*`,
 because its start time is a guess.
 
+## One square instead
+
+Set **Display** to `Infobox` and the panel comes down, replaced by a single infobox: the plugin
+icon with one figure over it, sat in the infobox bar with everything else you have up there.
+
+A square holds one number, so **Infobox figure** picks which. It can be the delve you are on, the
+run timer, the pace, the time left to your target delve, any of the eight counters, or any of the
+four counter headings with its sources summed. The figures are shortened to fit: `1.2k` for a
+counter past a thousand, `1h23` for a run past the hour and `10h` past ten of them, and `40.1` for
+a pace. What was dropped to make them fit is in the tooltip - the unit, the full precision, and
+whether the run is one the plugin saw the start of.
+
+**Time to target** is the panel's `Predicted` row in a square, counting down to the delve set under
+**Target delve**. It reads that setting whether or not **Show target delve** is switched on, so the
+delve you are aiming for is set in one place whichever of the two is drawing it. It shows `Done`
+once the target is behind you, and a dimmed `-` until this run has cleared a delve 9 to average.
+
+Counters keep the colours they have on the panel, red for hitpoints, blue for prayer and yellow
+for damage, and one still at zero is drawn grey - so a spec you expected to be firing is visibly
+not. The counter checkboxes have no say here: they choose which lines the panel draws, and a
+square has one line. Right click it and pick **Clear** to dismiss a finished run, as on the panel.
+
+**Display** set to `Off` draws nothing over the game at all. Nothing else changes: delves are
+still timed, the counters still count, the chat messages still arrive, and the side panel and the
+history still fill up.
+
 ## The delve you are aiming for
 
 Switch on **Show target delve** and the overlay and the side panel gain two rows: the delve you set
@@ -271,6 +297,8 @@ it, never before, because an unclaimed pile is not yet yours.
 | Pace | Deep pace | Which figure the overlay and chat show |
 | Chat every N delves | 5 | 0 disables the messages |
 | Announce run end | on | Summary on claim, leave or death |
+| Display | Panel | The panel of rows, one infobox square, or nothing drawn over the game |
+| Infobox figure | Delve | Which single figure the square holds |
 | Show delve number / run timer / pace | on | Overlay rows |
 | Keep result for | 30 min | How long a finished run stays on screen; 0 hides it at once |
 | Show target delve | off | Adds the target and predicted rows |

@@ -1,12 +1,10 @@
 package com.rescanta.doommetrics;
 
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.time.Instant;
 import javax.inject.Inject;
 import net.runelite.api.MenuAction;
-import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayMenuEntry;
 import net.runelite.client.ui.overlay.OverlayPanel;
@@ -16,9 +14,6 @@ import net.runelite.client.ui.overlay.components.TitleComponent;
 
 class DoomMetricsOverlay extends OverlayPanel
 {
-	/** A figure still sitting at zero, drawn back rather than hidden. */
-	private static final Color DIMMED = ColorScheme.LIGHT_GRAY_COLOR;
-
 	// Held rather than fetched, because values() hands out a fresh copy of the array every call and
 	// these are walked several times a frame.
 	private static final CombatMetric.Group[] GROUPS = CombatMetric.Group.values();
@@ -45,6 +40,13 @@ class DoomMetricsOverlay extends OverlayPanel
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
+		// The other two styles are drawn by the infobox, or not at all. Answered before the run is
+		// asked for, so a player who has switched the panel off pays nothing for it every frame.
+		if (config.displayStyle() != DisplayStyle.PANEL)
+		{
+			return null;
+		}
+
 		DelveRun run = plugin.getDisplayRun();
 		if (run == null)
 		{
@@ -197,7 +199,7 @@ class DoomMetricsOverlay extends OverlayPanel
 		panelComponent.getChildren().add(LineComponent.builder()
 			.left(left)
 			.right(DoomFormat.count(amount))
-			.rightColor(amount > 0 ? unit.color() : DIMMED)
+			.rightColor(amount > 0 ? unit.color() : DoomColors.DIMMED)
 			.build());
 	}
 

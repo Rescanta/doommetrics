@@ -76,6 +76,38 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "displayStyle",
+		name = "Display",
+		description = "What the plugin draws over the game while a run is on."
+			+ "<br>Panel is the overlay of lines, built from the switches below."
+			+ "<br>Infobox is a single square holding the one figure picked underneath, with the"
+			+ " rest of it in the tooltip."
+			+ "<br>Off draws nothing. Delves are still timed and everything is still counted, and"
+			+ " the side panel and the chat messages carry on as they were.",
+		position = 8
+	)
+	default DisplayStyle displayStyle()
+	{
+		return DisplayStyle.PANEL;
+	}
+
+	@ConfigItem(
+		keyName = "infoboxFigure",
+		name = "Infobox figure",
+		description = "Which single figure the infobox square holds. Only used when Display is set"
+			+ " to Infobox."
+			+ "<br>The counters here are independent of the counter checkboxes below, which choose"
+			+ " what the panel draws."
+			+ "<br>Time to target counts down to the delve set under Target delve, whether or not"
+			+ " Show target delve is switched on.",
+		position = 9
+	)
+	default InfoBoxFigure infoboxFigure()
+	{
+		return InfoBoxFigure.DELVE;
+	}
+
+	@ConfigItem(
 		keyName = "showDelveNumber",
 		name = "Show delve number",
 		description = "Show the delve you are currently on in the overlay.",

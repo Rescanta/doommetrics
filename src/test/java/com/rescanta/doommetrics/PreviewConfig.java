@@ -15,6 +15,8 @@ class PreviewConfig implements DoomMetricsConfig
 {
 	private final Map<CombatMetric, Boolean> counters = new EnumMap<>(CombatMetric.class);
 
+	DisplayStyle displayStyle = DisplayStyle.PANEL;
+	InfoBoxFigure infoboxFigure = InfoBoxFigure.DELVE;
 	PaceMode paceMode = PaceMode.DEEP_AVERAGE;
 	MetricDisplay grouping = MetricDisplay.SEPARATE;
 	boolean showDelveNumber = true;
@@ -54,6 +56,8 @@ class PreviewConfig implements DoomMetricsConfig
 	/** Takes on another config's settings, so a scene can be loaded into the live one. */
 	void adopt(PreviewConfig other)
 	{
+		displayStyle = other.displayStyle;
+		infoboxFigure = other.infoboxFigure;
 		paceMode = other.paceMode;
 		grouping = other.grouping;
 		showDelveNumber = other.showDelveNumber;
@@ -66,6 +70,18 @@ class PreviewConfig implements DoomMetricsConfig
 		{
 			counter(metric, other.counter(metric));
 		}
+	}
+
+	@Override
+	public DisplayStyle displayStyle()
+	{
+		return displayStyle;
+	}
+
+	@Override
+	public InfoBoxFigure infoboxFigure()
+	{
+		return infoboxFigure;
 	}
 
 	@Override

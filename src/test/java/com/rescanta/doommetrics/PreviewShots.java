@@ -28,6 +28,9 @@ public class PreviewShots
 	/** How much the small game font is blown up by, so a saved image can be read at all. */
 	private static final int ZOOM = 2;
 
+	/** How many squares a row of the figure grid holds, keeping it about as wide as it is tall. */
+	private static final int GRID_COLUMNS = 5;
+
 	public static void main(String[] args) throws Exception
 	{
 		PreviewRender.requireDisplay();
@@ -89,6 +92,8 @@ public class PreviewShots
 
 			written.add(shot(overlay(scene, PreviewRender.Backdrop.CAVE),
 				directory.resolve(prefix + "-overlay.png")));
+			written.add(shot(infoBoxes(scene, PreviewRender.Backdrop.CAVE),
+				directory.resolve(prefix + "-infobox.png")));
 			written.add(shot(panel(scene), directory.resolve(prefix + "-panel.png")));
 			written.add(shot(history(scene), directory.resolve(prefix + "-history.png")));
 
@@ -119,6 +124,36 @@ public class PreviewShots
 			new DoomMetricsOverlay(plugin, scene.config));
 
 		return PreviewRender.scale(PreviewRender.against(drawn, backdrop, 8), ZOOM);
+	}
+
+	/**
+	 * Every figure the square can hold, for one scene, in one picture.
+	 *
+	 * <p>All sixteen rather than the one the scene has picked, because the square only ever shows
+	 * one and the thing worth judging is the set: whether every figure is legible at that size,
+	 * and whether the colours tell the units apart when the labels are not there to.
+	 */
+	private static BufferedImage infoBoxes(PreviewScene scene, PreviewRender.Backdrop backdrop)
+	{
+		PreviewPlugin plugin = new PreviewPlugin();
+		plugin.run = scene.run;
+
+		PreviewConfig config = new PreviewConfig();
+		config.adopt(scene.config);
+		config.displayStyle = DisplayStyle.INFOBOX;
+
+		DoomMetricsInfoBox box = new DoomMetricsInfoBox(PreviewRender.icon(), plugin, config);
+		List<BufferedImage> cells = new ArrayList<>();
+		List<String> labels = new ArrayList<>();
+
+		for (InfoBoxFigure figure : InfoBoxFigure.values())
+		{
+			config.infoboxFigure = figure;
+			cells.add(PreviewRender.infoBox(box));
+			labels.add(figure.toString());
+		}
+
+		return PreviewRender.scale(PreviewRender.grid(cells, labels, GRID_COLUMNS, backdrop), ZOOM);
 	}
 
 	private static BufferedImage panel(PreviewScene scene)
