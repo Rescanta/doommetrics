@@ -7,6 +7,8 @@ import java.time.Duration;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.components.ComponentConstants;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -18,7 +20,7 @@ import org.junit.Test;
  * what picks the labels, so it is checked here in the font they are drawn in rather than left to
  * whoever next writes a longer one.
  *
- * <p>Neither test needs a screen: an overlay draws into an image and asks nothing of the desktop.
+ * <p>None of it needs a screen: an overlay draws into an image and asks nothing of the desktop.
  */
 public class DoomMetricsOverlayTest
 {
@@ -87,6 +89,27 @@ public class DoomMetricsOverlayTest
 		assertEquals("a run's widest figures should not cost the overlay a line",
 			draw(PreviewScene.named("deep")).getHeight(),
 			draw(PreviewScene.named("ceiling")).getHeight());
+	}
+
+	@Test
+	public void drawsNothingUnlessThePanelIsTheChosenStyle()
+	{
+		PreviewScene scene = PreviewScene.named("deep");
+
+		for (DisplayStyle style : DisplayStyle.values())
+		{
+			scene.config.displayStyle = style;
+			BufferedImage drawn = draw(scene);
+
+			if (style == DisplayStyle.PANEL)
+			{
+				assertNotNull("the panel style draws the panel", drawn);
+			}
+			else
+			{
+				assertNull(style + " is drawn by the infobox, or not at all", drawn);
+			}
+		}
 	}
 
 	private static void assertFits(FontMetrics metrics, String left, String right)

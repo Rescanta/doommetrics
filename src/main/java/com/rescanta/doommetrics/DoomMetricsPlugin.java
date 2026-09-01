@@ -54,6 +54,7 @@ import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.InfoBoxMenuClicked;
 import net.runelite.client.events.OverlayMenuClicked;
 import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.game.ItemManager;
@@ -62,6 +63,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
 import net.runelite.client.util.ImageUtil;
 
 @Slf4j
@@ -87,7 +89,8 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private static final int ABANDON_TICKS = 100;
 
-	private static final String CLEAR_OPTION = "Clear";
+	/** Package-private so the infobox can carry the same option the overlay does. */
+	static final String CLEAR_OPTION = "Clear";
 
 	/**
 	 * The drops worth writing against a run. Everything else the Doom hands out is supplies and
@@ -199,6 +202,9 @@ public class DoomMetricsPlugin extends Plugin
 	private DoomMetricsOverlay overlay;
 
 	@Inject
+	private InfoBoxManager infoBoxManager;
+
+	@Inject
 	private ClientToolbar clientToolbar;
 
 	@Inject
@@ -218,6 +224,10 @@ public class DoomMetricsPlugin extends Plugin
 
 	private DoomMetricsPanel panel;
 	private NavigationButton navButton;
+
+	/** The square, up for as long as the plugin is. It decides for itself when to draw. */
+	private DoomMetricsInfoBox infoBox;
+
 	/** Read on the Swing thread when the history window is built, cleared on shutdown. */
 	private volatile BufferedImage icon;
 
@@ -351,6 +361,9 @@ public class DoomMetricsPlugin extends Plugin
 			.build();
 		clientToolbar.addNavigation(navButton);
 
+		infoBox = new DoomMetricsInfoBox(icon, this, config);
+		infoBoxManager.addInfoBox(infoBox);
+
 		reset();
 		loadMilestones();
 		loadTotals();
@@ -360,6 +373,8 @@ public class DoomMetricsPlugin extends Plugin
 	protected void shutDown()
 	{
 		overlayManager.remove(overlay);
+		infoBoxManager.removeInfoBox(infoBox);
+		infoBox = null;
 		clientToolbar.removeNavigation(navButton);
 		navButton = null;
 		panel = null;
@@ -1393,6 +1408,23 @@ public class DoomMetricsPlugin extends Plugin
 	private void handleOverlayMenuClicked(OverlayMenuClicked event)
 	{
 		if (event.getOverlay() == overlay && CLEAR_OPTION.equals(event.getEntry().getOption()))
+		{
+			lastRun = null;
+		}
+	}
+
+	@Subscribe
+	public void onInfoBoxMenuClicked(InfoBoxMenuClicked event)
+	{
+		long started = System.nanoTime();
+		handleInfoBoxMenuClicked(event);
+		reportSlow("onInfoBoxMenuClicked", started);
+	}
+
+	/** The same Clear the overlay carries, for the display style where the overlay is not drawn. */
+	private void handleInfoBoxMenuClicked(InfoBoxMenuClicked event)
+	{
+		if (event.getInfoBox() == infoBox && CLEAR_OPTION.equals(event.getEntry().getOption()))
 		{
 			lastRun = null;
 		}

@@ -70,8 +70,14 @@ public class PreviewWindow
 	private final DoomMetricsOverlay overlay = new DoomMetricsOverlay(plugin, config);
 	private final DoomMetricsPanel panel = new DoomMetricsPanel(this::openHistory);
 
+	/** The same square the plugin puts up, reading the same config the overlay beside it does. */
+	private final DoomMetricsInfoBox infoBox =
+		new DoomMetricsInfoBox(PreviewRender.icon(), plugin, config);
+
 	private final JComboBox<PreviewScene> scenePicker = new JComboBox<>(
 		new DefaultComboBoxModel<>(scenes.toArray(new PreviewScene[0])));
+	private final JComboBox<DisplayStyle> stylePicker = new JComboBox<>(DisplayStyle.values());
+	private final JComboBox<InfoBoxFigure> figurePicker = new JComboBox<>(InfoBoxFigure.values());
 	private final JComboBox<PreviewRender.Backdrop> backdropPicker =
 		new JComboBox<>(PreviewRender.Backdrop.values());
 	private final JComboBox<Integer> zoomPicker = new JComboBox<>(new Integer[]{1, 2, 3});
@@ -136,6 +142,20 @@ public class PreviewWindow
 		zoomPicker.addActionListener(event -> canvas.repaint());
 		backdropPicker.addActionListener(event -> canvas.repaint());
 
+		stylePicker.addActionListener(event ->
+		{
+			config.displayStyle = (DisplayStyle) stylePicker.getSelectedItem();
+			refresh();
+		});
+		restaters.add(() -> stylePicker.setSelectedItem(config.displayStyle));
+
+		figurePicker.addActionListener(event ->
+		{
+			config.infoboxFigure = (InfoBoxFigure) figurePicker.getSelectedItem();
+			refresh();
+		});
+		restaters.add(() -> figurePicker.setSelectedItem(config.infoboxFigure));
+
 		pacePicker.addActionListener(event ->
 		{
 			config.paceMode = (PaceMode) pacePicker.getSelectedItem();
@@ -163,6 +183,10 @@ public class PreviewWindow
 		stack.add(Box.createVerticalStrut(10));
 		stack.add(labelled("Backdrop", backdropPicker));
 		stack.add(labelled("Zoom", zoomPicker));
+
+		stack.add(heading("Display"));
+		stack.add(labelled("Style", stylePicker));
+		stack.add(labelled("Square", figurePicker));
 
 		stack.add(heading("Overlay rows"));
 		stack.add(toggle("Delve number",
@@ -276,18 +300,36 @@ public class PreviewWindow
 			target.setColor(backdrop.color);
 			target.fillRect(0, 0, getWidth(), getHeight());
 
-			BufferedImage drawn = PreviewRender.overlay(overlay);
+			BufferedImage drawn = config.displayStyle == DisplayStyle.INFOBOX
+				? PreviewRender.infoBox(infoBox)
+				: PreviewRender.overlay(overlay);
 
 			if (drawn == null)
 			{
 				target.setFont(FontManager.getRunescapeFont());
 				target.setColor(ColorScheme.TEXT_COLOR);
-				target.drawString("No run to draw, so the overlay draws nothing", 12, 30);
+				target.drawString(nothing(), 12, 30);
 				return;
 			}
 
 			target.drawImage(drawn, 10, 10,
 				drawn.getWidth() * zoom, drawn.getHeight() * zoom, null);
+		}
+
+		/** Why there is nothing on the canvas, which is three different answers. */
+		private String nothing()
+		{
+			switch (config.displayStyle)
+			{
+				case OFF:
+					return "Display is Off, so nothing is drawn over the game";
+
+				case INFOBOX:
+					return "No run, so the square is not up";
+
+				default:
+					return "No run to draw, so the overlay draws nothing";
+			}
 		}
 	}
 
