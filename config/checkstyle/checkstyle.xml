@@ -1,0 +1,132 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+	"-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+	"https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+	The plugin hub's hard rules, as a build failure.
+
+	Every rule here mirrors a restriction in AGENTS.md that would get the plugin
+	rejected from the hub, not merely criticised in review. This is a rejection
+	gate, not a style guide - formatting is deliberately left alone.
+
+	Only src/main is checked. The preview harness under src/test is a developer
+	tool that never ships, and it legitimately uses reflection and System.exit.
+
+	To allow a line that a rule catches wrongly, bracket it with
+	// CHECKSTYLE:OFF and // CHECKSTYLE:ON, and say why.
+-->
+<module name="Checker">
+	<property name="severity" value="error"/>
+	<property name="fileExtensions" value="java"/>
+
+	<module name="SuppressWithPlainTextCommentFilter"/>
+
+	<!-- Forbidden language features -->
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noReflection"/>
+		<property name="format" value="\bjava\.lang\.reflect\b|\bClass\.forName\s*\(|\.setAccessible\s*\(|\.getDeclared(Field|Method|Constructor)s?\s*\(|\.getMethod\s*\("/>
+		<property name="message" value="Reflection is forbidden in hub plugins (AGENTS.md: Forbidden Language Features)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noNativeCode"/>
+		<property name="format" value="\bcom\.sun\.jna\b|\bSystem\.load(Library)?\s*\(|\bsun\.misc\.Unsafe\b|\borg\.lwjgl\b"/>
+		<property name="message" value="JNI, JNA, Unsafe and LWJGL are forbidden in hub plugins (AGENTS.md: Forbidden Language Features)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noExternalProcesses"/>
+		<property name="format" value="\bProcessBuilder\b|Runtime\.getRuntime\s*\(\s*\)\s*\.exec\b"/>
+		<property name="message" value="Executing external processes is forbidden in hub plugins (AGENTS.md: Forbidden Language Features)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noDynamicClassLoading"/>
+		<property name="format" value="\bURLClassLoader\b|\bdefineClass\s*\(|\.loadClass\s*\("/>
+		<property name="message" value="Dynamic class loading is forbidden in hub plugins (AGENTS.md: Forbidden Language Features)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noJavaSerialization"/>
+		<property name="format" value="\bObject(Output|Input)Stream\b|\bimplements\s+Serializable\b"/>
+		<property name="message" value="Java (de)serialization is forbidden in hub plugins - persist with Gson instead (AGENTS.md: Forbidden Language Features)."/>
+	</module>
+
+	<!-- Threading and concurrency -->
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noThreadSleep"/>
+		<property name="format" value="\bThread\.sleep\s*\("/>
+		<property name="message" value="Never use Thread.sleep - schedule the work instead (AGENTS.md: Threading and Concurrency)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noAwaitTermination"/>
+		<property name="format" value="\.awaitTermination\s*\("/>
+		<property name="message" value="Never block in startUp/shutDown - use shutdownNow() alone (AGENTS.md: Threading and Concurrency)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noCountDownLatch"/>
+		<property name="format" value="\bCountDownLatch\b"/>
+		<property name="message" value="Batch async work with CompletableFuture.allOf, not CountDownLatch (AGENTS.md: Threading and Concurrency)."/>
+	</module>
+
+	<!-- HTTP and JSON -->
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noRawHttpClients"/>
+		<property name="format" value="\bHttpURLConnection\b|\bjava\.net\.http\b|\borg\.apache\.http\b"/>
+		<property name="message" value="Use the injected OkHttpClient for HTTP, not HttpURLConnection or another client (AGENTS.md: HTTP and JSON)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noBlockingHttpCall"/>
+		<property name="format" value="\bnewCall\s*\([^)]*\)\s*\.execute\s*\("/>
+		<property name="message" value="Never execute an OkHttp call synchronously - use enqueue() (AGENTS.md: HTTP and JSON)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noManualGson"/>
+		<property name="format" value="new\s+Gson\s*\(\s*\)|new\s+GsonBuilder\s*\("/>
+		<property name="message" value="Inject Gson and derive with newBuilder() rather than constructing one (AGENTS.md: HTTP and JSON)."/>
+	</module>
+
+	<!-- API usage -->
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noAwtDesktop"/>
+		<property name="format" value="\bjava\.awt\.Desktop\b|\bDesktop\.getDesktop\s*\("/>
+		<property name="message" value="Open URLs with LinkBrowser, not java.awt.Desktop (AGENTS.md: API Usage)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noWidgetInfo"/>
+		<property name="format" value="\bWidgetInfo\b"/>
+		<property name="message" value="WidgetInfo is deprecated - use net.runelite.api.gameval.InterfaceID component constants (AGENTS.md: API Usage)."/>
+	</module>
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noManualWidgetIds"/>
+		<property name="format" value="getWidget\s*\([^,)]+,"/>
+		<property name="message" value="Pass a single gameval component ID to getWidget - do not combine interface and child IDs by hand (AGENTS.md: API Usage)."/>
+	</module>
+
+	<!-- File I/O -->
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noArbitraryFileIo"/>
+		<property name="format" value="System\.getProperty\s*\(\s*&quot;user\.(home|dir)&quot;"/>
+		<property name="message" value="Write only under RuneLite.RUNELITE_DIR (AGENTS.md: File I/O)."/>
+	</module>
+
+	<!-- Plugin setup and packaging -->
+
+	<module name="RegexpSingleline">
+		<property name="id" value="noTemplateLeftovers"/>
+		<property name="format" value="\bcom\.example\b|\bExample(Plugin|Config)\b"/>
+		<property name="message" value="Template names must be renamed throughout (AGENTS.md: Plugin Setup and Packaging)."/>
+	</module>
+</module>
