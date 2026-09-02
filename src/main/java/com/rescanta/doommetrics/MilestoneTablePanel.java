@@ -1,7 +1,6 @@
 package com.rescanta.doommetrics;
 
 import java.awt.Color;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -11,9 +10,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.border.Border;
-import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
 
 /**
  * The lifetime milestone table - delve, kill count, personal best - as a component in its own
@@ -42,8 +39,6 @@ class MilestoneTablePanel extends JPanel
 		}
 	}
 
-	private static final Color STRIPE = new Color(36, 36, 36);
-
 	/**
 	 * How the three columns share the available width.
 	 *
@@ -53,10 +48,9 @@ class MilestoneTablePanel extends JPanel
 	 */
 	private static final double[] COLUMN_WEIGHTS = {0.30, 0.26, 0.44};
 
-	private static final Border CELL_PADDING = new EmptyBorder(2, 4, 2, 4);
 	private static final Border HEADER_PADDING = BorderFactory.createCompoundBorder(
-		BorderFactory.createMatteBorder(0, 0, 1, 0, ColorScheme.MEDIUM_GRAY_COLOR),
-		CELL_PADDING);
+		BorderFactory.createMatteBorder(0, 0, 1, 0, PanelStyle.RULE),
+		PanelStyle.CELL_PADDING);
 
 	private final String emptyText;
 
@@ -64,7 +58,7 @@ class MilestoneTablePanel extends JPanel
 	{
 		super(new GridBagLayout());
 		this.emptyText = emptyText;
-		setBackground(ColorScheme.DARK_GRAY_COLOR);
+		setBackground(PanelStyle.BACKGROUND);
 	}
 
 	/** Rebuilds the table. Called only when a row actually changed. */
@@ -74,9 +68,8 @@ class MilestoneTablePanel extends JPanel
 
 		if (rows.isEmpty())
 		{
-			JLabel empty = plain(emptyText, SwingConstants.LEFT);
-			empty.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-			empty.setBorder(CELL_PADDING);
+			JLabel empty = PanelStyle.caption(emptyText, SwingConstants.LEFT);
+			empty.setBorder(PanelStyle.CELL_PADDING);
 
 			GridBagConstraints constraints = new GridBagConstraints();
 			constraints.fill = GridBagConstraints.HORIZONTAL;
@@ -102,19 +95,17 @@ class MilestoneTablePanel extends JPanel
 
 	private void addHeaderRow()
 	{
-		addRow(0, ColorScheme.DARK_GRAY_COLOR, HEADER_PADDING,
-			bold("Delve", SwingConstants.RIGHT),
-			bold("KC", SwingConstants.RIGHT),
-			bold("PB", SwingConstants.RIGHT));
+		addRow(0, PanelStyle.BACKGROUND, HEADER_PADDING,
+			PanelStyle.caption("Delve", SwingConstants.RIGHT),
+			PanelStyle.caption("KC", SwingConstants.RIGHT),
+			PanelStyle.caption("PB", SwingConstants.RIGHT));
 	}
 
 	private void addDataRow(Row data, int index)
 	{
-		JLabel delve = plain(Integer.toString(data.delve), SwingConstants.RIGHT);
-		JLabel kc = plain(Integer.toString(data.kc), SwingConstants.RIGHT);
-		JLabel pb = plain(DoomFormat.ticks(data.pbTicks), SwingConstants.RIGHT);
-
-		delve.setForeground(ColorScheme.TEXT_COLOR);
+		JLabel delve = PanelStyle.body(Integer.toString(data.delve), SwingConstants.RIGHT);
+		JLabel kc = PanelStyle.body(Integer.toString(data.kc), SwingConstants.RIGHT);
+		JLabel pb = PanelStyle.body(DoomFormat.ticks(data.pbTicks), SwingConstants.RIGHT);
 
 		// A seeded row - reached before the plugin was watching - has nothing measured behind it.
 		kc.setForeground(data.kc == 0 ? ColorScheme.LIGHT_GRAY_COLOR : ColorScheme.TEXT_COLOR);
@@ -122,8 +113,8 @@ class MilestoneTablePanel extends JPanel
 			? ColorScheme.PROGRESS_COMPLETE_COLOR
 			: data.pbTicks > 0 ? ColorScheme.TEXT_COLOR : ColorScheme.LIGHT_GRAY_COLOR);
 
-		addRow(index + 1, index % 2 == 0 ? ColorScheme.DARKER_GRAY_COLOR : STRIPE,
-			CELL_PADDING, delve, kc, pb);
+		addRow(index + 1, index % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE,
+			PanelStyle.CELL_PADDING, delve, kc, pb);
 	}
 
 	/**
@@ -151,25 +142,5 @@ class MilestoneTablePanel extends JPanel
 			constraints.weightx = COLUMN_WEIGHTS[i];
 			add(cells[i], constraints);
 		}
-	}
-
-	private static JLabel plain(String text, int alignment)
-	{
-		return label(text, alignment, FontManager.getRunescapeSmallFont());
-	}
-
-	private static JLabel bold(String text, int alignment)
-	{
-		JLabel label = label(text, alignment, FontManager.getRunescapeBoldFont());
-		label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		return label;
-	}
-
-	private static JLabel label(String text, int alignment, Font font)
-	{
-		JLabel label = new JLabel(text, alignment);
-		label.setFont(font);
-		label.setForeground(ColorScheme.TEXT_COLOR);
-		return label;
 	}
 }
