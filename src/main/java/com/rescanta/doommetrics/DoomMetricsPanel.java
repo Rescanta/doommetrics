@@ -1,11 +1,16 @@
 package com.rescanta.doommetrics;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -16,12 +21,20 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 
 /**
- * The side panel: the run in progress on top, the sitting under it, the character's lifetime under
- * that, then the lifetime milestone table and a button that opens the history window.
+ * The side panel: the run in progress on top, the sitting beside the character's lifetime under it,
+ * then the sitting's combat figures, the lifetime milestone table, and a button that opens the
+ * history window.
  *
- * <p>The sitting and the lifetime are kept apart rather than interleaved, because they answer
- * different questions - how this evening is going, and what the character has done over all of
- * them - and a reader comparing the two wants each under a heading that says which it is.
+ * <p>The run is drawn as two large figures with the rest of it in small type beneath, because
+ * there are only two things a player reads while they are being hit - which delve they are on and
+ * how long they have been down - and the panel is worth nothing if those have to be picked out of
+ * a list of eleven numbers set in the same type.
+ *
+ * <p>The sitting and the lifetime share one table, one column each, rather than sitting in two
+ * sections one above the other. They do answer different questions - how this evening is going,
+ * and what the character has done over all of them - but the question a player actually asks is
+ * whether tonight is better than usual, and that is a comparison. Under the two column headings
+ * each figure still says which it is; side by side it also says how they stand.
  *
  * <p>Everything here runs on the Swing thread. The plugin hands it immutable snapshots rather than
  * live objects, so nothing the client thread is still writing to is ever read from a paint.
@@ -34,15 +47,26 @@ class DoomMetricsPanel extends PluginPanel
 		/** How many rows a run can fill: delve, time, pace, and the target pair. */
 		static final int ROWS = 5;
 
+		/** Which of those rows are drawn large, at the head of the section. */
+		private static final int HERO_ROWS = 2;
+
 		/** Row labels in draw order, a null label meaning that row is switched off. */
 		final String[] labels;
 
 		final String[] values;
 
-		private Live(String[] labels, String[] values)
+		/** Whether the run is over, which is what stops the clock rather than merely pausing it. */
+		final boolean finished;
+
+		/** Whether it ended in a death, the one outcome worth colouring. */
+		final boolean died;
+
+		private Live(String[] labels, String[] values, boolean finished, boolean died)
 		{
 			this.labels = labels;
 			this.values = values;
+			this.finished = finished;
+			this.died = died;
 		}
 
 		/**
@@ -53,6 +77,7 @@ class DoomMetricsPanel extends PluginPanel
 		 */
 		static Live of(DelveRun display, PaceMode mode, int target)
 		{
+			boolean died = display.isFinished() && display.getEndReason() == EndReason.DIED;
 			String delveLabel;
 			String delveValue;
 
@@ -61,10 +86,11 @@ class DoomMetricsPanel extends PluginPanel
 				delveLabel = "Delve";
 				delveValue = Integer.toString(display.currentLevel());
 			}
-			else if (display.getEndReason() == EndReason.DIED)
+			else if (died)
 			{
 				delveLabel = "Died on";
-				delveValue = "Delve " + display.getDiedOnLevel();
+				// The number alone: the heading over it already says what it is a number of.
+				delveValue = Integer.toString(display.getDiedOnLevel());
 			}
 			else
 			{
@@ -90,7 +116,9 @@ class DoomMetricsPanel extends PluginPanel
 					target > 0 ? Integer.toString(target) : null,
 					target > 0 ? DoomFormat.prediction(display.untilTarget(target, now),
 						display.hasReached(target)) : null,
-				});
+				},
+				display.isFinished(),
+				died);
 		}
 
 		/**
@@ -107,7 +135,7 @@ class DoomMetricsPanel extends PluginPanel
 				key.append(labels[i]).append('|').append(values[i]).append('|');
 			}
 
-			return key.toString();
+			return key.append(finished).append('|').append(died).toString();
 		}
 	}
 
@@ -146,53 +174,58 @@ class DoomMetricsPanel extends PluginPanel
 		}
 	}
 
-	private final JPanel livePanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
-	private final JPanel sessionPanel = new JPanel(new DynamicGridLayout(0, 1, 0, 6));
-	private final JPanel lifetimePanel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
+	/** How the three columns of the session and lifetime table share the width. */
+	private static final double[] COMPARE_WEIGHTS = {0.36, 0.32, 0.32};
+
+	private final JPanel runCard = PanelStyle.column(4);
+	private final JPanel runRows = PanelStyle.column(PanelStyle.ROW_GAP);
 	private final CombatTablePanel combatPanel = new CombatTablePanel();
 	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("Nothing banked yet.");
 
-	private final JLabel idleLabel = plain("No run in progress");
-	private final JLabel[] liveLeft = labels(SwingConstants.LEFT);
-	private final JLabel[] liveRight = labels(SwingConstants.RIGHT);
+	private final JLabel idleLabel = PanelStyle.caption("No run in progress",
+		SwingConstants.LEFT);
 
-	private final JLabel sessionLength = right("-");
-	private final JLabel sessionPace = right("-");
-	private final JLabel sessionDeep = right("-");
-	private final JLabel lifetimePace = right("-");
-	private final JLabel lifetimeDeep = right("-");
+	private final JLabel[] heroCaptions = {
+		PanelStyle.caption("Delve", SwingConstants.LEFT),
+		PanelStyle.caption("Time", SwingConstants.RIGHT),
+	};
+
+	private final JLabel[] heroValues = {
+		PanelStyle.hero("-", SwingConstants.LEFT),
+		PanelStyle.hero("-", SwingConstants.RIGHT),
+	};
+
+	private final JLabel[] runLabels = new JLabel[Live.ROWS];
+	private final JLabel[] runValues = new JLabel[Live.ROWS];
+
+	private final JLabel sessionLength = PanelStyle.body("-", SwingConstants.RIGHT);
+	private final JLabel sessionPace = PanelStyle.body("-", SwingConstants.RIGHT);
+	private final JLabel sessionDeep = PanelStyle.body("-", SwingConstants.RIGHT);
+	private final JLabel lifetimePace = PanelStyle.body("-", SwingConstants.RIGHT);
+	private final JLabel lifetimeDeep = PanelStyle.body("-", SwingConstants.RIGHT);
 
 	/** @param onOpenHistory invoked on the Swing thread when the history button is pressed */
 	DoomMetricsPanel(Runnable onOpenHistory)
 	{
-		setBackground(ColorScheme.DARK_GRAY_COLOR);
-		setLayout(new DynamicGridLayout(0, 1, 0, 10));
+		setBackground(PanelStyle.BACKGROUND);
+		setLayout(new DynamicGridLayout(0, 1, 0, PanelStyle.SECTION_GAP));
 
-		livePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		for (int i = Live.HERO_ROWS; i < Live.ROWS; i++)
+		{
+			runLabels[i] = PanelStyle.caption("", SwingConstants.LEFT);
+			runValues[i] = PanelStyle.body("", SwingConstants.RIGHT);
+		}
 
-		// Built once and only ever retexted, unlike the live section - these are always the same
-		// rows, so there is nothing for a rebuild to change.
-		sessionPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		sessionPanel.add(rows(
-			row("Length", sessionLength,
-				"How long this sitting has been going, from its first run to now"),
-			row("Deep pace", sessionPace, null),
-			row("Deep delves", sessionDeep, "Delves cleared this sitting at or past the deep "
-				+ "level, the run in progress included")));
-		sessionPanel.add(combatPanel);
+		runCard.add(hero());
+		runCard.add(PanelStyle.rule());
+		runCard.add(runRows);
 
-		lifetimePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		lifetimePanel.add(row("Deep pace", lifetimePace, null));
-		lifetimePanel.add(row("Deep delves", lifetimeDeep,
-			"Every delve this character has cleared at or past the deep level"));
-
-		add(section("Current run", livePanel));
-		// The sitting above the character's lifetime, and the milestone table below both: what is
-		// being earned right now is what a player glances at mid-run, and what they have earned
-		// over a lifetime is what they scroll to.
-		add(section("This session", sessionPanel));
-		add(section("Lifetime", lifetimePanel));
-		add(section("Milestones", tablePanel));
+		add(PanelStyle.section("Current run", PanelStyle.card(runCard)));
+		// The sitting and the character's lifetime above the tables: what is being earned right
+		// now is what a player glances at mid-run, and the rest is what they scroll to.
+		add(PanelStyle.section("Session & lifetime", PanelStyle.card(compare())));
+		add(PanelStyle.section("Session combat", combatPanel));
+		add(PanelStyle.section("Milestones", tablePanel));
 		add(historyButton(onOpenHistory));
 
 		setLive(null);
@@ -220,6 +253,7 @@ class DoomMetricsPanel extends PluginPanel
 	private static void apply(JLabel label, String value, String tooltip)
 	{
 		label.setText(value == null ? "-" : value);
+		label.setForeground(value == null ? ColorScheme.LIGHT_GRAY_COLOR : ColorScheme.TEXT_COLOR);
 
 		if (tooltip != null)
 		{
@@ -227,48 +261,57 @@ class DoomMetricsPanel extends PluginPanel
 		}
 	}
 
-	/** One reusable widget per live row, retexted rather than rebuilt as the figures move. */
-	private static JLabel[] labels(int alignment)
-	{
-		JLabel[] labels = new JLabel[Live.ROWS];
-
-		for (int i = 0; i < labels.length; i++)
-		{
-			labels[i] = label("", alignment);
-		}
-
-		return labels;
-	}
-
-	/** Repaints the live figures. A null snapshot collapses the section to one idle line. */
+	/**
+	 * Repaints the live figures. A null snapshot leaves the two large figures blank and collapses
+	 * the rest of the card to one idle line, so the section holds its shape between runs instead
+	 * of the whole panel jumping every time one starts.
+	 */
 	void setLive(Live live)
 	{
-		livePanel.removeAll();
+		runRows.removeAll();
 
 		if (live == null)
 		{
-			idleLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-			livePanel.add(idleLabel);
+			for (int i = 0; i < Live.HERO_ROWS; i++)
+			{
+				heroValues[i].setText("-");
+				heroValues[i].setForeground(DoomColors.DIMMED);
+			}
+
+			heroCaptions[0].setText("Delve");
+			heroCaptions[1].setText("Time");
+			runRows.add(idleLabel);
 		}
 		else
 		{
-			for (int i = 0; i < live.labels.length; i++)
+			for (int i = 0; i < Live.HERO_ROWS; i++)
+			{
+				heroCaptions[i].setText(live.labels[i]);
+				heroValues[i].setText(live.values[i]);
+			}
+
+			// A death is the one outcome the panel colours, and a stopped clock is dimmed so a
+			// run walked out of ten minutes ago is not read as one still going.
+			heroValues[0].setForeground(live.died
+				? ColorScheme.PROGRESS_ERROR_COLOR
+				: DoomColors.PLAIN);
+			heroValues[1].setForeground(live.finished ? DoomColors.DIMMED : DoomColors.PLAIN);
+
+			for (int i = Live.HERO_ROWS; i < Live.ROWS; i++)
 			{
 				if (live.labels[i] == null)
 				{
 					continue;
 				}
 
-				liveLeft[i].setText(live.labels[i]);
-				liveLeft[i].setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-				liveRight[i].setText(live.values[i]);
-				liveRight[i].setForeground(ColorScheme.TEXT_COLOR);
-				livePanel.add(pair(liveLeft[i], liveRight[i], ColorScheme.DARK_GRAY_COLOR));
+				runLabels[i].setText(live.labels[i]);
+				runValues[i].setText(live.values[i]);
+				runRows.add(pair(runLabels[i], runValues[i]));
 			}
 		}
 
-		livePanel.revalidate();
-		livePanel.repaint();
+		runRows.revalidate();
+		runRows.repaint();
 	}
 
 	/**
@@ -287,79 +330,111 @@ class DoomMetricsPanel extends PluginPanel
 		tablePanel.setRows(rows);
 	}
 
-	/** Several rows stacked tight, for a block that shares a section with a table below it. */
-	private static JPanel rows(JPanel... content)
+	/**
+	 * The delve and the clock, side by side and large, each under the word for what it is.
+	 *
+	 * <p>The clock is set against the right edge so its digits stay put as it goes from four
+	 * characters to five to seven, rather than the whole figure sliding left as the run wears on.
+	 */
+	private JPanel hero()
 	{
-		JPanel panel = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
-		panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		JPanel panel = new JPanel(new GridLayout(1, 2, 6, 0));
+		panel.setBackground(PanelStyle.CARD);
 
-		for (JPanel row : content)
+		for (int i = 0; i < Live.HERO_ROWS; i++)
 		{
-			panel.add(row);
+			JPanel tile = new JPanel(new BorderLayout());
+			tile.setBackground(PanelStyle.CARD);
+			tile.add(heroCaptions[i], BorderLayout.NORTH);
+			tile.add(heroValues[i], BorderLayout.CENTER);
+			panel.add(tile);
 		}
 
 		return panel;
 	}
 
-	private static JPanel row(String text, JLabel value, String tooltip)
+	/**
+	 * The sitting's figures and the character's in one grid, a column each under its own heading.
+	 *
+	 * <p>The sitting's length has no lifetime counterpart, so it sits above the comparison rather
+	 * than in them as a row with half of it permanently blank.
+	 */
+	private JPanel compare()
 	{
-		JLabel label = plain(text);
-		label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		label.setToolTipText(tooltip);
-		return pair(label, value, ColorScheme.DARK_GRAY_COLOR);
+		JLabel length = PanelStyle.caption("Sitting length", SwingConstants.LEFT);
+		length.setToolTipText("How long this sitting has been going, from its first run to now");
+		sessionLength.setToolTipText(length.getToolTipText());
+
+		JPanel grid = new JPanel(new GridBagLayout());
+		grid.setBackground(PanelStyle.CARD);
+		addCompareRow(grid, 0, PanelStyle.caption("", SwingConstants.LEFT),
+			PanelStyle.caption("Session", SwingConstants.RIGHT),
+			PanelStyle.caption("Lifetime", SwingConstants.RIGHT));
+		addCompareRow(grid, 1, PanelStyle.caption("Deep pace", SwingConstants.LEFT),
+			sessionPace, lifetimePace);
+		addCompareRow(grid, 2, PanelStyle.caption("Deep delves", SwingConstants.LEFT),
+			sessionDeep, lifetimeDeep);
+
+		JPanel panel = PanelStyle.column(4);
+		panel.add(pair(length, sessionLength));
+		panel.add(PanelStyle.rule());
+		panel.add(grid);
+		return panel;
 	}
 
-	private static JButton historyButton(Runnable onOpenHistory)
+	private static void addCompareRow(JPanel grid, int gridy, JLabel... cells)
 	{
-		JButton button = new JButton("Open history");
-		button.setFont(FontManager.getRunescapeBoldFont());
-		button.setForeground(ColorScheme.TEXT_COLOR);
-		button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		button.setBorder(new EmptyBorder(6, 8, 6, 8));
-		button.setFocusPainted(false);
-		button.setToolTipText("Show the milestone table and depth per run in their own window");
-		button.addActionListener(event -> onOpenHistory.run());
-		return button;
+		GridBagConstraints constraints = new GridBagConstraints();
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.gridy = gridy;
+		constraints.ipady = 2;
+
+		for (int i = 0; i < cells.length; i++)
+		{
+			constraints.gridx = i;
+			constraints.weightx = COMPARE_WEIGHTS[i];
+			grid.add(cells[i], constraints);
+		}
 	}
 
-	private static JPanel section(String title, JPanel content)
-	{
-		JLabel heading = new JLabel(title);
-		heading.setFont(FontManager.getRunescapeBoldFont());
-		heading.setForeground(ColorScheme.BRAND_ORANGE);
-		heading.setBorder(new EmptyBorder(0, 0, 4, 0));
-
-		JPanel wrapper = new JPanel(new BorderLayout());
-		wrapper.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		wrapper.add(heading, BorderLayout.NORTH);
-		wrapper.add(content, BorderLayout.CENTER);
-		return wrapper;
-	}
-
-	private static JPanel pair(JLabel left, JLabel right, Color background)
+	/** A name on the left and its figure on the right, the shape most of the panel is made of. */
+	private static JPanel pair(JLabel left, JLabel right)
 	{
 		JPanel panel = new JPanel(new BorderLayout());
-		panel.setBackground(background);
+		panel.setBackground(PanelStyle.CARD);
 		panel.add(left, BorderLayout.WEST);
 		panel.add(right, BorderLayout.EAST);
 		return panel;
 	}
 
-	private static JLabel plain(String text)
+	private static JComponent historyButton(Runnable onOpenHistory)
 	{
-		return label(text, SwingConstants.LEFT);
-	}
+		JButton button = new JButton("Open history");
+		button.setFont(FontManager.getRunescapeBoldFont());
+		button.setForeground(ColorScheme.TEXT_COLOR);
+		button.setBackground(PanelStyle.CARD);
+		button.setBorder(new EmptyBorder(7, 8, 7, 8));
+		button.setFocusPainted(false);
+		button.setToolTipText("Show the milestone table and depth per run in their own window");
+		button.addActionListener(event -> onOpenHistory.run());
 
-	private static JLabel right(String text)
-	{
-		return label(text, SwingConstants.RIGHT);
-	}
+		// The panel is otherwise all text, so nothing about the button says it can be pressed
+		// until the pointer is over it.
+		button.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mouseEntered(MouseEvent event)
+			{
+				button.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+			}
 
-	private static JLabel label(String text, int alignment)
-	{
-		JLabel label = new JLabel(text, alignment);
-		label.setFont(FontManager.getRunescapeSmallFont());
-		label.setForeground(ColorScheme.TEXT_COLOR);
-		return label;
+			@Override
+			public void mouseExited(MouseEvent event)
+			{
+				button.setBackground(PanelStyle.CARD);
+			}
+		});
+
+		return button;
 	}
 }
