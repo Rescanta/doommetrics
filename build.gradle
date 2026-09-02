@@ -1,5 +1,6 @@
 plugins {
 	id 'java'
+	id 'checkstyle'
 }
 
 repositories {
@@ -28,6 +29,14 @@ dependencies {
 }
 
 group = 'com.rescanta.doommetrics'
+
+// The plugin hub's hard rules, as a build failure - see config/checkstyle/checkstyle.xml.
+// Pinned to the last Checkstyle line that runs on JDK 11, which is what this plugin builds with.
+checkstyle {
+	toolVersion = '10.26.1'
+	sourceSets = [sourceSets.main]
+	maxWarnings = 0
+}
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
@@ -82,4 +91,33 @@ tasks.register('shadowJar', Jar) {
 	group = BasePlugin.BUILD_GROUP
 	archiveClassifier.set('shadow')
 	archiveFileName.set("${rootProject.name}-${project.version}-all.jar")
+}
+
+// Two packaging rules the hub also rejects on. Checkstyle only reads .java files,
+// so they are checked here rather than in checkstyle.xml.
+tasks.register('verifyPluginPackaging') {
+	description = 'Fails on a Plugin services file or committed build artifacts'
+	group = 'verification'
+
+	def serviceFiles = fileTree('src') {
+		include '**/META-INF/services/net.runelite.client.plugins.Plugin'
+	}
+	def strayArtifacts = fileTree(projectDir) {
+		include '**/*.class'
+		exclude 'build/**', '.gradle/**', '.git/**', '.idea/**'
+	}
+
+	doLast {
+		if (!serviceFiles.empty) {
+			throw new GradleException("Remove ${serviceFiles.files.join(', ')} - the hub loads plugins from runelite-plugin.properties (AGENTS.md: Plugin Setup and Packaging).")
+		}
+
+		if (!strayArtifacts.empty) {
+			throw new GradleException("Build artifacts must not be committed: ${strayArtifacts.files.join(', ')} (AGENTS.md: Plugin Setup and Packaging).")
+		}
+	}
+}
+
+tasks.named('check') {
+	dependsOn 'verifyPluginPackaging'
 }
