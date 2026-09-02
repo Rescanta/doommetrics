@@ -16,9 +16,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
 
 /**
  * A window of its own, outside the side panel and outside the client: the milestone table and the
@@ -75,7 +74,7 @@ class HistoryWindow extends JFrame
 		metric.addActionListener(event -> redrawChart());
 
 		JPanel content = new JPanel(new BorderLayout(10, 0));
-		content.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		content.setBackground(PanelStyle.BACKGROUND);
 		content.setBorder(new EmptyBorder(10, 10, 10, 10));
 		content.add(sidebar(), BorderLayout.WEST);
 		content.add(chartPane(), BorderLayout.CENTER);
@@ -132,19 +131,17 @@ class HistoryWindow extends JFrame
 	 */
 	private JPanel chartPane()
 	{
-		JLabel prompt = new JLabel("Show");
-		prompt.setFont(FontManager.getRunescapeSmallFont());
-		prompt.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		JLabel prompt = PanelStyle.caption("Show", SwingConstants.LEFT);
 
 		JPanel picker = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-		picker.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		picker.setBackground(PanelStyle.BACKGROUND);
 		picker.add(prompt);
 		picker.add(metric);
 
 		JPanel wrapper = new JPanel(new BorderLayout(0, 6));
-		wrapper.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		wrapper.setBackground(PanelStyle.BACKGROUND);
 		wrapper.add(picker, BorderLayout.NORTH);
-		wrapper.add(section("Per run", chart), BorderLayout.CENTER);
+		wrapper.add(PanelStyle.section("Per run", chart), BorderLayout.CENTER);
 		return wrapper;
 	}
 
@@ -156,37 +153,23 @@ class HistoryWindow extends JFrame
 	private JScrollPane sidebar()
 	{
 		JPanel stack = new JPanel(new BorderLayout(0, 10));
-		stack.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		stack.add(section("Lifetime totals", combat), BorderLayout.NORTH);
-		stack.add(section("Milestones", table), BorderLayout.CENTER);
+		stack.setBackground(PanelStyle.BACKGROUND);
+		stack.add(PanelStyle.section("Lifetime totals", combat), BorderLayout.NORTH);
+		stack.add(PanelStyle.section("Milestones", table), BorderLayout.CENTER);
 
 		// The tables are grids; wrapping them in a BorderLayout stops the viewport stretching
 		// their rows to fill the height when there are only a few of them.
 		JPanel top = new JPanel(new BorderLayout());
-		top.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		top.setBackground(PanelStyle.BACKGROUND);
 		top.add(stack, BorderLayout.NORTH);
 
 		JScrollPane scroller = new JScrollPane(top,
 			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
 			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scroller.setBorder(BorderFactory.createEmptyBorder());
-		scroller.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
+		scroller.getViewport().setBackground(PanelStyle.BACKGROUND);
 		scroller.setPreferredSize(new Dimension(210, 0));
 		scroller.getVerticalScrollBar().setUnitIncrement(16);
 		return scroller;
-	}
-
-	private static JPanel section(String title, Component content)
-	{
-		JLabel heading = new JLabel(title);
-		heading.setFont(FontManager.getRunescapeBoldFont());
-		heading.setForeground(ColorScheme.BRAND_ORANGE);
-		heading.setBorder(new EmptyBorder(0, 0, 4, 0));
-
-		JPanel wrapper = new JPanel(new BorderLayout());
-		wrapper.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		wrapper.add(heading, BorderLayout.NORTH);
-		wrapper.add(content, BorderLayout.CENTER);
-		return wrapper;
 	}
 }

@@ -141,8 +141,14 @@ final class PreviewScene
 		DelveRun run = run(23, now);
 		fill(run, 1);
 
-		return new PreviewScene("deep", "The ordinary mid-run state, every counter on its own line",
-			new PreviewConfig(), run, session(), lifetime(),
+		// Aiming for a delve, which is the fullest the run section gets: the two figures at the
+		// head of it and three rows under them.
+		PreviewConfig config = new PreviewConfig();
+		config.showTargetDelve = true;
+
+		return new PreviewScene("deep", "The ordinary mid-run state, every counter on its own line "
+			+ "and a delve being aimed for",
+			config, run, session(), lifetime(),
 			stats(Duration.ofMinutes(96), 41, 92, 1387), rows(), history(240));
 	}
 
@@ -220,7 +226,9 @@ final class PreviewScene
 	 */
 	private static PreviewScene ceiling(Instant now)
 	{
-		DelveRun run = run(23, now);
+		// Deep enough that the run clock is into the hours, which is the widest that clock ever
+		// gets and so the one the panel's tile has to hold.
+		DelveRun run = run(60, now);
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
@@ -235,9 +243,14 @@ final class PreviewScene
 			lifetime.add(metric, 9_481_255L);
 		}
 
-		return new PreviewScene("ceiling", "Every counter at the widest a run can make it, which "
-			+ "is what the overlay labels have to fit beside",
-			new PreviewConfig(), run, lifetime.copy(), lifetime,
+		// The same rows the deep scene has, so the two are comparable line for line - which is
+		// what DoomMetricsOverlayTest measures the widest figures against.
+		PreviewConfig config = new PreviewConfig();
+		config.showTargetDelve = true;
+
+		return new PreviewScene("ceiling", "Every counter and every clock at the widest a run can "
+			+ "make it, which is what the overlay labels and the panel's tiles have to fit beside",
+			config, run, lifetime.copy(), lifetime,
 			stats(Duration.ofHours(11), 486, 660, 41_920), rows(120), history(2400));
 	}
 
