@@ -228,32 +228,23 @@ public class DoomMetricsPlugin extends Plugin
 	/** The square, up for as long as the plugin is. It decides for itself when to draw. */
 	private DoomMetricsInfoBox infoBox;
 
-	/** Read on the Swing thread when the history window is built, cleared on shutdown. */
+	/** Read on the Swing thread when the detail window is built, cleared on shutdown. */
 	private volatile BufferedImage icon;
 
 	/**
-	 * The history window while it is open, or null. Swing thread only - it is created, read and
+	 * The run detail window while it is open, or null. Swing thread only - it is created, read and
 	 * disposed there, so the client thread never touches a frame mid-layout.
 	 */
-	private HistoryWindow historyWindow;
+	private RunDetailWindow detailWindow;
 
 	/**
-	 * The last milestone snapshot pushed to the Swing thread, so a window opening between two runs
-	 * has a table to draw without reading the model the client thread owns. Swing thread only.
+	 * The run the open window is drawing, held so a window opened between two runs has the last
+	 * one to show without reaching back into a run the client thread owns. Swing thread only.
 	 */
-	private List<MilestoneTablePanel.Row> tableRows = Collections.emptyList();
+	private RunDetail windowDetail = RunDetail.empty();
 
-	/**
-	 * The history the open window's chart is drawing, so a run finishing while it is up can be
-	 * added without re-reading the file. Swing thread only.
-	 */
-	private RunSeries chartSeries = RunSeries.empty();
-
-	/**
-	 * The last lifetime combat snapshot pushed to the Swing thread, so a window opening between two
-	 * runs has figures to draw without reading the tally the client thread owns. Swing thread only.
-	 */
-	private CombatTotals windowCombat = new CombatTotals();
+	/** The last live rows pushed across, for the same reason. Swing thread only. */
+	private DoomMetricsPanel.Live windowLive;
 
 	/** This character's lifetime table, reloaded whenever the profile changes. */
 	private final MilestoneTable milestones = new MilestoneTable();
@@ -337,6 +328,9 @@ public class DoomMetricsPlugin extends Plugin
 	/** What the live section last drew, so an unchanged tick costs nothing. */
 	private String lastLiveKey;
 
+	/** What the run detail window last drew, for the same reason - see {@link #refreshDetail}. */
+	private String lastDetailKey;
+
 	private int bossCount;
 	private int ticksWithoutBoss;
 
@@ -352,7 +346,7 @@ public class DoomMetricsPlugin extends Plugin
 		overlayManager.add(overlay);
 
 		icon = ImageUtil.loadImageResource(DoomMetricsPlugin.class, "panel_icon.png");
-		panel = new DoomMetricsPanel(this::openHistoryWindow);
+		panel = new DoomMetricsPanel(this::openDetailWindow);
 		navButton = NavigationButton.builder()
 			.tooltip("Doom Metrics")
 			.icon(icon)
@@ -382,7 +376,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		// The window outlives the side panel unless it is taken down explicitly, and a disabled
 		// plugin leaving a frame on screen would go on drawing data it no longer maintains.
-		SwingUtilities.invokeLater(this::closeHistoryWindow);
+		SwingUtilities.invokeLater(this::closeDetailWindow);
 
 		reset();
 	}
@@ -1150,28 +1144,6 @@ public class DoomMetricsPlugin extends Plugin
 
 		startSessionForCurrentCharacter();
 		refreshLive();
-		refreshLifetimeCombat();
-	}
-
-	/**
-	 * Pushes the lifetime combat figures over to the Swing thread. Called from the client thread,
-	 * which owns the tally, so a copy crosses rather than the tally itself.
-	 */
-	private void refreshLifetimeCombat()
-	{
-		CombatTotals totals = lifetimeCombat.copy();
-
-		SwingUtilities.invokeLater(() ->
-		{
-			// Held so a window opened later has figures to draw without reaching back into a tally
-			// the client thread may already be writing to again.
-			windowCombat = totals;
-
-			if (historyWindow != null)
-			{
-				historyWindow.setLifetimeCombat(totals);
-			}
-		});
 	}
 
 	/**
@@ -1588,7 +1560,6 @@ public class DoomMetricsPlugin extends Plugin
 
 		lifetimeCombat.addAll(ended);
 		totalsStore.saveCombat(lifetimeCombat);
-		refreshLifetimeCombat();
 	}
 
 	/**
@@ -1696,14 +1667,27 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
+		refreshDetail();
+
 		DelveRun display = getDisplayRun();
+		DelveRun detail = detailRun();
 		DoomMetricsPanel.Live live = display == null
 			? null
 			: DoomMetricsPanel.Live.of(display, config.paceMode(), targetDelve());
+
+		// The same rows for the window, except that it keeps drawing a run the overlay's linger
+		// has taken down - so the head of the window cannot blank out from under a chart that is
+		// still showing the run those figures belong to.
+		DoomMetricsPanel.Live detailLive = detail == display
+			? live
+			: (detail == null ? null : DoomMetricsPanel.Live.of(detail, config.paceMode(),
+				targetDelve()));
+
 		DoomMetricsPanel.Stats stats = statsSnapshot();
 		boolean showCombat = run != null || sessionAlive(Instant.now());
 		String key = (live == null ? "" : live.key())
-			+ "|" + stats.key() + "|" + combatKey(showCombat);
+			+ "|" + stats.key() + "|" + combatKey(showCombat)
+			+ (detailLive == live ? "" : "|" + (detailLive == null ? "" : detailLive.key()));
 
 		// The timers only move once a second, so most ticks have nothing to redraw. The rates move
 		// less again - neither can change until a delve is cleared or a run ends - and the combat
@@ -1724,6 +1708,15 @@ public class DoomMetricsPlugin extends Plugin
 			target.setLive(live);
 			target.setStats(stats);
 			target.setCombat(combat);
+
+			// Held so a window opened between two ticks has a head to draw, rather than sitting
+			// blank until the next figure moves.
+			windowLive = detailLive;
+
+			if (detailWindow != null)
+			{
+				detailWindow.setLive(detailLive);
+			}
 		});
 	}
 
@@ -1839,82 +1832,98 @@ public class DoomMetricsPlugin extends Plugin
 		milestones.getRows().forEach((delve, row) -> rows.add(new MilestoneTablePanel.Row(
 			delve, row.kc, row.pbTicks, improvedThisSession.contains(delve))));
 
-		SwingUtilities.invokeLater(() ->
-		{
-			// Held so a window opened later has a table to draw without reaching back into the
-			// model, which by then the client thread may already be writing to again.
-			tableRows = rows;
-			target.setRows(rows);
-
-			if (historyWindow != null)
-			{
-				historyWindow.setRows(rows);
-			}
-		});
+		SwingUtilities.invokeLater(() -> target.setRows(rows));
 	}
 
 	/**
-	 * Opens the history window, or brings it forward if it is already up. Runs on the Swing
+	 * Opens the run detail window, or brings it forward if it is already up. Runs on the Swing
 	 * thread, from the side panel's button.
 	 */
-	private void openHistoryWindow()
+	private void openDetailWindow()
 	{
-		if (historyWindow == null)
+		if (detailWindow == null)
 		{
-			historyWindow = new HistoryWindow(icon, () -> historyWindow = null);
-			historyWindow.setRows(tableRows);
-			historyWindow.setSeries(chartSeries);
-			historyWindow.setLifetimeCombat(windowCombat);
+			detailWindow = new RunDetailWindow(icon, () -> detailWindow = null);
+			// Whatever was last pushed across, so a window opened mid-delve shows the run it is
+			// in the middle of rather than filling in on the next clear.
+			detailWindow.setDetail(windowDetail);
+			detailWindow.setLive(windowLive);
 		}
 
-		historyWindow.open(SwingUtilities.getWindowAncestor(panel));
-
-		// Re-read every time rather than trusting what is already drawn: the profile may have
-		// changed, or another client may have written runs since this one last looked.
-		loadHistory();
+		detailWindow.open(SwingUtilities.getWindowAncestor(panel));
 	}
 
-	private void closeHistoryWindow()
+	private void closeDetailWindow()
 	{
-		HistoryWindow window = historyWindow;
+		RunDetailWindow window = detailWindow;
 
 		if (window == null)
 		{
 			return;
 		}
 
-		// Cleared first so the frame's own close callback has nothing left to do.
-		historyWindow = null;
-		chartSeries = RunSeries.empty();
+		// Cleared first so the frame's own close callback has nothing left to do. Only ever
+		// reached on shutdown - a window closed by the reader goes through that callback alone,
+		// and keeps what was pushed to it so reopening shows the run rather than an empty frame.
+		detailWindow = null;
+		windowDetail = RunDetail.empty();
+		windowLive = null;
 		window.dispose();
 	}
 
 	/**
-	 * Reads the whole history off disk and hands the chart every figure it can plot from it.
+	 * The run the detail window is about: the one in progress, or the last one that ended.
 	 *
-	 * <p>Reduced to per-metric lists here, on the executor thread, rather than each time the
-	 * dropdown moves - switching metric should not cost a pass over a lifetime of runs.
+	 * <p>Unlike {@link #getDisplayRun} this ignores the linger setting. That setting is there so an
+	 * overlay nobody asked for does not sit over the game world for the rest of the evening; a
+	 * window is only on screen because it was opened, and a reader who opens it half an hour after
+	 * a run wants the run rather than an empty frame.
 	 */
-	private void loadHistory()
+	private DelveRun detailRun()
 	{
-		runHistoryStore.load(records ->
+		return run != null ? run : lastRun;
+	}
+
+	/**
+	 * Takes the current run apart and pushes it to the window, if anything about it has changed.
+	 *
+	 * <p>Called on every tick, and almost always does nothing: what a snapshot holds cannot move
+	 * except by banking a delve or ending a run - see {@link RunDetail#keyFor}. A run four hundred
+	 * delves deep is therefore taken apart once per clear, not once per tick and not once per heal.
+	 */
+	private void refreshDetail()
+	{
+		DelveRun target = detailRun();
+		String key = RunDetail.keyFor(target);
+
+		if (key.equals(lastDetailKey))
 		{
-			RunSeries series = RunSeries.of(records);
+			return;
+		}
 
-			SwingUtilities.invokeLater(() ->
+		lastDetailKey = key;
+
+		// Built on the client thread, which owns the run, and immutable once built - so the Swing
+		// thread never reads a tally this thread is still adding to.
+		RunDetail detail = RunDetail.of(target);
+
+		SwingUtilities.invokeLater(() ->
+		{
+			windowDetail = detail;
+
+			if (detailWindow != null)
 			{
-				chartSeries = series;
-
-				if (historyWindow != null)
-				{
-					historyWindow.setSeries(series);
-				}
-			});
+				detailWindow.setDetail(detail);
+			}
 		});
 	}
 
 	/**
-	 * Writes a finished run to the history file, and adds it to the chart if it is on screen.
+	 * Writes a finished run to the history file.
+	 *
+	 * <p>Nothing reads it back: what the plugin shows is this session's runs, which are in memory.
+	 * It is still written, because the record is cheap to keep and impossible to recover once a
+	 * run is over - see {@link RunHistoryStore}.
 	 *
 	 * <p>Only runs that ended in a way we saw are recorded. An {@link EndReason#ABANDONED} run has
 	 * an ending we are guessing at, and its depth would be whatever the player happened to have
@@ -1938,17 +1947,6 @@ public class DoomMetricsPlugin extends Plugin
 
 		runHistoryStore.append(record,
 			runProfile != null ? runProfile : runHistoryStore.currentProfile());
-
-		SwingUtilities.invokeLater(() ->
-		{
-			if (historyWindow == null)
-			{
-				return;
-			}
-
-			chartSeries = chartSeries.plus(record);
-			historyWindow.setSeries(chartSeries);
-		});
 	}
 
 	private Double pace(DelveRun target)

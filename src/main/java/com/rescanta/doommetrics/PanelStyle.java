@@ -17,7 +17,7 @@ import net.runelite.client.ui.DynamicGridLayout;
 import net.runelite.client.ui.FontManager;
 
 /**
- * The look the side panel and the history window are both built out of: three text weights, one
+ * The look the side panel and the run detail window are both built out of: three text weights, one
  * card, one section heading.
  *
  * <p>Held in one place because the two windows draw the same figures and a block that reads as a

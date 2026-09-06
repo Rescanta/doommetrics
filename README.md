@@ -1,8 +1,8 @@
 # Doom of Mokhaiotl Metrics
 
 Times every delve in a Doom of Mokhaiotl run, shows your deep delve completions per hour, counts
-what your gear gave back while you were down there, and keeps a lifetime record of every run and
-every tenth delve you have reached.
+what your gear gave back while you were down there, breaks the run down delve by delve in a window
+of its own, and keeps a lifetime record of every tenth delve you have reached.
 
 ## How delves are timed
 
@@ -108,7 +108,7 @@ square has one line. Right click it and pick **Clear** to dismiss a finished run
 
 **Display** set to `Off` draws nothing over the game at all. Nothing else changes: delves are
 still timed, the counters still count, the chat messages still arrive, and the side panel and the
-history still fill up.
+run detail still fill up.
 
 ## The delve you are aiming for
 
@@ -140,8 +140,10 @@ messages are switched off altogether.
 ## Counters
 
 The plugin can also count what your gear and spellbook gave back. Every counter is off by default;
-tick the ones you want under **Counters** and they appear on the overlay under the pace, in the
-side panel's table, and as a line on the history chart.
+tick the ones you want under **Counters** and they appear on the overlay under the pace and in the
+side panel's table. The run detail chart draws all eight whatever the checkboxes say - it is a
+window you opened to look at one run in full, and a counter you had not thought to tick is exactly
+the thing worth finding there.
 
 | Counter | Group | Counted in |
 |---|---|---|
@@ -211,7 +213,7 @@ Behind the chevron icon, top to bottom:
   back tomorrow starts you clean.
 - **Lifetime** - the same rate and delve count over everything this character has ever done.
 - **Milestones** - the lifetime table, below.
-- **Open history** - the history window.
+- **Open run detail** - this run, delve by delve, in a window of its own.
 
 ## Milestones
 
@@ -257,38 +259,73 @@ If you logged in at the cave and switched the plugin on mid-trip the bound is ti
 genuine best still stands; if the client had been open for hours it is loose, and that run quietly
 fails to set one.
 
-## History
+## Run detail
 
-Every finished run is written down, and **Open history** puts the record in a window of its own -
-one wide enough for a chart, which a side panel is not.
+**Open run detail** puts one run in a window of its own - the one you are on, or the last one you
+finished - broken down delve by delve. A side panel has no room for a chart; this does.
 
 ```
-Show [ Deepest delve      v ]
-
-Lifetime totals        Per run
-Spell healing           .     .   .    .  .
-  Blood barrage    ..  . . ..  . ...  . . ..
-  Other spells    . .. ..  .. .. .  ...  . .
-Spec healing     ~~~~~~~~~~~~~~~~~~~~~~~~~~
-  ...
-Milestones
+This run              Per delve
+Delve      Time       Counted per delve
+  24      21:02       140 |            ZCB /\   /\
+Deep pace  58.1/hr        |  __       /  \_/  \
+                       70 | /  \_ Barrage      \
+Counters                  |/     \__/‾‾\__/‾‾\__\
+             This run    0 |__Eldritch__________
+Spell healing               |
+ ■ Blood barrage    806     | 2:00
+ ■ Other spells     124     | ▁▂▃▃▄▄▅▅▆▆▇▇  Delve time
+Spec healing                | ▁▁▂▂▃▃▄▄▅▅▆▆  Fight
+ ■ Ancient godsword  58   0:00
+ ...                        1     5    10    15
+                                    Delve
 ```
 
-One dot per run, oldest first, with a rolling average through them - a plain line is a solid band
-once there are a few hundred runs, and the trend disappears into it. The dropdown picks what the
-dots measure: how deep the run got, or any one of the counters. Beside the chart are this
-character's lifetime counter totals and the milestone table.
+The upper plot is the counters, a line each, over the delves the run has banked. They share one
+scale because none of them clears a few hundred on a single delve, so a barrage heal and a Zaryte
+spec are like sizes and can be read against each other. Which unit a line is counted in is on the
+legend, under the heading it is listed beneath - hitpoints, prayer points or damage, the same four
+headings the side panel uses.
 
-Runs are kept in `.runelite/doommetrics/`, one file per character, one JSON line per run. A line
-holds when the run ended, how deep it got, how long that took, how it ended, and what the counters
-recorded. Appending costs the same on the ten thousandth run as on the first, and a write torn by a
-crash costs the last line rather than the whole history, so nothing is ever discarded to keep the
-file small - twenty thousand runs is about a megabyte.
+The lower strip is the clock: how long each delve took, and under it the fight the game timed. The
+band between them is everything the delve cost that was not the fight - the restocking, the walk
+in and the drop down the hole. It is a second plot rather than a second scale on the first, because
+seconds and hitpoints have no honest common axis, and lining the two up on one delve axis is the
+whole point of stacking them.
 
-The notable drops from each run - the eye, avernic treads, mokhaiotl cloth and the pet - are
-written to that file too, though nothing displays them yet. Only those are listed: the supplies and
-currency the Doom hands out say nothing about how the trip went. The pile is read when you claim
-it, never before, because an unclaimed pile is not yet yours.
+**Point at a delve** and a line marks it across both plots while the column beside the counters
+switches from the run's totals to that delve's. Every figure on the chart is therefore also written
+down, and reading one never depends on landing the pointer on a two pixel dot.
+
+**Point at a counter's name** to bring its line forward and push the other seven back, and click it
+to take the line off altogether - which also gives the counters left on the plot the height they
+were sharing with it. A colour belongs to a counter for as long as the window is open, so switching
+one off never repaints the rest.
+
+### Long runs
+
+The world record is past delve 260 and the chart is built to go further. Past eighty delves the
+markers come off - there is no longer room to hit one - and each line becomes a rolling average
+with the delve-by-delve line left underneath at a fraction of the weight. A counter varies a good
+deal from one delve to the next, and eight lines of that at three hundred delves fill in as a solid
+band with no trend left in it. The average carries the trend the lines no longer can; the lines are
+kept because the spread they show is real, and a chart of averages alone would say a delve cost
+what the delves around it cost. The caption says which is which, and the exact figure for any one
+delve is still the one you get by pointing at it.
+
+### What is not here
+
+Nothing is read back from disk, so the window is empty until this session has a run in it, and a
+run is gone once the next one starts. What survives a restart is the milestone table and the
+lifetime rate, both in the side panel where they always were.
+
+Finished runs are still written to `.runelite/doommetrics/`, one file per character, one JSON line
+per run: when the run ended, how deep it got, how long that took, how it ended, what the counters
+recorded, and the notable drops - the eye, avernic treads, mokhaiotl cloth and the pet. Nothing
+displays that file. It is kept because a run is impossible to recover once it is over and the
+record costs about sixty bytes, so twenty thousand runs is about a megabyte. Appending costs the
+same on the ten thousandth run as on the first, and a write torn by a crash costs the last line
+rather than the whole file.
 
 ## Config
 
@@ -333,7 +370,7 @@ rather than quietly miscounting.
 
 ```
 ./gradlew test           run the suite
-./gradlew preview        the overlay, panel and history window, with no game under them
+./gradlew preview        the overlay, panel and detail window, with no game under them
 ./gradlew previewShots   a picture of every one of those states, into build/preview
 ```
 

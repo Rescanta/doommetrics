@@ -95,7 +95,7 @@ public class PreviewShots
 			written.add(shot(infoBoxes(scene, PreviewRender.Backdrop.CAVE),
 				directory.resolve(prefix + "-infobox.png")));
 			written.add(shot(panel(scene), directory.resolve(prefix + "-panel.png")));
-			written.add(shot(history(scene), directory.resolve(prefix + "-history.png")));
+			written.add(shot(detail(scene), directory.resolve(prefix + "-detail.png")));
 
 			index.append(prefix).append(" - ").append(scene.note).append(System.lineSeparator());
 		}
@@ -170,18 +170,17 @@ public class PreviewShots
 		return PreviewRender.scale(PreviewRender.component(panel), ZOOM);
 	}
 
-	/** The history window at the size it opens at. Left unscaled: it is large enough to read. */
-	private static BufferedImage history(PreviewScene scene)
+	/** The run detail window at the size it opens at. Left unscaled: it is large enough to read. */
+	private static BufferedImage detail(PreviewScene scene)
 	{
-		HistoryWindow window = new HistoryWindow(null, () ->
+		RunDetailWindow window = new RunDetailWindow(null, () ->
 		{
 		});
 
-		window.setRows(scene.rows);
-		window.setLifetimeCombat(scene.lifetime);
-		window.setSeries(scene.series);
+		window.setLive(scene.live(scene.config));
+		window.setDetail(scene.detail());
 
-		return PreviewRender.window(window, 900, 560);
+		return PreviewRender.window(window, 980, 600);
 	}
 
 	private static String shot(BufferedImage image, Path file) throws IOException

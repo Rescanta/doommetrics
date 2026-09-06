@@ -23,7 +23,7 @@ import net.runelite.client.ui.PluginPanel;
 /**
  * The side panel: the run in progress on top, the sitting beside the character's lifetime under it,
  * then the sitting's combat figures, the lifetime milestone table, and a button that opens the
- * history window.
+ * run detail window.
  *
  * <p>The run is drawn as two large figures with the rest of it in small type beneath, because
  * there are only two things a player reads while they are being hit - which delve they are on and
@@ -48,7 +48,7 @@ class DoomMetricsPanel extends PluginPanel
 		static final int ROWS = 5;
 
 		/** Which of those rows are drawn large, at the head of the section. */
-		private static final int HERO_ROWS = 2;
+		static final int HERO_ROWS = 2;
 
 		/** Row labels in draw order, a null label meaning that row is switched off. */
 		final String[] labels;
@@ -204,8 +204,8 @@ class DoomMetricsPanel extends PluginPanel
 	private final JLabel lifetimePace = PanelStyle.body("-", SwingConstants.RIGHT);
 	private final JLabel lifetimeDeep = PanelStyle.body("-", SwingConstants.RIGHT);
 
-	/** @param onOpenHistory invoked on the Swing thread when the history button is pressed */
-	DoomMetricsPanel(Runnable onOpenHistory)
+	/** @param onOpenDetail invoked on the Swing thread when the run detail button is pressed */
+	DoomMetricsPanel(Runnable onOpenDetail)
 	{
 		setBackground(PanelStyle.BACKGROUND);
 		setLayout(new DynamicGridLayout(0, 1, 0, PanelStyle.SECTION_GAP));
@@ -226,7 +226,7 @@ class DoomMetricsPanel extends PluginPanel
 		add(PanelStyle.section("Session & lifetime", PanelStyle.card(compare())));
 		add(PanelStyle.section("Session combat", combatPanel));
 		add(PanelStyle.section("Milestones", tablePanel));
-		add(historyButton(onOpenHistory));
+		add(detailButton(onOpenDetail));
 
 		setLive(null);
 		setStats(null);
@@ -407,16 +407,16 @@ class DoomMetricsPanel extends PluginPanel
 		return panel;
 	}
 
-	private static JComponent historyButton(Runnable onOpenHistory)
+	private static JComponent detailButton(Runnable onOpenDetail)
 	{
-		JButton button = new JButton("Open history");
+		JButton button = new JButton("Open run detail");
 		button.setFont(FontManager.getRunescapeBoldFont());
 		button.setForeground(ColorScheme.TEXT_COLOR);
 		button.setBackground(PanelStyle.CARD);
 		button.setBorder(new EmptyBorder(7, 8, 7, 8));
 		button.setFocusPainted(false);
-		button.setToolTipText("Show the milestone table and depth per run in their own window");
-		button.addActionListener(event -> onOpenHistory.run());
+		button.setToolTipText("Break this run down delve by delve, in a window of its own");
+		button.addActionListener(event -> onOpenDetail.run());
 
 		// The panel is otherwise all text, so nothing about the button says it can be pressed
 		// until the pointer is over it.

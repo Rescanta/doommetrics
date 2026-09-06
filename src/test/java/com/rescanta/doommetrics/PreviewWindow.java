@@ -39,7 +39,7 @@ import net.runelite.client.ui.laf.RuneLiteLAF;
  * The plugin's interfaces, on screen, with no game underneath them.
  *
  * <p>Run it with {@code gradlew preview}. The overlay is on the left over a backdrop you can
- * change, the side panel is on the right at the width RuneLite gives it, and the history window
+ * change, the side panel is on the right at the width RuneLite gives it, and the detail window
  * opens from a button. Every option that changes how they look is a control down the side, so
  * something you would otherwise log in, walk to the Doom and delve twenty times to see is a
  * checkbox away instead.
@@ -68,7 +68,7 @@ public class PreviewWindow
 
 	private final PreviewPlugin plugin = new PreviewPlugin();
 	private final DoomMetricsOverlay overlay = new DoomMetricsOverlay(plugin, config);
-	private final DoomMetricsPanel panel = new DoomMetricsPanel(this::openHistory);
+	private final DoomMetricsPanel panel = new DoomMetricsPanel(this::openDetail);
 
 	/** The same square the plugin puts up, reading the same config the overlay beside it does. */
 	private final DoomMetricsInfoBox infoBox =
@@ -91,7 +91,7 @@ public class PreviewWindow
 	private final OverlayCanvas canvas = new OverlayCanvas();
 
 	private PreviewScene scene;
-	private HistoryWindow history;
+	private RunDetailWindow detail;
 
 	private void open()
 	{
@@ -207,7 +207,7 @@ public class PreviewWindow
 		}
 
 		stack.add(Box.createVerticalStrut(10));
-		stack.add(button("Open history window", this::openHistory));
+		stack.add(button("Open run detail window", this::openDetail));
 		stack.add(button("Write PNGs", this::writeShots));
 		stack.add(Box.createVerticalGlue());
 
@@ -234,9 +234,9 @@ public class PreviewWindow
 		note.setText("<html><body style='width:210px'>" + loaded.note + "</body></html>");
 		panel.setRows(loaded.rows);
 
-		if (history != null)
+		if (detail != null)
 		{
-			openHistory();
+			openDetail();
 		}
 
 		for (Runnable restate : restaters)
@@ -257,20 +257,27 @@ public class PreviewWindow
 		panel.setLive(scene.live(config));
 		panel.setStats(scene.stats);
 		panel.setCombat(scene.panelCombat());
+
+		if (detail != null)
+		{
+			// The head of the detail window is the same rows the side panel draws, so a knob
+			// turned in the preview has to move both of them.
+			detail.setLive(scene.live(config));
+		}
+
 		canvas.repaint();
 	}
 
-	private void openHistory()
+	private void openDetail()
 	{
-		if (history == null)
+		if (detail == null)
 		{
-			history = new HistoryWindow(null, () -> history = null);
+			detail = new RunDetailWindow(null, () -> detail = null);
 		}
 
-		history.setRows(scene.rows);
-		history.setLifetimeCombat(scene.lifetime);
-		history.setSeries(scene.series);
-		history.open(canvas);
+		detail.setLive(scene.live(config));
+		detail.setDetail(scene.detail());
+		detail.open(canvas);
 	}
 
 	private void writeShots()
