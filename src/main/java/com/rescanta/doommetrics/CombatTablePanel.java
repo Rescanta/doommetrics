@@ -16,9 +16,9 @@ import net.runelite.client.ui.FontManager;
  * A {@link CombatTotals} laid out as a table: what healed you, what restored your prayer and what
  * your specs hit for, under the heading each belongs to.
  *
- * <p>A component in its own right for the same reason {@link MilestoneTablePanel} is one - the side
- * panel draws the sitting's figures with it and the history window draws the character's lifetime
- * figures with it, and two tables built separately would drift apart.
+ * <p>A component in its own right so the figures are laid out in one place: the side panel draws
+ * the sitting's tally with it, and anything else that has a {@link CombatTotals} to show can draw
+ * that one the same way rather than growing a second table that drifts from this.
  *
  * <p>Every row is built once and only ever retexted. The rows never change: eight metrics under
  * four headings, whether or not any of them has fired. A metric that has counted nothing reads zero

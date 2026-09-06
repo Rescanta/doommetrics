@@ -26,10 +26,16 @@ import java.util.Random;
  */
 final class PreviewScene
 {
-	/** How long a delve at this depth takes, near enough that the pace figures read plausibly. */
+	/**
+	 * How long a delve at this depth takes, near enough that the pace figures read plausibly.
+	 *
+	 * <p>The growth flattens off, because the real fight's does: a delve gets harder as it goes
+	 * deeper but the depth is uncapped, and a length that kept climbing linearly would have delve
+	 * 350 taking twelve minutes and the deepest scene reporting a pace nobody has ever seen.
+	 */
 	private static Duration delveLength(int level)
 	{
-		return Duration.ofSeconds(30 + level * 2L);
+		return Duration.ofSeconds(30 + Math.min(level, 45) * 2L);
 	}
 
 	final String name;
@@ -48,11 +54,10 @@ final class PreviewScene
 	final CombatTotals lifetime;
 	final DoomMetricsPanel.Stats stats;
 	final List<MilestoneTablePanel.Row> rows;
-	final RunSeries series;
 
 	private PreviewScene(String name, String note, PreviewConfig config, DelveRun run,
 		CombatTotals session, CombatTotals lifetime, DoomMetricsPanel.Stats stats,
-		List<MilestoneTablePanel.Row> rows, RunSeries series)
+		List<MilestoneTablePanel.Row> rows)
 	{
 		this.name = name;
 		this.note = note;
@@ -62,7 +67,12 @@ final class PreviewScene
 		this.lifetime = lifetime;
 		this.stats = stats;
 		this.rows = rows;
-		this.series = series;
+	}
+
+	/** The run taken apart delve by delve, as the plugin hands it to the detail window. */
+	RunDetail detail()
+	{
+		return RunDetail.of(run);
 	}
 
 	/**
@@ -103,7 +113,8 @@ final class PreviewScene
 			lingering(now),
 			bare(now),
 			fresh(now),
-			ceiling(now));
+			ceiling(now),
+			record(now));
 	}
 
 	/** One scene by name, for a test that is about a particular state rather than all of them. */
@@ -125,21 +136,20 @@ final class PreviewScene
 		return new PreviewScene("idle", "Between runs: no overlay at all, and a panel with only "
 			+ "the sitting and the lifetime to report",
 			new PreviewConfig(), null, session(), lifetime(),
-			stats(Duration.ofMinutes(96), 41, 92, 1387), rows(), history(240));
+			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
 	}
 
 	private static PreviewScene shallow(Instant now)
 	{
 		return new PreviewScene("shallow", "Four delves in: no deep delve banked yet, so the pace "
 			+ "has nothing to report and the counters have barely moved",
-			new PreviewConfig(), run(3, now), session(), lifetime(),
-			stats(Duration.ofMinutes(4), 0, 4, 1387), rows(), history(240));
+			new PreviewConfig(), run(3, now, counters(1)), session(), lifetime(),
+			stats(Duration.ofMinutes(4), 0, 4, 1387), rows());
 	}
 
 	private static PreviewScene deep(Instant now)
 	{
-		DelveRun run = run(23, now);
-		fill(run, 1);
+		DelveRun run = run(23, now, counters(1));
 
 		// Aiming for a delve, which is the fullest the run section gets: the two figures at the
 		// head of it and three rows under them.
@@ -149,13 +159,12 @@ final class PreviewScene
 		return new PreviewScene("deep", "The ordinary mid-run state, every counter on its own line "
 			+ "and a delve being aimed for",
 			config, run, session(), lifetime(),
-			stats(Duration.ofMinutes(96), 41, 92, 1387), rows(), history(240));
+			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
 	}
 
 	private static PreviewScene combined(Instant now)
 	{
-		DelveRun run = run(23, now);
-		fill(run, 1);
+		DelveRun run = run(23, now, counters(1));
 
 		PreviewConfig config = new PreviewConfig();
 		config.grouping = MetricDisplay.COMBINED;
@@ -164,37 +173,34 @@ final class PreviewScene
 		return new PreviewScene("combined", "The same run with the counters folded into their "
 			+ "groups, and run pace in place of deep pace",
 			config, run, session(), lifetime(),
-			stats(Duration.ofMinutes(96), 41, 92, 1387), rows(), history(240));
+			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
 	}
 
 	private static PreviewScene died(Instant now)
 	{
-		DelveRun run = run(31, now);
-		fill(run, 2);
+		DelveRun run = run(31, now, counters(2));
 		run.end(EndReason.DIED, now, 32);
 
 		return new PreviewScene("died", "The seconds after a death, when the overlay grows a row "
 			+ "and the delve row changes what it is counting",
 			new PreviewConfig(), run, session(), lifetime(),
-			stats(Duration.ofMinutes(112), 65, 141, 1387), rows(), history(240));
+			stats(Duration.ofMinutes(112), 65, 141, 1387), rows());
 	}
 
 	private static PreviewScene lingering(Instant now)
 	{
-		DelveRun run = run(27, now);
-		fill(run, 2);
+		DelveRun run = run(27, now, counters(2));
 		run.end(EndReason.FINISHED, now, 0);
 
 		return new PreviewScene("lingering", "A run walked out of, still up for the linger "
 			+ "minutes: cleared rather than died, and a clock that has stopped",
 			new PreviewConfig(), run, session(), lifetime(),
-			stats(Duration.ofMinutes(104), 58, 128, 1387), rows(), history(240));
+			stats(Duration.ofMinutes(104), 58, 128, 1387), rows());
 	}
 
 	private static PreviewScene bare(Instant now)
 	{
-		DelveRun run = run(23, now);
-		fill(run, 1);
+		DelveRun run = run(23, now, counters(1));
 
 		PreviewConfig config = new PreviewConfig();
 		config.allCounters(false);
@@ -203,18 +209,18 @@ final class PreviewScene
 		return new PreviewScene("bare", "Everything optional switched off, which is the narrowest "
 			+ "the overlay ever gets",
 			config, run, session(), lifetime(),
-			stats(Duration.ofMinutes(96), 41, 92, 1387), rows(), history(240));
+			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
 	}
 
 	private static PreviewScene fresh(Instant now)
 	{
 		return new PreviewScene("fresh", "A character with nothing behind them: empty tables, an "
 			+ "empty chart, and rates with nothing to average",
-			new PreviewConfig(), run(1, now), new CombatTotals(), new CombatTotals(),
+			new PreviewConfig(), run(1, now, NOTHING), new CombatTotals(), new CombatTotals(),
 			new DoomMetricsPanel.Stats(DoomFormat.duration(Duration.ofMinutes(2)),
 				DoomFormat.pace(null), "Nothing banked yet", "0",
 				DoomFormat.pace(null), "Nothing banked yet", null),
-			Collections.emptyList(), RunSeries.empty());
+			Collections.emptyList());
 	}
 
 	/**
@@ -228,12 +234,10 @@ final class PreviewScene
 	{
 		// Deep enough that the run clock is into the hours, which is the widest that clock ever
 		// gets and so the one the panel's tile has to hold.
-		DelveRun run = run(60, now);
+		long[] counters = new long[CombatMetric.values().length];
+		Arrays.fill(counters, 99_999L);
 
-		for (CombatMetric metric : CombatMetric.values())
-		{
-			run.recordCombat(metric, 99_999);
-		}
+		DelveRun run = run(60, now, counters);
 
 		// A lifetime, unlike a run, really does reach seven figures, and the panel has to hold it.
 		CombatTotals lifetime = new CombatTotals();
@@ -251,14 +255,36 @@ final class PreviewScene
 		return new PreviewScene("ceiling", "Every counter and every clock at the widest a run can "
 			+ "make it, which is what the overlay labels and the panel's tiles have to fit beside",
 			config, run, lifetime.copy(), lifetime,
-			stats(Duration.ofHours(11), 486, 660, 41_920), rows(120), history(2400));
+			stats(Duration.ofHours(11), 486, 660, 41_920), rows(120));
+	}
+
+	/**
+	 * A run past the deepest anybody has taken one, which is what the chart has to stay readable
+	 * at: three hundred and fifty delves across a plot a few hundred pixels wide, with eight lines
+	 * over each other and the delve markers too close together to draw.
+	 */
+	private static PreviewScene record(Instant now)
+	{
+		DelveRun run = run(350, now, counters(40));
+		run.end(EndReason.DIED, now, 351);
+
+		return new PreviewScene("record", "Deeper than the world record: the depth the run detail "
+			+ "chart has to stay legible at, and the one where its markers come off",
+			new PreviewConfig(), run, session(), lifetime(),
+			stats(Duration.ofHours(4), 340, 240, 41_920), rows(350));
 	}
 
 	/**
 	 * A run that has cleared its way down to {@code reached} and is twenty seconds into the next
-	 * delve, with the splits behind it that the pace figures are averaged over.
+	 * delve, with the splits behind it that the pace figures are averaged over, and
+	 * {@code counters} spread across those delves.
+	 *
+	 * <p>Built delve by delve rather than filled afterwards, because that is how the plugin builds
+	 * one: a counter is credited to whichever delve was being fought when it fired, so a run whose
+	 * figures were added at the end would put every one of them on the delve after the last, and
+	 * the chart would draw an empty run with one spike off the end of it.
 	 */
-	private static DelveRun run(int reached, Instant now)
+	private static DelveRun run(int reached, Instant now, long[] counters)
 	{
 		Duration total = Duration.ofSeconds(20);
 
@@ -270,31 +296,114 @@ final class PreviewScene
 		Instant at = now.minus(total);
 		DelveRun run = new DelveRun(at, 1, false);
 
+		// Fixed seed, so the same picture comes out of every run of the harness and two of them
+		// can be compared against each other rather than only against memory.
+		Random random = new Random(19_244);
+		long[][] plan = plan(reached, counters, random);
+
 		for (int level = 1; level <= reached; level++)
 		{
+			for (CombatMetric metric : CombatMetric.values())
+			{
+				run.recordCombat(metric, plan[level - 1][metric.ordinal()]);
+			}
+
 			at = at.plus(delveLength(level));
-			run.complete(level, at, delveLength(level));
+			run.complete(level, at, fightLength(level, random));
 		}
 
 		return run;
 	}
 
 	/**
-	 * Credits a run with what its gear would have given back, scaled by {@code weight}.
+	 * How each counter's run total is spread across the delves that earned it: one row per delve.
+	 *
+	 * <p>Shaped rather than merely random. A source gives back more per delve the deeper the run
+	 * goes, and varies a good deal delve to delve on top of that, and a sixth of delves see a given
+	 * source not fire at all - so the chart has a trend to draw, spread around it, and lines that
+	 * touch the floor. Pure noise would prove the chart can draw a band and nothing else.
+	 *
+	 * <p>Every row is scaled so the column sums to exactly what was asked for, with the rounding
+	 * given to the largest delve. The run's totals are therefore the ones the overlay and panel
+	 * layouts were chosen against, however the shares happen to fall.
+	 */
+	private static long[][] plan(int reached, long[] counters, Random random)
+	{
+		long[][] plan = new long[reached][counters.length];
+
+		for (CombatMetric metric : CombatMetric.values())
+		{
+			int at = metric.ordinal();
+			long total = counters[at];
+
+			if (total <= 0)
+			{
+				continue;
+			}
+
+			double[] weights = new double[reached];
+			double sum = 0;
+
+			for (int i = 0; i < reached; i++)
+			{
+				weights[i] = random.nextInt(6) == 0
+					? 0
+					: (0.55 + 0.9 * i / Math.max(1, reached - 1)) * (0.7 + random.nextDouble() * 0.6);
+				sum += weights[i];
+			}
+
+			long spent = 0;
+			int largest = 0;
+
+			for (int i = 0; i < reached; i++)
+			{
+				plan[i][at] = sum <= 0 ? 0 : Math.round(total * weights[i] / sum);
+				spent += plan[i][at];
+
+				if (plan[i][at] > plan[largest][at])
+				{
+					largest = i;
+				}
+			}
+
+			plan[largest][at] = Math.max(0, plan[largest][at] + total - spent);
+		}
+
+		return plan;
+	}
+
+	/**
+	 * The fight the game would have reported inside a segment of {@link #delveLength}: most of it,
+	 * with the rest standing for the restocking and the drop down the hole. The gap between the
+	 * two is what the time strip fills, so a preview where they were equal would never show it.
+	 */
+	private static Duration fightLength(int level, Random random)
+	{
+		Duration segment = delveLength(level);
+		return segment.minusSeconds(3 + random.nextInt(12));
+	}
+
+	/**
+	 * What a run's gear would have given back over the whole trip, scaled by {@code weight}.
 	 *
 	 * <p>One source is left on zero deliberately: a counter that has not fired is drawn differently
 	 * from one that has, and a set of scenes where everything is non-zero would never show it.
 	 */
-	private static void fill(DelveRun run, int weight)
+	private static long[] counters(int weight)
 	{
-		run.recordCombat(CombatMetric.BLOOD_BARRAGE_HEAL, 806L * weight);
-		run.recordCombat(CombatMetric.OTHER_SPELL_HEAL, 124L * weight);
-		run.recordCombat(CombatMetric.AGS_HEAL, 58L * weight);
-		run.recordCombat(CombatMetric.BLOWPIPE_HEAL, 47L * weight);
-		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 210L * weight);
-		run.recordCombat(CombatMetric.ZCB_DAMAGE, 1502L * weight);
-		run.recordCombat(CombatMetric.OTHER_SPEC_DAMAGE, 337L * weight);
+		long[] counters = new long[CombatMetric.values().length];
+		counters[CombatMetric.BLOOD_BARRAGE_HEAL.ordinal()] = 806L * weight;
+		counters[CombatMetric.OTHER_SPELL_HEAL.ordinal()] = 124L * weight;
+		counters[CombatMetric.AGS_HEAL.ordinal()] = 58L * weight;
+		counters[CombatMetric.BLOWPIPE_HEAL.ordinal()] = 47L * weight;
+		counters[CombatMetric.ELDRITCH_PRAYER.ordinal()] = 210L * weight;
+		counters[CombatMetric.ZCB_DAMAGE.ordinal()] = 1502L * weight;
+		counters[CombatMetric.OTHER_SPEC_DAMAGE.ordinal()] = 337L * weight;
+		return counters;
 	}
+
+	/** A run with nothing attributed to it at all. */
+	private static final long[] NOTHING = new long[CombatMetric.values().length];
 
 	/** What the sitting had banked before the run in progress. */
 	private static CombatTotals session()
@@ -376,39 +485,6 @@ final class PreviewScene
 		return rows;
 	}
 
-	/**
-	 * A character's history, deep enough that the chart is drawing more runs than it has pixels.
-	 *
-	 * <p>Fixed seed, so the same picture comes out of every run of the harness and two of them can
-	 * be compared against each other rather than only against memory.
-	 */
-	private static RunSeries history(int runs)
-	{
-		Random random = new Random(19_244);
-		List<RunRecord> records = new ArrayList<>(runs);
-
-		for (int i = 0; i < runs; i++)
-		{
-			RunRecord record = new RunRecord();
-			// A climb across the character's history, with the spread of a real evening on top.
-			int trend = 8 + (i * 22) / Math.max(1, runs);
-			record.delve = Math.max(1, trend + random.nextInt(9) - 4);
-			record.at = i;
-			record.ticks = record.delve * 190;
-			record.end = random.nextInt(4) == 0 ? EndReason.FINISHED : EndReason.DIED;
-			record.diedOn = record.end == EndReason.DIED ? record.delve + 1 : 0;
-			record.combat = new CombatTotals();
-
-			for (CombatMetric metric : CombatMetric.values())
-			{
-				record.combat.add(metric, (long) record.delve * (12 + random.nextInt(40)));
-			}
-
-			records.add(record);
-		}
-
-		return RunSeries.of(records);
-	}
 
 	/** The name, so a scene can be dropped straight into a picker. */
 	@Override

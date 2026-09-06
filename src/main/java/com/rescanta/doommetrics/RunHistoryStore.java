@@ -35,6 +35,13 @@ import net.runelite.client.config.ConfigManager;
  * runs is about a megabyte, so there is no cap - losing the oldest runs would defeat the point of
  * keeping them.
  *
+ * <p>Nothing in the plugin reads this file back. What is shown is the run you are on or the one
+ * you just finished, and both of those are in memory - see {@link RunDetail}. The file is written
+ * anyway because a run is impossible to recover once the next one starts and a record costs about
+ * sixty bytes, so keeping one is close to free and losing one is permanent. {@link #load} is kept
+ * for the same reason: it is what makes a view built on this history a display change rather than
+ * a recovery problem.
+ *
  * <p>All disk access runs on the shared executor. Reads hand their result back on that thread, so
  * callers marshal onto whichever thread owns what they are updating.
  */

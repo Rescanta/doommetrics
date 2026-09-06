@@ -249,7 +249,7 @@ final class PreviewRender
 		}
 	}
 
-	/** A whole window - the history window is one - drawn at the size given. */
+	/** A whole window - the run detail window is one - drawn at the size given. */
 	static BufferedImage window(JFrame frame, int width, int height)
 	{
 		try

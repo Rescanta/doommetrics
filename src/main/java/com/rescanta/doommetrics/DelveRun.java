@@ -38,6 +38,12 @@ class DelveRun
 	 */
 	static final int PACE_AVERAGE_FROM_LEVEL = 9;
 
+	/**
+	 * Handed back for a delve that earned nothing. Shared and never written to - every caller of
+	 * {@link #combatOn} only reads.
+	 */
+	private static final CombatTotals EMPTY_COMBAT = new CombatTotals();
+
 	static final class Split
 	{
 		final int level;
@@ -91,6 +97,20 @@ class DelveRun
 	 * See {@link CombatTracker} for what does and does not get counted.
 	 */
 	private final CombatTotals combat = new CombatTotals();
+
+	/**
+	 * The same tally split by the delve it was earned on, keyed by delve number.
+	 *
+	 * <p>What decides which delve an amount belongs to is {@link #currentLevel} at the moment the
+	 * tracker credits it, which is exact rather than a convention: every source counted here is
+	 * cleared when a delve completes, so no effect fired on one delve can pay out on the next.
+	 *
+	 * <p>A delve that earned nothing has no entry rather than an entry of zeroes, so a run that
+	 * never fires a spec costs this nothing at all. The sum of these is {@link #combat} by
+	 * construction - both are written by the same call - so the chart and the counters can never
+	 * disagree about what a run earned.
+	 */
+	private final Map<Integer, CombatTotals> combatByDelve = new LinkedHashMap<>();
 
 	private Instant startedAt;
 
@@ -203,10 +223,18 @@ class DelveRun
 		return names;
 	}
 
-	/** Credits an attributed heal, prayer restore or spec hit to this trip. */
+	/** Credits an attributed heal, prayer restore or spec hit to this trip, and to the delve. */
 	void recordCombat(CombatMetric metric, long amount)
 	{
+		if (amount <= 0)
+		{
+			// Tested here as well as in CombatTotals so nothing that would be discarded can leave
+			// an empty tally behind on a delve that earned nothing.
+			return;
+		}
+
 		combat.add(metric, amount);
+		combatByDelve.computeIfAbsent(currentLevel, level -> new CombatTotals()).add(metric, amount);
 	}
 
 	/**
@@ -216,6 +244,16 @@ class DelveRun
 	CombatTotals getCombat()
 	{
 		return combat;
+	}
+
+	/**
+	 * What was earned on one delve, or an empty tally for a delve that earned nothing. Never null,
+	 * so a caller walking every delve of a run does not have to tell "no entry" from "no figures".
+	 */
+	CombatTotals combatOn(int level)
+	{
+		CombatTotals totals = combatByDelve.get(level);
+		return totals == null ? EMPTY_COMBAT : totals;
 	}
 
 	void end(EndReason reason, Instant at, int diedOnLevel)
