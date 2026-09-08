@@ -292,6 +292,21 @@ public class CombatTrackerTest
 		assertEquals(list("eldritchPrayer=24"), recorded);
 	}
 
+	/**
+	 * The restore does not arrive with the spec. The staff casts from across the room and the
+	 * points only move once the spell has flown, which on a real trip was three ticks behind the
+	 * spec most of the time and six behind it at the outside - and a window that shut at three
+	 * counted five points of a delve where two specs gave back twenty-three.
+	 */
+	@Test
+	public void anEldritchRestoreThatFlewTheFullDistanceIsStillCounted()
+	{
+		tracker.specFired(SpecWeapon.ELDRITCH_STAFF, 100);
+		tracker.prayerGained(18, 106);
+
+		assertEquals(list("eldritchPrayer=18"), recorded);
+	}
+
 	@Test
 	public void prayerLongAfterAnEldritchSpecIsAPotion()
 	{

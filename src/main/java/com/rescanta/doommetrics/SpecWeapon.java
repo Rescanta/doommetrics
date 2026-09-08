@@ -70,6 +70,27 @@ enum SpecWeapon
 	private static final int PROMPT = 3;
 
 	/**
+	 * How long after an Eldritch spec its prayer restore may still arrive, in game ticks.
+	 *
+	 * <p>Longer than {@link #PROMPT}, because the points do not go up when the spec is fired but
+	 * when the spell it threw arrives - and a staff casts from up to ten tiles off. Timed against a
+	 * trip's worth of specs the restore landed three ticks behind the spec most of the time and six
+	 * behind it at the outside, so a window that shut at three took the ones cast from under the
+	 * boss and dropped the rest.
+	 *
+	 * <p>Which is not a rounding error: a spec is worth twenty-odd prayer points, and a delve where
+	 * two of them took the player from the nineties to the cap reported five. Seven ticks covers
+	 * the slowest seen with a tick in hand, and still shuts long before a restore potion drunk
+	 * after the spec could be mistaken for it.
+	 *
+	 * <p>What the extra ticks cost is the point of prayer that comes back on its own every twelfth
+	 * tick down there, which now lands inside a spec's window more often than not and is credited
+	 * to it. That is one point against the twenty the window was widened to save, and the only
+	 * over-count anything here allows.
+	 */
+	private static final int RESTORE = 7;
+
+	/**
 	 * When the Ancient godsword's Blood Sacrifice pays out, in ticks after the spec.
 	 *
 	 * <p>The mark lasts exactly eight ticks and the damage and healing follow it, so the pair is
@@ -100,7 +121,7 @@ enum SpecWeapon
 
 	private static SpecEffect prayer(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, 0, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, 0, RESTORE, budget);
 	}
 
 	/** The Ancient godsword's delayed hit, which lands when the mark on the target expires. */
