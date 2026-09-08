@@ -47,6 +47,7 @@ import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
@@ -88,6 +89,15 @@ public class DoomMetricsPlugin extends Plugin
 	 * no varplayer and posts no chat message.
 	 */
 	private static final int ABANDON_TICKS = 100;
+
+	/** How often the prayer regeneration potion gives a point back, in game ticks. */
+	private static final int PRAYER_REGEN_PERIOD = 12;
+
+	/**
+	 * How often a hitpoint comes back on its own, in game ticks - one a minute, which is what a
+	 * player who is not going out of their way to heal faster regenerates at.
+	 */
+	private static final int HITPOINTS_REGEN_PERIOD = 100;
 
 	/** Package-private so the infobox can carry the same option the overlay does. */
 	static final String CLEAR_OPTION = "Clear";
@@ -282,6 +292,12 @@ public class DoomMetricsPlugin extends Plugin
 	/** The boosted hitpoints level as we last saw it, for the same reason. */
 	private int hitpoints;
 
+	/** Tells the regeneration potion's drip from the prayer points the gear gave back. */
+	private final Regeneration prayerRegeneration = new Regeneration();
+
+	/** Tells the hitpoints that come back on their own from the ones the gear gave back. */
+	private final Regeneration hitpointsRegeneration = new Regeneration();
+
 	/**
 	 * When the session's most recent run ended, or null while one is in progress or before the
 	 * session has any run in it at all. What {@link #SESSION_IDLE} is measured from.
@@ -396,6 +412,8 @@ public class DoomMetricsPlugin extends Plugin
 		specEnergy = 0;
 		prayerPoints = 0;
 		hitpoints = 0;
+		prayerRegeneration.reset();
+		hitpointsRegeneration.reset();
 		sessionEndedAt = null;
 		sessionStartedAt = null;
 		sessionProfile = null;
@@ -835,9 +853,8 @@ public class DoomMetricsPlugin extends Plugin
 			// ago, which is what keeps the login flood out.
 			if (run != null && prayerPoints > was)
 			{
-				int tick = client.getTickCount();
-				logAttribution(SpecEffect.Kind.PRAYER, prayerPoints - was, tick);
-				combatTracker.prayerGained(prayerPoints - was, tick);
+				rose(SpecEffect.Kind.PRAYER, prayerRegeneration, prayerRegenerationPeriod(),
+					was, prayerPoints, event.getLevel());
 			}
 		}
 		else if (event.getSkill() == Skill.HITPOINTS)
@@ -847,11 +864,100 @@ public class DoomMetricsPlugin extends Plugin
 
 			if (run != null && hitpoints > was)
 			{
-				int tick = client.getTickCount();
-				logAttribution(SpecEffect.Kind.HEAL, hitpoints - was, tick);
-				combatTracker.healed(hitpoints - was, tick);
+				rose(SpecEffect.Kind.HEAL, hitpointsRegeneration, hitpointsRegenerationPeriod(),
+					was, hitpoints, event.getLevel());
 			}
 		}
+	}
+
+	/**
+	 * A level going up, offered to the tracker with whatever came back on its own taken out of it
+	 * first - see {@link Regeneration}.
+	 */
+	private void rose(SpecEffect.Kind kind, Regeneration regeneration, int period, int from, int to,
+		int natural)
+	{
+		int rise = to - from;
+		int tick = client.getTickCount();
+		boolean spare = combatTracker.wouldCredit(kind, tick) == null;
+		int gain = regeneration.without(from, to, natural, tick, period, spare);
+
+		if (gain < rise && config.debugLogging())
+		{
+			log.debug("{} of {} at tick {} has {} that came back on its own in it", kind, rise, tick,
+				rise - gain);
+		}
+
+		if (gain <= 0)
+		{
+			return;
+		}
+
+		logAttribution(kind, gain, tick);
+
+		if (kind == SpecEffect.Kind.PRAYER)
+		{
+			combatTracker.prayerGained(gain, tick);
+		}
+		else
+		{
+			combatTracker.healed(gain, tick);
+		}
+	}
+
+	/** How often the prayer regeneration potion is dripping, or 0 while no dose is in effect. */
+	private int prayerRegenerationPeriod()
+	{
+		return client.getVarbitValue(VarbitID.PRAYER_REGENERATION_POTION_TIMER) > 0
+			? PRAYER_REGEN_PERIOD
+			: 0;
+	}
+
+	/**
+	 * How often a hitpoint comes back on its own, in ticks.
+	 *
+	 * <p>One a minute as standard. Rapid Heal or a cape carrying the Hitpoints cape's perk doubles
+	 * it, and the two do not stack with each other; a regen bracelet doubles it again and does
+	 * stack with either, which is what makes four a minute the ceiling.
+	 */
+	private int hitpointsRegenerationPeriod()
+	{
+		int rate = 1;
+
+		if (client.getVarbitValue(VarbitID.PRAYER_RAPIDHEAL) == 1 || isWearingRegenCape())
+		{
+			rate *= 2;
+		}
+
+		if (isWearingRegenBracelet())
+		{
+			rate *= 2;
+		}
+
+		return HITPOINTS_REGEN_PERIOD / rate;
+	}
+
+	/**
+	 * Whether the cape being worn doubles hitpoints regeneration. The Hitpoints cape does, and so
+	 * does a max cape, which inherits every skillcape's perk - and comes in more recolours than a
+	 * list of ids can keep up with, so it is caught by name as {@link SpecWeapon} catches weapons.
+	 */
+	private boolean isWearingRegenCape()
+	{
+		int itemId = equipped(EquipmentInventorySlot.CAPE);
+
+		if (itemId == ItemID.SKILLCAPE_HITPOINTS || itemId == ItemID.SKILLCAPE_HITPOINTS_TRIMMED)
+		{
+			return true;
+		}
+
+		String name = itemName(itemId);
+		return name != null && name.toLowerCase().contains("max cape");
+	}
+
+	private boolean isWearingRegenBracelet()
+	{
+		return equipped(EquipmentInventorySlot.GLOVES) == ItemID.JEWL_BRACELET_REGEN;
 	}
 
 	/**
@@ -1034,7 +1140,7 @@ public class DoomMetricsPlugin extends Plugin
 				return;
 			}
 
-			int itemId = equippedWeapon();
+			int itemId = equipped(EquipmentInventorySlot.WEAPON);
 			SpecWeapon weapon = SpecWeapon.forItem(itemId, itemName(itemId));
 
 			if (weapon == null)
@@ -1050,8 +1156,8 @@ public class DoomMetricsPlugin extends Plugin
 		});
 	}
 
-	/** The item id in the weapon slot, or 0 when the slot is empty or unreadable. */
-	private int equippedWeapon()
+	/** The item id worn in {@code slot}, or 0 when the slot is empty or unreadable. */
+	private int equipped(EquipmentInventorySlot slot)
 	{
 		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
 
@@ -1060,8 +1166,8 @@ public class DoomMetricsPlugin extends Plugin
 			return 0;
 		}
 
-		Item weapon = worn.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
-		return weapon == null ? 0 : weapon.getId();
+		Item item = worn.getItem(slot.getSlotIdx());
+		return item == null ? 0 : item.getId();
 	}
 
 	/** An item's name from the cache, or null when there is nothing to name. */
