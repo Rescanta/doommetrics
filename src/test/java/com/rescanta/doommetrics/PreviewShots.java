@@ -96,6 +96,8 @@ public class PreviewShots
 				directory.resolve(prefix + "-infobox.png")));
 			written.add(shot(panel(scene), directory.resolve(prefix + "-panel.png")));
 			written.add(shot(detail(scene), directory.resolve(prefix + "-detail.png")));
+			written.add(shot(chat(scene, PreviewRender.Chatbox.TRANSPARENT,
+				PreviewRender.Backdrop.CAVE), directory.resolve(prefix + "-chat.png")));
 
 			index.append(prefix).append(" - ").append(scene.note).append(System.lineSeparator());
 		}
@@ -107,6 +109,13 @@ public class PreviewShots
 			directory.resolve("backdrop-stone.png")));
 		written.add(shot(overlay(deep, PreviewRender.Backdrop.GLARE),
 			directory.resolve("backdrop-glare.png")));
+
+		// The same for chat: the opaque box, and the transparent one over the brightest floor,
+		// which is the hardest place for its white words to be read.
+		written.add(shot(chat(deep, PreviewRender.Chatbox.OPAQUE, PreviewRender.Backdrop.CAVE),
+			directory.resolve("chat-opaque.png")));
+		written.add(shot(chat(deep, PreviewRender.Chatbox.TRANSPARENT, PreviewRender.Backdrop.GLARE),
+			directory.resolve("chat-glare.png")));
 
 		Files.createDirectories(directory);
 		Files.write(directory.resolve("index.txt"),
@@ -168,6 +177,17 @@ public class PreviewShots
 		panel.setRows(scene.rows);
 
 		return PreviewRender.scale(PreviewRender.component(panel), ZOOM);
+	}
+
+	/** Every line the scene's run would post to chat, as that chatbox shows them. */
+	private static BufferedImage chat(PreviewScene scene, PreviewRender.Chatbox box,
+		PreviewRender.Backdrop backdrop)
+	{
+		BufferedImage drawn = PreviewRender.chat(scene.chat(scene.config), box, backdrop);
+
+		return PreviewRender.scale(drawn == null
+			? PreviewRender.against(null, backdrop, 8, "(nothing posted to chat)")
+			: drawn, ZOOM);
 	}
 
 	/** The run detail window at the size it opens at. Left unscaled: it is large enough to read. */

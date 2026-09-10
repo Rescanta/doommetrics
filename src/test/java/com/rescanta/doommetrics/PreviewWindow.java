@@ -81,6 +81,8 @@ public class PreviewWindow
 	private final JComboBox<PreviewRender.Backdrop> backdropPicker =
 		new JComboBox<>(PreviewRender.Backdrop.values());
 	private final JComboBox<Integer> zoomPicker = new JComboBox<>(new Integer[]{1, 2, 3});
+	private final JComboBox<PreviewRender.Chatbox> chatboxPicker =
+		new JComboBox<>(PreviewRender.Chatbox.values());
 	private final JComboBox<PaceMode> pacePicker = new JComboBox<>(PaceMode.values());
 	private final JComboBox<MetricDisplay> groupingPicker = new JComboBox<>(MetricDisplay.values());
 
@@ -89,6 +91,7 @@ public class PreviewWindow
 
 	private final JLabel note = new JLabel();
 	private final OverlayCanvas canvas = new OverlayCanvas();
+	private final ChatCanvas chat = new ChatCanvas();
 
 	private PreviewScene scene;
 	private RunDetailWindow detail;
@@ -115,9 +118,19 @@ public class PreviewWindow
 		root.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		root.setBorder(new EmptyBorder(10, 10, 10, 10));
 		root.add(controls(), BorderLayout.WEST);
-		root.add(canvas, BorderLayout.CENTER);
+		root.add(game(), BorderLayout.CENTER);
 		root.add(sidePanel(), BorderLayout.EAST);
 		return root;
+	}
+
+	/** The overlay where the game's corner would be, and the chatbox under it. */
+	private JComponent game()
+	{
+		JPanel game = new JPanel(new BorderLayout(0, 10));
+		game.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		game.add(canvas, BorderLayout.CENTER);
+		game.add(titled("Chat", chat), BorderLayout.SOUTH);
+		return game;
 	}
 
 	/** The side panel as RuneLite hangs it: fixed width, scrolled, nothing else beside it. */
@@ -140,7 +153,12 @@ public class PreviewWindow
 
 		zoomPicker.setSelectedItem(2);
 		zoomPicker.addActionListener(event -> canvas.repaint());
-		backdropPicker.addActionListener(event -> canvas.repaint());
+		chatboxPicker.addActionListener(event -> chat.repaint());
+		backdropPicker.addActionListener(event ->
+		{
+			canvas.repaint();
+			chat.repaint();
+		});
 
 		stylePicker.addActionListener(event ->
 		{
@@ -183,6 +201,7 @@ public class PreviewWindow
 		stack.add(Box.createVerticalStrut(10));
 		stack.add(labelled("Backdrop", backdropPicker));
 		stack.add(labelled("Zoom", zoomPicker));
+		stack.add(labelled("Chatbox", chatboxPicker));
 
 		stack.add(heading("Display"));
 		stack.add(labelled("Style", stylePicker));
@@ -266,6 +285,7 @@ public class PreviewWindow
 		}
 
 		canvas.repaint();
+		chat.repaint();
 	}
 
 	private void openDetail()
@@ -337,6 +357,47 @@ public class PreviewWindow
 				default:
 					return "No run to draw, so the overlay draws nothing";
 			}
+		}
+	}
+
+	/**
+	 * Every line the scene's run would post, in the chatbox picked, at the game's own size rather
+	 * than the overlay's zoom - a chat line is only ever read at that size, and wraps at it.
+	 */
+	private class ChatCanvas extends JComponent
+	{
+		ChatCanvas()
+		{
+			setPreferredSize(new Dimension(0, 170));
+		}
+
+		@Override
+		protected void paintComponent(Graphics graphics)
+		{
+			PreviewRender.Backdrop backdrop =
+				(PreviewRender.Backdrop) backdropPicker.getSelectedItem();
+
+			Graphics2D target = (Graphics2D) graphics;
+			target.setColor(backdrop.color);
+			target.fillRect(0, 0, getWidth(), getHeight());
+
+			if (scene == null)
+			{
+				return;
+			}
+
+			BufferedImage drawn = PreviewRender.chat(scene.chat(config),
+				(PreviewRender.Chatbox) chatboxPicker.getSelectedItem(), backdrop);
+
+			if (drawn == null)
+			{
+				target.setFont(FontManager.getRunescapeFont());
+				target.setColor(ColorScheme.TEXT_COLOR);
+				target.drawString("No delve cleared, so nothing has been posted to chat", 12, 30);
+				return;
+			}
+
+			target.drawImage(drawn, 10, 10, null);
 		}
 	}
 

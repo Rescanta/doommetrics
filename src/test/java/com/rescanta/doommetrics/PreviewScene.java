@@ -99,6 +99,42 @@ final class PreviewScene
 		return run == null ? session.copy() : session.plus(run.getCombat());
 	}
 
+	/**
+	 * Every kind of line the plugin posts to chat, filled with this scene's run: the one the
+	 * interval gives its last cleared delve, the one it would have had as the target, and the
+	 * summary at the end - the scene's own ending when the run is over, and both kinds when it is
+	 * not. Empty when there is no cleared delve to report.
+	 *
+	 * <p>Shown whether the interval would have posted them or not: which delves are announced is
+	 * {@link ChatAnnouncement#isDue}'s business and tested there, and what is judged here is how
+	 * each line reads. Worded from whichever config is driving the preview, like {@link #live}.
+	 */
+	List<ChatAnnouncement> chat(PreviewConfig from)
+	{
+		List<ChatAnnouncement> lines = new ArrayList<>();
+
+		if (run == null || run.lastLevel() == 0)
+		{
+			return lines;
+		}
+
+		int last = run.lastLevel();
+		lines.add(ChatAnnouncement.delveCleared(run, last, 0, from.paceMode));
+		lines.add(ChatAnnouncement.delveCleared(run, last, last, from.paceMode));
+
+		if (run.isFinished())
+		{
+			lines.add(ChatAnnouncement.runEnded(run, run.getEndReason(), from.paceMode));
+		}
+		else
+		{
+			lines.add(ChatAnnouncement.runEnded(run, EndReason.DIED, from.paceMode));
+			lines.add(ChatAnnouncement.runEnded(run, EndReason.FINISHED, from.paceMode));
+		}
+
+		return lines;
+	}
+
 	/** Every state worth a look, in the order they are worth looking at. */
 	static List<PreviewScene> all()
 	{
