@@ -380,13 +380,15 @@ rather than quietly miscounting.
 
 ```
 ./gradlew test           run the suite
-./gradlew preview        the overlay, panel and detail window, with no game under them
+./gradlew preview        the overlay, panel, detail window and chat messages, with no game under them
 ./gradlew previewShots   a picture of every one of those states, into build/preview
 ```
 
 The preview harness draws the interfaces against fixed scenes - mid-run, just died, everything
 switched off, a character with nothing behind them - so a change to how they read can be looked at
-without going delving for it. `previewShots` writes the same set to disk, which makes a before and
+without going delving for it. The chat messages are drawn as the chatbox would show them, every
+kind the plugin posts filled with the scene's numbers, so their wording and colours can be judged
+without waiting for the delve that sends each one. `previewShots` writes the same set to disk, which makes a before and
 an after of every state at once, including the ones you would not have thought to open.
 
 ## License

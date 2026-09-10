@@ -48,8 +48,6 @@ import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.callback.ClientThread;
@@ -609,7 +607,7 @@ public class DoomMetricsPlugin extends Plugin
 		log.debug("Delve {} cleared in {} (segment {})",
 			level, DoomFormat.preciseDuration(fight), DoomFormat.duration(split.segment));
 
-		announceClear(level, split);
+		announceClear(level);
 		recordMilestone(level);
 	}
 
@@ -1668,37 +1666,17 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Posts elapsed time and pace when the delve number is a multiple of the configured interval.
-	 * Shallow delves are skipped, so an interval of 5 reports at delve 10, 15, 20 and so on.
-	 *
-	 * <p>Landing on the target delve is reported whatever the interval says, including when the
-	 * messages are switched off altogether. A target of 52 read against an interval of 5 would
-	 * otherwise pass in silence, and the one delve of a run you asked to be told about is a poor
-	 * one to leave unannounced. The delves in between it are still the interval's business.
+	 * Posts elapsed time and pace for the delve just cleared, when the interval or the target
+	 * says it is due - see {@link ChatAnnouncement#isDue}.
 	 */
-	private void announceClear(int level, DelveRun.Split split)
+	private void announceClear(int level)
 	{
-		int interval = config.chatIntervalDelves();
 		int target = targetDelve();
 
-		// Exactly the target rather than at or past it, so a run we joined already deeper than the
-		// target does not open with an announcement of an arrival nobody watched.
-		boolean reached = level == target;
-		boolean scheduled = interval > 0
-			&& level >= DelveRun.DEEP_DELVE_LEVEL
-			&& level % interval == 0;
-
-		if (!reached && !scheduled)
+		if (ChatAnnouncement.isDue(level, config.chatIntervalDelves(), target))
 		{
-			return;
+			sendChat(ChatAnnouncement.delveCleared(run, level, target, config.paceMode()));
 		}
-
-		sendChat((reached ? "Doom target delve %s reached! Duration: %s." : "Doom delve %s duration: %s.")
-				+ " Run time: %s, " + paceLabel() + ": %s.",
-			level,
-			DoomFormat.preciseDuration(split.fight == null ? split.segment : split.fight),
-			DoomFormat.duration(run.clearedElapsed()),
-			DoomFormat.pace(pace(run)));
 	}
 
 	private void endRun(EndReason reason, int diedOnLevel)
@@ -1734,20 +1712,7 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		String elapsed = DoomFormat.duration(ended.clearedElapsed());
-		String pace = DoomFormat.pace(pace(ended));
-
-		if (reason == EndReason.DIED)
-		{
-			sendChat("Doom run over: died on delve %s. Cleared up to delve %s in %s, "
-					+ paceLabel() + ": %s.",
-				diedOnLevel, ended.lastLevel(), elapsed, pace);
-		}
-		else
-		{
-			sendChat("Doom run over: cleared up to delve %s in %s, " + paceLabel() + ": %s.",
-				ended.lastLevel(), elapsed, pace);
-		}
+		sendChat(ChatAnnouncement.runEnded(ended, reason, config.paceMode()));
 	}
 
 	/**
@@ -2056,11 +2021,6 @@ public class DoomMetricsPlugin extends Plugin
 			runProfile != null ? runProfile : runHistoryStore.currentProfile());
 	}
 
-	private Double pace(DelveRun target)
-	{
-		return target.pace(config.paceMode());
-	}
-
 	/**
 	 * The delve being aimed for, or 0 when the target is switched off - the one form the panel and
 	 * the announcement both read it in, so neither has to test the checkbox for itself.
@@ -2076,39 +2036,11 @@ public class DoomMetricsPlugin extends Plugin
 			|| npcId == NpcID.DOM_BOSS_BURROWED;
 	}
 
-	/** The pace setting's name as it reads part way through a sentence, e.g. {@code deep pace}. */
-	private String paceLabel()
+	private void sendChat(ChatAnnouncement announcement)
 	{
-		return config.paceMode().toString().toLowerCase(Locale.US);
-	}
-
-	/**
-	 * Posts a line worded the way the game's own delve messages are: the words in the normal chat
-	 * colour and each figure in the highlight red, as in {@code Deep delves completed: 6,777}.
-	 * Every {@code %s} in the wording is filled by the next figure, in order.
-	 *
-	 * <p>The red is RuneLite's game message highlight rather than a colour of our own, so it is the
-	 * game's red out of the box, is adjusted for the transparent chatbox, and follows the player if
-	 * they have recoloured it in the Chat Color plugin.
-	 */
-	private void sendChat(String wording, Object... figures)
-	{
-		String[] words = wording.split("%s", -1);
-		ChatMessageBuilder message = new ChatMessageBuilder()
-			.append(ChatColorType.NORMAL)
-			.append(words[0]);
-
-		for (int i = 1; i < words.length; i++)
-		{
-			message.append(ChatColorType.HIGHLIGHT)
-				.append(String.valueOf(figures[i - 1]))
-				.append(ChatColorType.NORMAL)
-				.append(words[i]);
-		}
-
 		chatMessageManager.queue(QueuedMessage.builder()
 			.type(ChatMessageType.GAMEMESSAGE)
-			.runeLiteFormattedMessage(message.build())
+			.runeLiteFormattedMessage(announcement.formatted())
 			.build());
 	}
 }
