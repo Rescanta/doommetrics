@@ -1693,12 +1693,12 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		sendChat(String.format("%sDelve %d in %s | %s elapsed | %s",
-			reached ? "Target reached | " : "",
+		sendChat((reached ? "Doom target delve %s reached! Duration: %s." : "Doom delve %s duration: %s.")
+				+ " Run time: %s, " + paceLabel() + ": %s.",
 			level,
 			DoomFormat.preciseDuration(split.fight == null ? split.segment : split.fight),
 			DoomFormat.duration(run.clearedElapsed()),
-			DoomFormat.pace(pace(run))));
+			DoomFormat.pace(pace(run)));
 	}
 
 	private void endRun(EndReason reason, int diedOnLevel)
@@ -1739,12 +1739,14 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (reason == EndReason.DIED)
 		{
-			sendChat(String.format("Died on delve %d | cleared %d in %s | %s",
-				diedOnLevel, ended.lastLevel(), elapsed, pace));
+			sendChat("Doom run over: died on delve %s. Cleared up to delve %s in %s, "
+					+ paceLabel() + ": %s.",
+				diedOnLevel, ended.lastLevel(), elapsed, pace);
 		}
 		else
 		{
-			sendChat(String.format("Cleared delve %d | %s | %s", ended.lastLevel(), elapsed, pace));
+			sendChat("Doom run over: cleared up to delve %s in %s, " + paceLabel() + ": %s.",
+				ended.lastLevel(), elapsed, pace);
 		}
 	}
 
@@ -2074,18 +2076,39 @@ public class DoomMetricsPlugin extends Plugin
 			|| npcId == NpcID.DOM_BOSS_BURROWED;
 	}
 
-	private void sendChat(String message)
+	/** The pace setting's name as it reads part way through a sentence, e.g. {@code deep pace}. */
+	private String paceLabel()
 	{
-		String formatted = new ChatMessageBuilder()
-			.append(ChatColorType.HIGHLIGHT)
-			.append("[Doom] ")
+		return config.paceMode().toString().toLowerCase(Locale.US);
+	}
+
+	/**
+	 * Posts a line worded the way the game's own delve messages are: the words in the normal chat
+	 * colour and each figure in the highlight red, as in {@code Deep delves completed: 6,777}.
+	 * Every {@code %s} in the wording is filled by the next figure, in order.
+	 *
+	 * <p>The red is RuneLite's game message highlight rather than a colour of our own, so it is the
+	 * game's red out of the box, is adjusted for the transparent chatbox, and follows the player if
+	 * they have recoloured it in the Chat Color plugin.
+	 */
+	private void sendChat(String wording, Object... figures)
+	{
+		String[] words = wording.split("%s", -1);
+		ChatMessageBuilder message = new ChatMessageBuilder()
 			.append(ChatColorType.NORMAL)
-			.append(message)
-			.build();
+			.append(words[0]);
+
+		for (int i = 1; i < words.length; i++)
+		{
+			message.append(ChatColorType.HIGHLIGHT)
+				.append(String.valueOf(figures[i - 1]))
+				.append(ChatColorType.NORMAL)
+				.append(words[i]);
+		}
 
 		chatMessageManager.queue(QueuedMessage.builder()
 			.type(ChatMessageType.GAMEMESSAGE)
-			.runeLiteFormattedMessage(formatted)
+			.runeLiteFormattedMessage(message.build())
 			.build());
 	}
 }
