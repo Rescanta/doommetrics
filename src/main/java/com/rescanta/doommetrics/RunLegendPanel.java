@@ -8,6 +8,7 @@ import java.awt.Graphics;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 import javax.swing.JLabel;
@@ -218,6 +219,9 @@ class RunLegendPanel extends JPanel
 		private final JLabel name;
 		private final JLabel value = PanelStyle.body("0", SwingConstants.RIGHT);
 
+		/** Which specs feed a catch-all, as tooltip lines, or empty for a row its name explains. */
+		private final String sources;
+
 		private double fill;
 		private boolean off;
 
@@ -227,6 +231,9 @@ class RunLegendPanel extends JPanel
 			this.metric = metric;
 			this.stripe = stripe;
 			this.name = PanelStyle.body(metric.label(), SwingConstants.LEFT);
+
+			List<String> from = metric.sources();
+			this.sources = from.isEmpty() ? "" : "<br><br>Counted from:<br>" + String.join("<br>", from);
 
 			name.setBorder(new EmptyBorder(3, 3, 3, 0));
 			value.setBorder(PanelStyle.CELL_PADDING);
@@ -277,10 +284,12 @@ class RunLegendPanel extends JPanel
 				: ColorScheme.LIGHT_GRAY_COLOR);
 			name.setForeground(off ? ColorScheme.MEDIUM_GRAY_COLOR : ColorScheme.TEXT_COLOR);
 
-			setToolTipText(off
+			String tooltip = off
 				? "Click to put this line back on the chart"
 				: DoomFormat.count(amount) + " " + metric.unit().description()
-					+ " - click to take this line off the chart");
+					+ " - click to take this line off the chart";
+
+			setToolTipText(sources.isEmpty() ? tooltip : "<html>" + tooltip + sources + "</html>");
 
 			fill = off || amount <= 0 || largest <= 0 ? 0 : (double) amount / largest;
 			repaint();

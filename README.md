@@ -156,6 +156,11 @@ the thing worth finding there.
 | Zaryte crossbow | Spec damage | damage dealt |
 | Other specs | Spec damage | damage dealt |
 
+The Zaryte crossbow has a damage counter to itself. **Other specs** under spec damage takes the
+dragon knife, dragon thrownaxe, rosewood blowpipe and toxic blowpipe - which hit for about the same
+as each other, so one line does for all four - along with the damage of any other spec, the ancient
+godsword and eldritch staff included. Point at it in the side panel for the full list.
+
 Each figure is drawn in the colour of what it is counted in - hitpoints red, prayer blue, damage
 yellow - so which lines are which is legible without reading the labels. A counter that has not
 fired yet stays grey at zero rather than disappearing, so the overlay does not resize under you
@@ -183,6 +188,11 @@ credits an effect to whichever of those it can be pinned on and **drops anything
 Brews, food, regeneration and prayer potions are therefore missing from these figures, and that is
 the point rather than a shortcoming: a counter that swallowed them would report sustain your gear
 never earned. Every number here is a floor - what could be proven - and never an over-count.
+
+Spec damage is only counted on the boss itself, standing or burrowed. Larvae, volatile earth and
+the boss behind its demonic shield are all worth a spec, but not for the damage, so a spec fired at
+one of them is spent and adds nothing. Nor is the auto-attack either side of a spec: a hit only
+counts if it lands when that weapon's spec could have.
 
 ## Chat
 
@@ -353,7 +363,7 @@ rather than the whole file.
 | Other spec heal | off | Hitpoints healed by your other specs |
 | Eldritch prayer | off | Prayer points restored by the eldritch staff spec |
 | ZCB damage | off | Damage dealt by the zaryte crossbow spec |
-| Other spec damage | off | Damage dealt by your other specs |
+| Other spec damage | off | Damage dealt by every other spec - knives, thrownaxes and blowpipes included |
 
 ### Advanced
 

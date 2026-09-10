@@ -284,7 +284,8 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "showOtherSpecDamage",
 		name = "Other spec damage",
-		description = "Count the damage your other special attacks have dealt.",
+		description = "Count the damage every spec but the Zaryte crossbow's has dealt: the dragon"
+			+ " knife, dragon thrownaxe, rosewood blowpipe and toxic blowpipe, and any other.",
 		position = 59,
 		section = countersSection
 	)

@@ -193,9 +193,6 @@ public class DoomMetricsPlugin extends Plugin
 		SpotanimID.SANGUINESTI_STAFF_IMPACT_JUSTICIAR
 	};
 
-	/** The name of the thing whose damage is not counted - see {@link #countsAsDamage}. */
-	private static final String VOLATILE_EARTH = "volatile earth";
-
 	@Inject
 	private Client client;
 
@@ -757,13 +754,20 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Whether a hit on {@code target} is worth adding to a damage figure.
+	 * Whether a hit on {@code target} is worth adding to a damage figure: only a hit on the boss
+	 * itself, standing or burrowed.
 	 *
-	 * <p>The volatile earth that comes up before the shockwaves is not a health bar anybody is
-	 * racing. It guarantees a max hit, and two of them have to be broken to raise the shield that
-	 * keeps you alive - which is what makes it the best thing in the delve to spend a blowpipe or
-	 * an eldritch spec on, and what makes counting the damage misleading. A delve's spec damage
-	 * would read as though the work had been done there.
+	 * <p>Everything else a spec gets fired at down there is a job rather than a health bar anybody
+	 * is racing. The volatile earth before the shockwaves guarantees a max hit and has to be broken
+	 * to raise the shield that keeps you alive, and the larvae have to die before they reach you -
+	 * which makes both the best things in the delve to spend a blowpipe or an eldritch spec on, and
+	 * what makes counting the damage misleading. Nor does the boss count while its demonic shield
+	 * is up: what lands on the shield is not what gets the delve done. A delve's spec damage would
+	 * read as though the work had been done there.
+	 *
+	 * <p>The two that count are listed rather than the things that do not, so an add this version
+	 * has never seen stays out of the figure instead of quietly joining it. Every figure here is a
+	 * floor, and an unknown target costs one a hit rather than inflating it.
 	 *
 	 * <p>Only the damage is dropped. The heal and the prayer that spec was fired for are counted
 	 * exactly as they always were, which is the whole reason it was fired at that target.
@@ -772,23 +776,18 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		if (!(target instanceof NPC))
 		{
-			return true;
-		}
-
-		NPC npc = (NPC) target;
-		String name = npc.getName();
-
-		// By name as well as by id, for the same reason the spec weapons are: the id list is what
-		// this version knew, and a form it did not know would quietly start counting again.
-		if (npc.getId() == NpcID.DOM_SHOCKWAVE_SHIELD
-			|| npc.getId() == NpcID.DOM_SHOCKWAVE_PATH_NODE
-			|| (name != null && name.toLowerCase().contains(VOLATILE_EARTH)))
-		{
-			log.debug("Not counting damage to {} ({})", name, npc.getId());
 			return false;
 		}
 
-		return true;
+		NPC npc = (NPC) target;
+
+		if (npc.getId() == NpcID.DOM_BOSS || npc.getId() == NpcID.DOM_BOSS_BURROWED)
+		{
+			return true;
+		}
+
+		log.debug("Not counting damage to {} ({})", npc.getName(), npc.getId());
+		return false;
 	}
 
 	/**

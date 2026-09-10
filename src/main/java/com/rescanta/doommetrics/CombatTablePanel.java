@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -151,6 +152,15 @@ class CombatTablePanel extends JPanel
 			setBackground(stripe);
 			add(label, BorderLayout.WEST);
 			add(value, BorderLayout.EAST);
+
+			// On the row rather than the label, so the gap beside a short name answers too. The
+			// figure keeps its own tooltip, which Swing shows in preference while over it.
+			List<String> sources = metric.sources();
+
+			if (!sources.isEmpty())
+			{
+				setToolTipText("<html>Counted from:<br>" + String.join("<br>", sources) + "</html>");
+			}
 		}
 
 		/**

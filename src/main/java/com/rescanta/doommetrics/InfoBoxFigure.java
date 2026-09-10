@@ -3,6 +3,8 @@ package com.rescanta.doommetrics;
 import java.awt.Color;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * The single figure an infobox square can hold, and everything needed to draw it: the text, the
@@ -203,8 +205,17 @@ public enum InfoBoxFigure
 			}
 
 			default:
-				return heading() + "</br>" + DoomFormat.count(amount(run)) + " "
+			{
+				String tooltip = heading() + "</br>" + DoomFormat.count(amount(run)) + " "
 					+ unit().description();
+
+				// A catch-all's label does not say what it catches, and the square has no label.
+				List<String> sources = metric == null ? Collections.emptyList() : metric.sources();
+
+				return sources.isEmpty()
+					? tooltip
+					: tooltip + "</br>Counted from:</br>" + String.join("</br>", sources);
+			}
 		}
 	}
 
