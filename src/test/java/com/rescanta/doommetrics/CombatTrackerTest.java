@@ -217,15 +217,15 @@ public class CombatTrackerTest
 		assertEquals(list("otherSpecDamage=20"), recorded);
 	}
 
-	/** Two darts, the second allowed a tick behind the first, and no heal behind either. */
+	/** Two darts landing together, no heal behind either, and the dart after them not the spec. */
 	@Test
 	public void aRosewoodBlowpipeSpecIsTwoDartsAndHealsNothing()
 	{
 		tracker.specFired(SpecWeapon.ROSEWOOD_BLOWPIPE, 100);
-		tracker.damaged(10, 103);
-		tracker.healed(5, 103);
-		tracker.damaged(8, 104);
-		tracker.damaged(7, 104);
+		tracker.damaged(10, 102);
+		tracker.damaged(8, 102);
+		tracker.healed(5, 102);
+		tracker.damaged(7, 103);
 
 		assertEquals(list("otherSpecDamage=10", "otherSpecDamage=8"), recorded);
 	}

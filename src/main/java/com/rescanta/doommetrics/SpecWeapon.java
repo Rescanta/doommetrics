@@ -47,8 +47,8 @@ enum SpecWeapon
 	 */
 	DRAGON_THROWNAXE("Dragon thrownaxe", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1)),
 
-	/** Rosewood blowpipe. Rapid Burst fires two darts one after the other and heals nothing. */
-	ROSEWOOD_BLOWPIPE("Rosewood blowpipe", rapidBurst()),
+	/** Rosewood blowpipe. Rapid Burst fires two darts that land on the same tick, and heals nothing. */
+	ROSEWOOD_BLOWPIPE("Rosewood blowpipe", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 2)),
 
 	/** Toxic blowpipe. One dart, healing half of what it hits for, both landing together. */
 	BLOWPIPE("Toxic blowpipe",
@@ -159,18 +159,6 @@ enum SpecWeapon
 	private static SpecEffect projectile(CombatMetric metric, int budget)
 	{
 		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, PROMPT, budget);
-	}
-
-	/**
-	 * The rosewood blowpipe's two darts. The second is given a tick longer than a thrown hit
-	 * usually has, since nothing yet says whether it lands with the first or a tick behind it. The
-	 * budget still stops at two, and the dart thrown after the spec cannot land before both of the
-	 * spec's have.
-	 */
-	private static SpecEffect rapidBurst()
-	{
-		return new SpecEffect(SpecEffect.Kind.DAMAGE, CombatMetric.OTHER_SPEC_DAMAGE,
-			FLIGHT, PROMPT + 1, 2);
 	}
 
 	private static SpecEffect heal(CombatMetric metric, int budget)
