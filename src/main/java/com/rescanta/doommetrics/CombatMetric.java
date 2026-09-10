@@ -1,6 +1,9 @@
 package com.rescanta.doommetrics;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * The sustain and burst figures tracked across a delve, a sitting and a lifetime.
@@ -192,6 +195,52 @@ enum CombatMetric
 	Unit unit()
 	{
 		return unit;
+	}
+
+	/**
+	 * The weapons whose specs feed this figure, one per line, or nothing when a single weapon does
+	 * - its label already names that one.
+	 *
+	 * <p>For the catch-alls, whose label cannot say what they catch: "Other specs" under spec
+	 * damage takes the knives, thrownaxes and blowpipes that hit for about the same as each other,
+	 * and the damage of every spec counted for something else. Worked out from {@link SpecWeapon}
+	 * rather than written down, so a weapon added there is listed here without anybody having to
+	 * remember to. The catch-all itself comes last, because a figure it feeds counts every spec
+	 * not named, not only the ones that are.
+	 */
+	List<String> sources()
+	{
+		List<String> named = new ArrayList<>();
+		boolean anyOther = false;
+
+		for (SpecWeapon weapon : SpecWeapon.values())
+		{
+			if (!weapon.credits(this))
+			{
+				continue;
+			}
+
+			if (weapon.label() == null)
+			{
+				anyOther = true;
+			}
+			else
+			{
+				named.add(weapon.label());
+			}
+		}
+
+		if (named.size() + (anyOther ? 1 : 0) < 2)
+		{
+			return Collections.emptyList();
+		}
+
+		if (anyOther)
+		{
+			named.add("Any other spec");
+		}
+
+		return named;
 	}
 
 	/**
