@@ -341,7 +341,7 @@ final class PreviewScene
 		{
 			for (CombatMetric metric : CombatMetric.values())
 			{
-				run.recordCombat(metric, plan[level - 1][metric.ordinal()]);
+				run.recordCombat(metric, plan[level - 1][metric.ordinal()], at);
 			}
 
 			at = at.plus(delveLength(level));
@@ -435,6 +435,10 @@ final class PreviewScene
 		counters[CombatMetric.ELDRITCH_PRAYER.ordinal()] = 210L * weight;
 		counters[CombatMetric.ZCB_DAMAGE.ordinal()] = 1502L * weight;
 		counters[CombatMetric.OTHER_SPEC_DAMAGE.ordinal()] = 337L * weight;
+		counters[CombatMetric.SCYTHE_PUNISH.ordinal()] = 612L * weight;
+		counters[CombatMetric.NOXIOUS_HALBERD_PUNISH.ordinal()] = 158L * weight;
+		counters[CombatMetric.CRYSTAL_HALBERD_PUNISH.ordinal()] = 245L * weight;
+		counters[CombatMetric.OTHER_MELEE_PUNISH.ordinal()] = 71L * weight;
 		return counters;
 	}
 
@@ -452,6 +456,10 @@ final class PreviewScene
 		totals.add(CombatMetric.ELDRITCH_PRAYER, 630);
 		totals.add(CombatMetric.ZCB_DAMAGE, 4_506);
 		totals.add(CombatMetric.OTHER_SPEC_DAMAGE, 1_011);
+		totals.add(CombatMetric.SCYTHE_PUNISH, 1_836);
+		totals.add(CombatMetric.NOXIOUS_HALBERD_PUNISH, 474);
+		totals.add(CombatMetric.CRYSTAL_HALBERD_PUNISH, 735);
+		totals.add(CombatMetric.OTHER_MELEE_PUNISH, 213);
 		return totals;
 	}
 
@@ -465,6 +473,10 @@ final class PreviewScene
 		totals.add(CombatMetric.ELDRITCH_PRAYER, 38_150);
 		totals.add(CombatMetric.ZCB_DAMAGE, 271_884);
 		totals.add(CombatMetric.OTHER_SPEC_DAMAGE, 60_337);
+		totals.add(CombatMetric.SCYTHE_PUNISH, 110_762);
+		totals.add(CombatMetric.NOXIOUS_HALBERD_PUNISH, 28_604);
+		totals.add(CombatMetric.CRYSTAL_HALBERD_PUNISH, 44_318);
+		totals.add(CombatMetric.OTHER_MELEE_PUNISH, 12_890);
 		return totals;
 	}
 

@@ -28,6 +28,9 @@ public class DoomMetricsInfoBoxTest
 	/** The most a whole run can put on one counter, as the overlay's own test uses. */
 	private static final long WIDEST_COUNTER = 999_999;
 
+	/** The most a few seconds can put on one heading, as the overlay's own test uses. */
+	private static final long WIDEST_GAIN = 9_999;
+
 	@Test
 	public void everyFigureFitsTheSquareAtItsWidest()
 	{
@@ -52,6 +55,7 @@ public class DoomMetricsInfoBoxTest
 			DoomFormat.compactDuration(Duration.ofHours(10)));
 		assertFits(metrics, InfoBoxFigure.PACE, DoomFormat.compactPace(999.9));
 		assertFits(metrics, InfoBoxFigure.ZCB_DAMAGE, DoomFormat.compact(WIDEST_COUNTER));
+		assertFits(metrics, InfoBoxFigure.ALL_PUNISH_DAMAGE, "+" + DoomFormat.compact(WIDEST_GAIN));
 
 		// The target figure has one reading that is not a clock, and the deepest target anyone can
 		// set is a long way off at the pace the shallow delves are going.
@@ -162,6 +166,38 @@ public class DoomMetricsInfoBoxTest
 		config.targetDelve = 50;
 		assertEquals("-", box.getText());
 		assertEquals("nothing behind the figure yet", DoomColors.DIMMED, box.getTextColor());
+	}
+
+	/**
+	 * A punish lands as the swing and the strength-bonus splats behind it, and the square reads it
+	 * as one gain for a few seconds before going back to the run's total.
+	 */
+	@Test
+	public void aGainReadsAsTheGainUntilItHasRunItsTime()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin();
+		DoomMetricsInfoBox box = box(plugin, config);
+		Instant now = Instant.now();
+
+		DelveRun run = new DelveRun(now.minusSeconds(600), 19, false);
+		run.recordCombat(CombatMetric.SCYTHE_PUNISH, 500, now.minusSeconds(60));
+		run.recordCombat(CombatMetric.SCYTHE_PUNISH, 30, now);
+		run.recordCombat(CombatMetric.SCYTHE_PUNISH, 67, now);
+
+		plugin.run = run;
+		config.displayStyle = DisplayStyle.INFOBOX;
+		config.infoboxFigure = InfoBoxFigure.SCYTHE_PUNISH;
+
+		assertEquals("+97", box.getText());
+		assertEquals("the gain is drawn in the colour of what it is counted in",
+			CombatMetric.Unit.DAMAGE.color(), box.getTextColor());
+		assertEquals("597", InfoBoxFigure.SCYTHE_PUNISH.text(run, config,
+			now.plus(RecentGains.SHOWN_FOR)));
+
+		// A heading's square reads the gain of everything under it.
+		assertEquals("+97", InfoBoxFigure.ALL_PUNISH_DAMAGE.text(run, config, now));
+		assertEquals("0", InfoBoxFigure.CRYSTAL_HALBERD_PUNISH.text(run, config, now));
 	}
 
 	@Test

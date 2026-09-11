@@ -285,11 +285,65 @@ public interface DoomMetricsConfig extends Config
 		keyName = "showOtherSpecDamage",
 		name = "Other spec damage",
 		description = "Count the damage every spec but the Zaryte crossbow's has dealt: the dragon"
-			+ " knife, dragon thrownaxe, rosewood blowpipe and toxic blowpipe, and any other.",
+			+ " knife, dragon thrownaxe, rosewood blowpipe and toxic blowpipe, and any other."
+			+ " A spec swung at a melee punish counts as punish damage instead.",
 		position = 59,
 		section = countersSection
 	)
 	default boolean showOtherSpecDamage()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showScythePunish",
+		name = "Scythe punish",
+		description = "Count the damage your scythe has dealt punishing the boss's prayer, its"
+			+ " strength-bonus hitsplats included.",
+		position = 60,
+		section = countersSection
+	)
+	default boolean showScythePunish()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showNoxiousHalberdPunish",
+		name = "Noxious halberd punish",
+		description = "Count the damage your noxious halberd has dealt punishing the boss's prayer,"
+			+ " its spec and strength-bonus hitsplats included.",
+		position = 61,
+		section = countersSection
+	)
+	default boolean showNoxiousHalberdPunish()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showCrystalHalberdPunish",
+		name = "Crystal halberd punish",
+		description = "Count the damage your crystal halberd has dealt punishing the boss's prayer,"
+			+ " its spec and strength-bonus hitsplats included.",
+		position = 62,
+		section = countersSection
+	)
+	default boolean showCrystalHalberdPunish()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showOtherMeleePunish",
+		name = "Other melee punish",
+		description = "Count the damage any other melee weapon - a dragon dagger, dragon or burning"
+			+ " claws - has dealt punishing the boss's prayer, specs and strength-bonus hitsplats"
+			+ " included.",
+		position = 63,
+		section = countersSection
+	)
+	default boolean showOtherMeleePunish()
 	{
 		return false;
 	}

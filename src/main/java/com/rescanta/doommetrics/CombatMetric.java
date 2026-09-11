@@ -37,7 +37,17 @@ enum CombatMetric
 	ZCB_DAMAGE(Group.DAMAGE, "zcbDamage", "Zaryte crossbow", "ZCB", Unit.DAMAGE,
 		new Color(0x9085E9)),
 	OTHER_SPEC_DAMAGE(Group.DAMAGE, "otherSpecDamage", "Other specs", "Other dmg", Unit.DAMAGE,
-		new Color(0xE66767));
+		new Color(0xE66767)),
+
+	// The punish rows take the first four slots' colours again, drawn dashed - see seriesDashed.
+	SCYTHE_PUNISH(Group.PUNISH, "scythePunish", "Scythe of vitur", "Scythe", Unit.DAMAGE,
+		new Color(0x3987E5)),
+	NOXIOUS_HALBERD_PUNISH(Group.PUNISH, "noxiousHalberdPunish", "Noxious halberd", "Nox halb",
+		Unit.DAMAGE, new Color(0xD95926)),
+	CRYSTAL_HALBERD_PUNISH(Group.PUNISH, "crystalHalberdPunish", "Crystal halberd", "Crystal halb",
+		Unit.DAMAGE, new Color(0x199E70)),
+	OTHER_MELEE_PUNISH(Group.PUNISH, "otherMeleePunish", "Other melee", "Other melee", Unit.DAMAGE,
+		new Color(0xC98500));
 
 	/** Which heading a metric sits under, so the panel groups like with like. */
 	enum Group
@@ -45,7 +55,13 @@ enum CombatMetric
 		SPELL_HEAL("Spell healing", "Spell heals", Unit.HITPOINTS),
 		SPEC_HEAL("Spec healing", "Spec heals", Unit.HITPOINTS),
 		PRAYER("Prayer restored", "Prayer", Unit.PRAYER),
-		DAMAGE("Spec damage", "Spec dmg", Unit.DAMAGE);
+		DAMAGE("Spec damage", "Spec dmg", Unit.DAMAGE),
+
+		/**
+		 * What a melee punish hit for: the swing itself and the strength-bonus hitsplats the boss
+		 * takes on top of it, credited to the weapon that swung - see {@link PunishTracker}.
+		 */
+		PUNISH("Punish damage", "Punish dmg", Unit.DAMAGE);
 
 		private final String heading;
 		private final String overlayHeading;
@@ -111,7 +127,7 @@ enum CombatMetric
 		 * panel's table alike.
 		 *
 		 * <p>Hung on the unit rather than on the metric because what is worth telling apart at a
-		 * glance is what a number measures, not what produced it: eight counters in eight colours
+		 * glance is what a number measures, not what produced it: twelve counters in twelve colours
 		 * is a legend to memorise, whereas three say outright that this line is hitpoints, that
 		 * one is prayer and that one is damage. Sources within a unit are told apart by their
 		 * labels, which is what the labels are there for.
@@ -250,9 +266,9 @@ enum CombatMetric
 	 * <p>Distinct from {@link Unit#color()} because the two answer different questions. Everywhere
 	 * a figure stands on its own - the overlay, the side panel's table - what the reader needs to
 	 * know is what it is counted in, and three colours say that outright. On a chart with all
-	 * eight drawn at once, three colours would put three identical red lines on the plot and the
+	 * twelve drawn at once, three colours would put three identical red lines on the plot and the
 	 * labels would be the only way to tell a barrage heal from a blowpipe one. Identity is the job
-	 * there, so eight hues do it, and the unit is carried instead by the group heading each line
+	 * there, so hues do it, and the unit is carried instead by the group heading each line
 	 * is listed under - which is where the legend keeps its unit-coloured tab.
 	 *
 	 * <p>These are the eight slots of a categorical palette validated as a set against this
@@ -262,10 +278,25 @@ enum CombatMetric
 	 * normal-vision Delta E of 19.3 against a floor of 15, all eight clearing 3:1 contrast on the
 	 * panel background. Identity never rests on the colour alone either way: every line is named
 	 * in the legend beside it, and hovering a delve puts that delve's figures in the same table.
+	 *
+	 * <p>The palette has eight validated slots and no ninth, and a hue generated to make one would
+	 * be exactly the colour nobody checked. So the four punish rows take the first four slots
+	 * again, and are told from the lines that share their hue by being drawn dashed - see
+	 * {@link #seriesDashed()}.
 	 */
 	Color seriesColor()
 	{
 		return series;
+	}
+
+	/**
+	 * Whether this metric's chart line is dashed, which is what tells a punish line from the
+	 * solid line of the same hue it shares a palette slot with. The legend's swatch is split to
+	 * match, so the name beside it says which of the two it is.
+	 */
+	boolean seriesDashed()
+	{
+		return group == Group.PUNISH;
 	}
 
 	/** The metric stored under {@code key}, or null if nothing is - an older or newer schema. */

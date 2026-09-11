@@ -97,7 +97,7 @@ class DoomMetricsOverlay extends OverlayPanel
 				DoomFormat.prediction(run.untilTarget(target, now), run.hasReached(target)));
 		}
 
-		addCombatLines(run.getCombat());
+		addCombatLines(run, now);
 
 		return super.render(graphics);
 	}
@@ -114,16 +114,22 @@ class DoomMetricsOverlay extends OverlayPanel
 	 * <p>A source that has counted nothing still gets its line, dimmed, for the same reason the
 	 * table keeps its zero rows: the overlay does not resize under you mid-delve, and a spec you
 	 * expected to be firing is visibly not.
+	 *
+	 * <p>A line that has just gained reads as the gain for a few seconds - {@code +97} - before it
+	 * goes back to the run's total. See {@link RecentGains}.
 	 */
-	private void addCombatLines(CombatTotals combat)
+	private void addCombatLines(DelveRun run, Instant now)
 	{
+		CombatTotals combat = run.getCombat();
+
 		if (config.metricGrouping() == MetricDisplay.SEPARATE)
 		{
 			for (CombatMetric metric : METRICS)
 			{
 				if (isShown(metric))
 				{
-					addAmount(metric.overlayLabel(), combat.get(metric), metric.unit());
+					addAmount(metric.overlayLabel(), combat.get(metric),
+						run.recentGain(metric, now), metric.unit());
 				}
 			}
 
@@ -133,6 +139,7 @@ class DoomMetricsOverlay extends OverlayPanel
 		for (CombatMetric.Group group : GROUPS)
 		{
 			long total = 0;
+			long recent = 0;
 			boolean shown = false;
 
 			for (CombatMetric metric : METRICS)
@@ -140,6 +147,7 @@ class DoomMetricsOverlay extends OverlayPanel
 				if (metric.group() == group && isShown(metric))
 				{
 					total += combat.get(metric);
+					recent += run.recentGain(metric, now);
 					shown = true;
 				}
 			}
@@ -148,7 +156,7 @@ class DoomMetricsOverlay extends OverlayPanel
 			// has no line rather than a zero: nothing was asked for, so nothing is being answered.
 			if (shown)
 			{
-				addAmount(group.overlayHeading(), total, group.unit());
+				addAmount(group.overlayHeading(), total, recent, group.unit());
 			}
 		}
 	}
@@ -181,6 +189,18 @@ class DoomMetricsOverlay extends OverlayPanel
 			case OTHER_SPEC_DAMAGE:
 				return config.showOtherSpecDamage();
 
+			case SCYTHE_PUNISH:
+				return config.showScythePunish();
+
+			case NOXIOUS_HALBERD_PUNISH:
+				return config.showNoxiousHalberdPunish();
+
+			case CRYSTAL_HALBERD_PUNISH:
+				return config.showCrystalHalberdPunish();
+
+			case OTHER_MELEE_PUNISH:
+				return config.showOtherMeleePunish();
+
 			default:
 				return false;
 		}
@@ -193,12 +213,15 @@ class DoomMetricsOverlay extends OverlayPanel
 	 * <p>A zero stays grey rather than taking a faint tint of its unit: a counter that has not
 	 * fired is being drawn back deliberately, and the whole point of the colour is that it marks
 	 * out a figure worth reading.
+	 *
+	 * @param recent what the counter has just gained, drawn in place of the total while it is
+	 *               more than nothing
 	 */
-	private void addAmount(String left, long amount, CombatMetric.Unit unit)
+	private void addAmount(String left, long amount, long recent, CombatMetric.Unit unit)
 	{
 		panelComponent.getChildren().add(LineComponent.builder()
 			.left(left)
-			.right(DoomFormat.count(amount))
+			.right(recent > 0 ? "+" + DoomFormat.count(recent) : DoomFormat.count(amount))
 			.rightColor(amount > 0 ? unit.color() : DoomColors.DIMMED)
 			.build());
 	}

@@ -173,4 +173,28 @@ class PreviewConfig implements DoomMetricsConfig
 	{
 		return counter(CombatMetric.OTHER_SPEC_DAMAGE);
 	}
+
+	@Override
+	public boolean showScythePunish()
+	{
+		return counter(CombatMetric.SCYTHE_PUNISH);
+	}
+
+	@Override
+	public boolean showNoxiousHalberdPunish()
+	{
+		return counter(CombatMetric.NOXIOUS_HALBERD_PUNISH);
+	}
+
+	@Override
+	public boolean showCrystalHalberdPunish()
+	{
+		return counter(CombatMetric.CRYSTAL_HALBERD_PUNISH);
+	}
+
+	@Override
+	public boolean showOtherMeleePunish()
+	{
+		return counter(CombatMetric.OTHER_MELEE_PUNISH);
+	}
 }

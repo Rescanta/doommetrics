@@ -11,8 +11,8 @@ import net.runelite.client.ui.overlay.infobox.InfoBox;
  * The run as one square: a picture, one figure over it, and a tooltip for everything the figure
  * left out.
  *
- * <p>Which figure is the config's to say, and it can be any of the sixteen in
- * {@link InfoBoxFigure}, counters included. The counter checkboxes have no say here - they choose
+ * <p>Which figure is the config's to say, and it can be any of those in {@link InfoBoxFigure},
+ * counters included. The counter checkboxes have no say here - they choose
  * which lines the panel draws, and a square has one line.
  *
  * <p>Added once at startup and taken down at shutdown rather than added and removed as runs come

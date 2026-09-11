@@ -31,11 +31,11 @@ public class RunDetailTest
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 
-		run.recordCombat(CombatMetric.ZCB_DAMAGE, 120);
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 120, Instant.EPOCH);
 		run.complete(1, at(60), null);
 
-		run.recordCombat(CombatMetric.ZCB_DAMAGE, 80);
-		run.recordCombat(CombatMetric.BLOOD_BARRAGE_HEAL, 44);
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 80, Instant.EPOCH);
+		run.recordCombat(CombatMetric.BLOOD_BARRAGE_HEAL, 44, Instant.EPOCH);
 		run.complete(2, at(120), null);
 
 		assertEquals(120, run.combatOn(1).get(CombatMetric.ZCB_DAMAGE));
@@ -54,7 +54,7 @@ public class RunDetailTest
 
 		for (int level = 1; level <= 5; level++)
 		{
-			run.recordCombat(CombatMetric.ELDRITCH_PRAYER, level * 10);
+			run.recordCombat(CombatMetric.ELDRITCH_PRAYER, level * 10, Instant.EPOCH);
 			run.complete(level, at(level * 60), null);
 		}
 
@@ -88,7 +88,7 @@ public class RunDetailTest
 	public void aSnapshotHoldsEveryClearedDelveAndTheTimeItTook()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
-		run.recordCombat(CombatMetric.AGS_HEAL, 60);
+		run.recordCombat(CombatMetric.AGS_HEAL, 60, Instant.EPOCH);
 		run.complete(1, at(90), Duration.ofSeconds(72));
 		run.complete(2, at(200), Duration.ofSeconds(95));
 
@@ -122,9 +122,9 @@ public class RunDetailTest
 	public void theDelveInProgressIsNotChartedAndDoesNotCountTowardsTheTotals()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
-		run.recordCombat(CombatMetric.ZCB_DAMAGE, 100);
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 100, Instant.EPOCH);
 		run.complete(1, at(60), null);
-		run.recordCombat(CombatMetric.ZCB_DAMAGE, 30);
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 30, Instant.EPOCH);
 
 		RunDetail detail = RunDetail.of(run);
 
@@ -140,13 +140,13 @@ public class RunDetailTest
 	public void aSnapshotDoesNotMoveUnderTheWindow()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
-		run.recordCombat(CombatMetric.BLOWPIPE_HEAL, 20);
+		run.recordCombat(CombatMetric.BLOWPIPE_HEAL, 20, Instant.EPOCH);
 		run.complete(1, at(60), null);
 
 		RunDetail detail = RunDetail.of(run);
 
 		run.enterLevel(1);
-		run.recordCombat(CombatMetric.BLOWPIPE_HEAL, 500);
+		run.recordCombat(CombatMetric.BLOWPIPE_HEAL, 500, Instant.EPOCH);
 
 		assertEquals(20, detail.delves().get(0).combat.get(CombatMetric.BLOWPIPE_HEAL));
 		assertEquals(20, detail.totals().get(CombatMetric.BLOWPIPE_HEAL));
@@ -213,7 +213,7 @@ public class RunDetailTest
 		DelveRun run = new DelveRun(START, 1, false);
 		String before = RunDetail.keyFor(run);
 
-		run.recordCombat(CombatMetric.ZCB_DAMAGE, 200);
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 200, Instant.EPOCH);
 		assertEquals("a heal on the delve in progress changes nothing on the chart",
 			before, RunDetail.keyFor(run));
 

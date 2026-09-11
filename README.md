@@ -90,8 +90,8 @@ Set **Display** to `Infobox` and the panel comes down, replaced by a single info
 icon with one figure over it, sat in the infobox bar with everything else you have up there.
 
 A square holds one number, so **Infobox figure** picks which. It can be the delve you are on, the
-run timer, the pace, the time left to your target delve, any of the eight counters, or any of the
-four counter headings with its sources summed. The figures are shortened to fit: `1.2k` for a
+run timer, the pace, the time left to your target delve, any of the twelve counters, or any of the
+five counter headings with its sources summed. The figures are shortened to fit: `1.2k` for a
 counter past a thousand, `1h23` for a run past the hour and `10h` past ten of them, and `40.1` for
 a pace. What was dropped to make them fit is in the tooltip - the unit, the full precision, and
 whether the run is one the plugin saw the start of.
@@ -103,8 +103,9 @@ once the target is behind you, and a dimmed `-` until this run has cleared a del
 
 Counters keep the colours they have on the panel, red for hitpoints, blue for prayer and yellow
 for damage, and one still at zero is drawn grey - so a spec you expected to be firing is visibly
-not. The counter checkboxes have no say here: they choose which lines the panel draws, and a
-square has one line. Right click it and pick **Clear** to dismiss a finished run, as on the panel.
+not. A counter that has just gained shows the gain for a few seconds, as on the panel - see
+[Counters](#counters). The counter checkboxes have no say here: they choose which lines the panel
+draws, and a square has one line. Right click it and pick **Clear** to dismiss a finished run, as on the panel.
 
 **Display** set to `Off` draws nothing over the game at all. Nothing else changes: delves are
 still timed, the counters still count, the chat messages still arrive, and the side panel and the
@@ -141,7 +142,7 @@ messages are switched off altogether.
 
 The plugin can also count what your gear and spellbook gave back. Every counter is off by default;
 tick the ones you want under **Counters** and they appear on the overlay under the pace and in the
-side panel's table. The run detail chart draws all eight whatever the checkboxes say - it is a
+side panel's table. The run detail chart draws all twelve whatever the checkboxes say - it is a
 window you opened to look at one run in full, and a counter you had not thought to tick is exactly
 the thing worth finding there.
 
@@ -155,16 +156,38 @@ the thing worth finding there.
 | Eldritch staff | Prayer restored | prayer points restored |
 | Zaryte crossbow | Spec damage | damage dealt |
 | Other specs | Spec damage | damage dealt |
+| Scythe of vitur | Punish damage | damage dealt |
+| Noxious halberd | Punish damage | damage dealt |
+| Crystal halberd | Punish damage | damage dealt |
+| Other melee | Punish damage | damage dealt |
 
 The Zaryte crossbow has a damage counter to itself. **Other specs** under spec damage takes the
 dragon knife, dragon thrownaxe, rosewood blowpipe and toxic blowpipe - which hit for about the same
 as each other, so one line does for all four - along with the damage of any other spec, the ancient
 godsword and eldritch staff included. Point at it in the side panel for the full list.
 
+**Punish damage** is what a melee punish hit for. When the boss prays against magic and ranged,
+the melee swing that answers it lands with full accuracy and brings strength-bonus hitsplats in
+behind it, and the swing and those hitsplats are both counted, under the weapon that swung. The
+scythe and both halberds have a row each; any other melee weapon - a dragon dagger, dragon or
+burning claws - goes under **Other melee**. A spec swung at a punish, the halberds' included, is
+counted here rather than under spec damage.
+
+A swing counts if the boss was praying when it was made, or if it cut the boss's beam off. The
+second catches a punish landed so early that the prayer never shows: it brings no strength-bonus
+hitsplats, but its hits are the punish all the same. Only what lands in the three ticks after the
+swing is counted, and no weapon can swing again inside that, so nothing thrown or cast once the
+punish is over is taken for part of it.
+
 Each figure is drawn in the colour of what it is counted in - hitpoints red, prayer blue, damage
 yellow - so which lines are which is legible without reading the labels. A counter that has not
 fired yet stays grey at zero rather than disappearing, so the overlay does not resize under you
 mid-delve and a spec you expected to be firing is visibly not.
+
+A counter that has just gained shows the gain for five ticks before going back to the run's
+total. A scythe punish that hits for 30 and brings 67 in strength-bonus hitsplats turns `500` into
+`+97`, then `597`. Anything landing while a gain is on show adds to it and starts the five ticks
+over, so one punish reads as one gain rather than as its hitsplats one at a time.
 
 **Group counters** decides how the ticked ones are drawn. `Separate` gives each its own line;
 `Combined` folds them into one line per group, so ticking the ancient godsword and the blowpipe
@@ -176,6 +199,7 @@ Barrage        1,204           Spell heals    1,204
 AGS              316           Spec heals       316
 Eldritch         180           Prayer           180
 ZCB           12,470           Spec dmg      12,470
+Scythe         1,836           Punish dmg     1,836
 ```
 
 ### What is not counted
@@ -189,7 +213,7 @@ Brews, food, regeneration and prayer potions are therefore missing from these fi
 the point rather than a shortcoming: a counter that swallowed them would report sustain your gear
 never earned. Every number here is a floor - what could be proven - and never an over-count.
 
-Spec damage is only counted on the boss itself, standing or burrowed. Larvae, volatile earth and
+Spec and punish damage are only counted on the boss itself, standing or burrowed. Larvae, volatile earth and
 the boss behind its demonic shield are all worth a spec, but not for the damage, so a spec fired at
 one of them is spent and adds nothing. Nor is the auto-attack either side of a spec: a hit only
 counts if it lands when that weapon's spec could have.
@@ -294,8 +318,12 @@ Spec healing                | ▁▁▂▂▃▃▄▄▅▅▆▆  Fight
 The upper plot is the counters, a line each, over the delves the run has banked. They share one
 scale because none of them clears a few hundred on a single delve, so a barrage heal and a Zaryte
 spec are like sizes and can be read against each other. Which unit a line is counted in is on the
-legend, under the heading it is listed beneath - hitpoints, prayer points or damage, the same four
+legend, under the heading it is listed beneath - hitpoints, prayer points or damage, the same five
 headings the side panel uses.
+
+The chart's colours are eight hues checked as a set for colour blindness, and there are twelve
+lines. Rather than add hues nobody checked, the four punish lines take the first four colours again
+and are drawn dashed, with a split swatch beside their names in the legend.
 
 The lower strip is the clock: how long each delve took, and under it the fight the game timed. The
 band between them is everything the delve cost that was not the fight - the restocking, the walk
@@ -307,7 +335,7 @@ whole point of stacking them.
 switches from the run's totals to that delve's. Every figure on the chart is therefore also written
 down, and reading one never depends on landing the pointer on a two pixel dot.
 
-**Point at a counter's name** to bring its line forward and push the other seven back, and click it
+**Point at a counter's name** to bring its line forward and push the others back, and click it
 to take the line off altogether - which also gives the counters left on the plot the height they
 were sharing with it. A colour belongs to a counter for as long as the window is open, so switching
 one off never repaints the rest.
@@ -317,7 +345,7 @@ one off never repaints the rest.
 The world record is past delve 260 and the chart is built to go further. Past eighty delves the
 markers come off - there is no longer room to hit one - and each line becomes a rolling average
 with the delve-by-delve line left underneath at a fraction of the weight. A counter varies a good
-deal from one delve to the next, and eight lines of that at three hundred delves fill in as a solid
+deal from one delve to the next, and a dozen lines of that at three hundred delves fill in as a solid
 band with no trend left in it. The average carries the trend the lines no longer can; the lines are
 kept because the spread they show is real, and a chart of averages alone would say a delve cost
 what the delves around it cost. The caption says which is which, and the exact figure for any one

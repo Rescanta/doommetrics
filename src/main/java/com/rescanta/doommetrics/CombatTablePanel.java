@@ -21,13 +21,13 @@ import net.runelite.client.ui.FontManager;
  * the sitting's tally with it, and anything else that has a {@link CombatTotals} to show can draw
  * that one the same way rather than growing a second table that drifts from this.
  *
- * <p>Every row is built once and only ever retexted. The rows never change: eight metrics under
- * four headings, whether or not any of them has fired. A metric that has counted nothing reads zero
+ * <p>Every row is built once and only ever retexted. The rows never change: twelve metrics under
+ * five headings, whether or not any of them has fired. A metric that has counted nothing reads zero
  * in the muted colour rather than vanishing, so the table does not reflow as a run goes on and so
  * the reader can see that a source they expected to fire has not.
  *
  * <p>Each row carries a meter behind its figure, filled against the largest figure counted in the
- * same unit - see {@link #setTotals}. Eight numbers in a column say what each source gave you but
+ * same unit - see {@link #setTotals}. Twelve numbers in a column say what each source gave you but
  * not which of them was carrying the run, and the answer is the shape of the column rather than
  * any one number in it.
  *
@@ -35,7 +35,7 @@ import net.runelite.client.ui.FontManager;
  */
 class CombatTablePanel extends JPanel
 {
-	/** The rows, in declaration order, so an update is eight setTexts and eight fills. */
+	/** The rows, in declaration order, so an update is a setText and a fill per metric. */
 	private final MeterRow[] rows = new MeterRow[CombatMetric.values().length];
 
 	CombatTablePanel()

@@ -25,7 +25,7 @@ import net.runelite.client.ui.FontManager;
  * One run, delve by delve: what each of the counters gave back on each delve, and how long each
  * delve took.
  *
- * <p>Two plots, stacked, sharing one delve axis. The upper one carries the eight counters, a line
+ * <p>Two plots, stacked, sharing one delve axis. The upper one carries the twelve counters, a line
  * each. The lower one carries the clock: the delve's segment and, under it, the fight the game
  * timed, with the band between them - the restocking, the walk in, the drop down the hole - filled.
  * They are two plots rather than one with two scales, because a second axis is two charts drawn on
@@ -33,9 +33,9 @@ import net.runelite.client.ui.FontManager;
  * Sharing the x axis is what lets a slow delve be read against a quiet one without inventing a
  * relationship between seconds and hitpoints.
  *
- * <p>The eight counters do share their axis, and are three different units doing it - hitpoints,
+ * <p>The counters do share their axis, and are three different units doing it - hitpoints,
  * prayer points and damage. That is only legible because of a fact about this fight rather than a
- * fact about charts: none of them clears a few hundred on a single delve, so all eight sit in one
+ * fact about charts: none of them clears a few hundred on a single delve, so all of them sit in one
  * band and the reader is comparing like sizes. It would be indefensible over a whole run, where
  * damage runs twenty times the healing, which is why the totals beside the chart are drawn as
  * meters scaled per unit instead. Which unit a line is counted in is on the legend, under the
@@ -71,6 +71,18 @@ class DelveChart extends JPanel
 	private static final BasicStroke EMPHASIS_STROKE =
 		new BasicStroke(2.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
+	/**
+	 * The dash a punish line is drawn with - see {@link CombatMetric#seriesDashed()}. Long enough
+	 * for each dash to hold its hue at two pixels, with gaps short enough to read as one line.
+	 */
+	private static final float[] DASH = {6f, 4f};
+
+	private static final BasicStroke DASHED_SERIES_STROKE =
+		new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f, DASH, 0f);
+
+	private static final BasicStroke DASHED_EMPHASIS_STROKE =
+		new BasicStroke(2.6f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f, DASH, 0f);
+
 	private static final BasicStroke TIME_STROKE =
 		new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
@@ -87,7 +99,7 @@ class DelveChart extends JPanel
 	 * line left underneath at a fraction of the weight.
 	 *
 	 * <p>A counter varies a good deal from one delve to the next - a spec fires twice on one and
-	 * not at all on the next - and past a couple of hundred delves eight lines of that fill in as
+	 * not at all on the next - and past a couple of hundred delves a dozen lines of that fill in as
 	 * a solid band with no trend left in it. The average carries the trend the lines no longer can,
 	 * and the lines are kept because the spread they show is real: what a delve cost is not the
 	 * average of the delves around it, and a chart of averages alone would say it was.
@@ -478,8 +490,8 @@ class DelveChart extends JPanel
 	 * The clock: the segment each delve took, the fight the game timed inside it, and the band
 	 * between them filled - which is the restocking, the walk in and the drop down the hole.
 	 *
-	 * <p>Drawn in ink rather than in a colour of its own. There are eight colours on this window
-	 * already and every one of them names a counter, so a ninth would be read as a ninth counter.
+	 * <p>Drawn in ink rather than in a colour of its own. Every colour on this window already
+	 * names a counter, so one more would be read as one more counter.
 	 * The two lines are told apart by construction instead: a fight is part of the segment that
 	 * contains it, so the fight line is never the upper of the two.
 	 */
@@ -589,7 +601,9 @@ class DelveChart extends JPanel
 
 		boolean front = emphasis == null || emphasis == metric;
 		Color color = front ? metric.seriesColor() : dim(metric.seriesColor());
-		Stroke stroke = emphasis == metric ? EMPHASIS_STROKE : SERIES_STROKE;
+		Stroke stroke = metric.seriesDashed()
+			? (emphasis == metric ? DASHED_EMPHASIS_STROKE : DASHED_SERIES_STROKE)
+			: (emphasis == metric ? EMPHASIS_STROKE : SERIES_STROKE);
 
 		if (window > 0)
 		{
@@ -735,7 +749,7 @@ class DelveChart extends JPanel
 	 * Names the two lines on the time strip, in the gap above it.
 	 *
 	 * <p>The counters have no legend here: theirs is the table beside the chart, which has the room
-	 * to name all eight and their figures beside them. These two have nowhere else to be named.
+	 * to name every one and their figures beside them. These two have nowhere else to be named.
 	 */
 	private void drawTimeLegend(Graphics2D g2)
 	{
@@ -763,8 +777,8 @@ class DelveChart extends JPanel
 	/**
 	 * The delve under the pointer, marked across both plots and named at the top.
 	 *
-	 * <p>A line rather than a tooltip, because the answer it is asked for is eight figures wide and
-	 * a box holding eight figures covers the thing it is describing. The figures go to the table
+	 * <p>A line rather than a tooltip, because the answer it is asked for is twelve figures wide and
+	 * a box holding twelve figures covers the thing it is describing. The figures go to the table
 	 * beside the chart instead, which already has a row for each of them.
 	 */
 	private void drawCrosshair(Graphics2D g2)

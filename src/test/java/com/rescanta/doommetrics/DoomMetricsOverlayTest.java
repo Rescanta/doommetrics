@@ -28,6 +28,13 @@ public class DoomMetricsOverlayTest
 	private static final long WIDEST_FIGURE = 99_999;
 
 	/**
+	 * The most a few seconds can put on one line, drawn as {@code +9,999} while it is on show. A
+	 * punish or a spec is a few hundred; this is a heading's worth of them landing together, with
+	 * room to spare.
+	 */
+	private static final long WIDEST_GAIN = 9_999;
+
+	/**
 	 * The least space worth leaving between a label and the figure beside it. The tightest row
 	 * there is - "Other spells" beside five figures - clears it with two pixels to spare.
 	 */
@@ -42,16 +49,19 @@ public class DoomMetricsOverlayTest
 	{
 		FontMetrics metrics = metrics();
 		String figure = DoomFormat.count(WIDEST_FIGURE);
+		String gain = "+" + DoomFormat.count(WIDEST_GAIN);
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
 			assertFits(metrics, metric.overlayLabel(), figure);
+			assertFits(metrics, metric.overlayLabel(), gain);
 		}
 
 		// Combined, the counters are drawn under these instead, and reach the same figures.
 		for (CombatMetric.Group group : CombatMetric.Group.values())
 		{
 			assertFits(metrics, group.overlayHeading(), figure);
+			assertFits(metrics, group.overlayHeading(), gain);
 		}
 
 		// The rows above the counters, at the widest each of them gets: a delve deeper than anyone

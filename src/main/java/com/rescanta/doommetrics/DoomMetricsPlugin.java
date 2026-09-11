@@ -23,6 +23,7 @@ import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
 import net.runelite.api.Hitsplat;
+import net.runelite.api.HitsplatID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
@@ -30,6 +31,7 @@ import net.runelite.api.NPC;
 import net.runelite.api.ScriptID;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
+import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
@@ -41,6 +43,7 @@ import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.VarbitChanged;
+import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
@@ -56,7 +59,9 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.InfoBoxMenuClicked;
 import net.runelite.client.events.OverlayMenuClicked;
 import net.runelite.client.events.RuneScapeProfileChanged;
+import net.runelite.client.game.ItemEquipmentStats;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStats;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
@@ -275,6 +280,16 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private final CombatTracker combatTracker = new CombatTracker(this::recordCombat);
 
+	/** Works out which hits on the boss were a melee punish. Fed only while a run is in progress. */
+	private final PunishTracker punishTracker = new PunishTracker(this::recordCombat, this::handBack);
+
+	/**
+	 * The boss, standing, shielded or burrowed, while it is in the scene - the one NPC whose prayer
+	 * is read every tick. Held from its spawn rather than looked for, and the same object across
+	 * its forms: shielding and burrowing change what it is, not which NPC it is.
+	 */
+	private NPC boss;
+
 	/**
 	 * The special attack energy as we last saw it. A spec is a drop in this - it only ever climbs
 	 * on its own - and the weapon held when it drops is what fired.
@@ -404,6 +419,8 @@ public class DoomMetricsPlugin extends Plugin
 		session = new DelveTotals();
 		sessionCombat = new CombatTotals();
 		combatTracker.reset();
+		punishTracker.reset();
+		boss = null;
 		specEnergy = 0;
 		prayerPoints = 0;
 		hitpoints = 0;
@@ -735,20 +752,83 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		Hitsplat hitsplat = event.getHitsplat();
-		boolean onMe = event.getActor() == client.getLocalPlayer();
+		Actor target = event.getActor();
 		int tick = client.getTickCount();
 
 		// Damage only. Healing is read off the hitpoints level instead - see onStatChanged - and
 		// reading it in both places would count every heal twice.
-		if (!onMe && hitsplat.isMine())
+		if (target == client.getLocalPlayer())
+		{
+			return;
+		}
+
+		boolean onBoss = isCountedBoss(target);
+
+		if (onBoss)
+		{
+			logBossHitsplat(hitsplat, tick);
+		}
+
+		if (onBoss && punishTracker.mayBePunish(tick) && isPunishSplat(hitsplat))
+		{
+			// Held to the end of the tick, when whether it was a punish is known. A hit that was
+			// not comes back through handBack and is counted as any other hit is.
+			punishTracker.hit(hitsplat.getAmount(), hitsplat.isMine(), tick);
+			return;
+		}
+
+		if (hitsplat.isMine())
 		{
 			// Passed on as a zero rather than skipped when it is a hit that does not count: the
 			// spec still spent itself on it, and a budget left unspent would be taken by the
 			// auto-attack behind it instead.
-			int amount = countsAsDamage(event.getActor()) ? hitsplat.getAmount() : 0;
+			int amount = countsAsDamage(target) ? hitsplat.getAmount() : 0;
 			logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
 			combatTracker.damaged(amount, tick);
 		}
+	}
+
+	/**
+	 * Whether a hitsplat on the boss can be part of a punish: one of ours, or one drawn in another
+	 * player's colours.
+	 *
+	 * <p>The strength-bonus hitsplats a punish brings are not the ones {@link Hitsplat#isMine()}
+	 * accepts - they are drawn greyer than a hit, and the game does not even draw all of them - so
+	 * they would be dropped with everything else not ours. The fight is solo, which makes a splat
+	 * in another player's colours on the boss ours all the same, and the Doom has a type of its own
+	 * that is taken for the same reason. What stays out is damage over time: poison, venom and burn
+	 * are ticking on their own schedule, not landing with the swing.
+	 *
+	 * <p>Which of these the bonus splats really are is written to the log with every splat on the
+	 * boss - see {@link #logBossHitsplat}.
+	 */
+	private static boolean isPunishSplat(Hitsplat hitsplat)
+	{
+		return hitsplat.isMine() || hitsplat.isOthers()
+			|| hitsplat.getHitsplatType() == HitsplatID.DOOM;
+	}
+
+	/** Every hitsplat on the boss, with its type, while the debug toggle is on. */
+	private void logBossHitsplat(Hitsplat hitsplat, int tick)
+	{
+		if (!config.debugLogging())
+		{
+			return;
+		}
+
+		log.debug("Boss hitsplat {} of type {} at tick {}{}", hitsplat.getAmount(),
+			hitsplat.getHitsplatType(), tick,
+			punishTracker.mayBePunish(tick) ? ", held for the punish check" : "");
+	}
+
+	/**
+	 * A hit of ours on the boss that was held for the punish check, back to be counted the way any
+	 * other is - whole if it was no punish, and as nothing if it was. See {@link PunishTracker}.
+	 */
+	private void handBack(int amount, int tick)
+	{
+		logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
+		combatTracker.damaged(amount, tick);
 	}
 
 	/**
@@ -772,20 +852,29 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private boolean countsAsDamage(Actor target)
 	{
+		if (isCountedBoss(target))
+		{
+			return true;
+		}
+
+		if (target instanceof NPC)
+		{
+			log.debug("Not counting damage to {} ({})", target.getName(), ((NPC) target).getId());
+		}
+
+		return false;
+	}
+
+	/** The boss standing or burrowed - the two forms a hit on counts. See {@link #countsAsDamage}. */
+	private static boolean isCountedBoss(Actor target)
+	{
 		if (!(target instanceof NPC))
 		{
 			return false;
 		}
 
-		NPC npc = (NPC) target;
-
-		if (npc.getId() == NpcID.DOM_BOSS || npc.getId() == NpcID.DOM_BOSS_BURROWED)
-		{
-			return true;
-		}
-
-		log.debug("Not counting damage to {} ({})", npc.getName(), npc.getId());
-		return false;
+		int id = ((NPC) target).getId();
+		return id == NpcID.DOM_BOSS || id == NpcID.DOM_BOSS_BURROWED;
 	}
 
 	/**
@@ -808,6 +897,67 @@ public class DoomMetricsPlugin extends Plugin
 		CombatMetric metric = combatTracker.wouldCredit(kind, tick);
 		log.debug("{} of {} at tick {} -> {}", kind, amount, tick,
 			metric == null ? "nothing open, held for this tick" : metric.key());
+	}
+
+	/**
+	 * The player starting an animation, offered to the punish tracker as a possible swing - which
+	 * it turns out to be only if a melee weapon is in hand once the tick ends. See
+	 * {@link PunishTracker#swung}.
+	 *
+	 * <p>The boss's own animations are logged under the debug toggle too, as the other place a
+	 * punish could be read from if the prayer ever stops saying so.
+	 */
+	@Subscribe
+	public void onAnimationChanged(AnimationChanged event)
+	{
+		long started = System.nanoTime();
+		handleAnimationChanged(event);
+		reportSlow("onAnimationChanged", started);
+	}
+
+	private void handleAnimationChanged(AnimationChanged event)
+	{
+		Actor actor = event.getActor();
+
+		if (run == null || actor == null)
+		{
+			return;
+		}
+
+		int animation = actor.getAnimation();
+		int tick = client.getTickCount();
+
+		if (actor == boss)
+		{
+			// The beam being cut off is the one sign of a punish landed before the prayer shows.
+			// Behind its shield the boss cuts it off over and over on its own, which is why only
+			// the standing boss's is taken - see PunishTracker.
+			if (animation == AnimationID.DOM_BEAM_CANCEL && boss.getId() != NpcID.DOM_BOSS_SHIELDED)
+			{
+				punishTracker.beamCancelled(tick);
+			}
+
+			if (config.debugLogging())
+			{
+				log.debug("Boss animation {} at tick {}", animation, tick);
+			}
+
+			return;
+		}
+
+		// An animation ending is not a swing starting, and nor is eating or drinking - the one
+		// thing a player is likely to do with a melee weapon already in hand under the prayer.
+		if (actor != client.getLocalPlayer() || animation < 0 || animation == AnimationID.HUMAN_EAT)
+		{
+			return;
+		}
+
+		punishTracker.swung(tick);
+
+		if (config.debugLogging())
+		{
+			log.debug("Animation {} at tick {}", animation, tick);
+		}
 	}
 
 	/**
@@ -1042,7 +1192,7 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		run.recordCombat(metric, amount);
+		run.recordCombat(metric, amount, Instant.now());
 
 		if (config.debugLogging())
 		{
@@ -1323,6 +1473,7 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			bossCount++;
 			ticksWithoutBoss = 0;
+			boss = event.getNpc();
 		}
 	}
 
@@ -1340,6 +1491,11 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			bossCount = Math.max(0, bossCount - 1);
 		}
+
+		if (event.getNpc() == boss)
+		{
+			boss = null;
+		}
 	}
 
 	@Subscribe
@@ -1354,7 +1510,99 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		checkResume();
 		trackAbandonedRun();
+		trackPunish();
 		refreshLive();
+	}
+
+	/**
+	 * Tells the punish tracker whether the boss is praying, and what is in hand if a swing is
+	 * waiting to be read - at the end of the tick, which is when both are settled.
+	 */
+	private void trackPunish()
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		int tick = client.getTickCount();
+		boolean praying = isBossPraying();
+
+		if (praying != punishTracker.isPraying() && config.debugLogging())
+		{
+			log.debug("Boss overhead {} {} at tick {}",
+				boss == null ? "gone" : Arrays.toString(boss.getOverheadArchiveIds()),
+				boss == null ? "" : Arrays.toString(boss.getOverheadSpriteIds()), tick);
+		}
+
+		punishTracker.tickEnded(tick, praying, this::equippedPunishWeapon);
+	}
+
+	/**
+	 * Whether the boss has an overhead prayer up. Down here that is only ever the one against magic
+	 * and ranged that a punish answers, so any icon at all is the signal, and which one it is
+	 * matters only to the log.
+	 */
+	private boolean isBossPraying()
+	{
+		if (boss == null)
+		{
+			return false;
+		}
+
+		int[] overheads = boss.getOverheadArchiveIds();
+
+		if (overheads == null)
+		{
+			return false;
+		}
+
+		for (int overhead : overheads)
+		{
+			if (overhead >= 0)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/** The weapon in hand as a punish weapon, or null for an empty hand or anything but melee. */
+	private PunishWeapon equippedPunishWeapon()
+	{
+		int itemId = equipped(EquipmentInventorySlot.WEAPON);
+
+		if (itemId <= 0)
+		{
+			return null;
+		}
+
+		String name = itemName(itemId);
+		PunishWeapon weapon = PunishWeapon.forItem(itemId, name);
+
+		if (weapon == PunishWeapon.OTHER && !isMeleeWeapon(itemId))
+		{
+			weapon = null;
+		}
+
+		if (config.debugLogging())
+		{
+			log.debug("Swing read at tick {}: {} (item {} \"{}\")", client.getTickCount(),
+				weapon == null ? "not melee" : weapon, itemId, name);
+		}
+
+		return weapon;
+	}
+
+	/** Whether a weapon's bonuses say melee - see {@link PunishWeapon#isMelee}. */
+	private boolean isMeleeWeapon(int itemId)
+	{
+		ItemStats stats = itemManager.getItemStats(itemId);
+		ItemEquipmentStats bonuses = stats == null ? null : stats.getEquipment();
+
+		return bonuses != null && PunishWeapon.isMelee(bonuses.getAstab(), bonuses.getAslash(),
+			bonuses.getAcrush(), bonuses.getArange(), bonuses.getAmagic());
 	}
 
 	/**
@@ -1450,6 +1698,7 @@ public class DoomMetricsPlugin extends Plugin
 			// Despawns are not delivered across a scene load, so the count has to be rebuilt.
 			bossCount = 0;
 			ticksWithoutBoss = 0;
+			boss = null;
 		}
 
 		// Leaving the world holds the run open rather than ending it, because leaving the world is
@@ -1538,6 +1787,7 @@ public class DoomMetricsPlugin extends Plugin
 		// A spec fired on the way in belongs to nothing we are counting, and its window must not
 		// be left open to swallow the first heal of the trip.
 		combatTracker.reset();
+		punishTracker.reset();
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
 		openSession(startedAt);
@@ -1685,6 +1935,7 @@ public class DoomMetricsPlugin extends Plugin
 		run = null;
 		resumeCheck = null;
 		combatTracker.reset();
+		punishTracker.reset();
 
 		if (ended == null)
 		{
@@ -1772,7 +2023,7 @@ public class DoomMetricsPlugin extends Plugin
 		lastLiveKey = key;
 
 		// Built only once something has actually moved, so an idle tick allocates nothing to hand
-		// across to a panel that would draw the same eight numbers again.
+		// across to a panel that would draw the same numbers again.
 		CombatTotals combat = showCombat ? combatSnapshot() : null;
 
 		SwingUtilities.invokeLater(() ->
@@ -2013,8 +2264,8 @@ public class DoomMetricsPlugin extends Plugin
 		record.diedOn = Math.max(0, diedOnLevel);
 		record.partial = ended.isPartial();
 		record.loot = ended.getLoot();
-		// Left out entirely for the many runs that attribute nothing, rather than written as eight
-		// zeroes on every line of the file.
+		// Left out entirely for the many runs that attribute nothing, rather than written as a row
+		// of zeroes on every line of the file.
 		record.combat = ended.getCombat().isEmpty() ? null : ended.getCombat().copy();
 
 		runHistoryStore.append(record,

@@ -22,8 +22,8 @@ import net.runelite.client.ui.FontManager;
 /**
  * The chart's legend and its table of figures, which are the same thing.
  *
- * <p>Eight lines need eight names, and a legend drawn across the top of a plot has room for about
- * three of them. Down the side there is room for all eight, for the group headings that say what
+ * <p>Twelve lines need twelve names, and a legend drawn across the top of a plot has room for about
+ * three of them. Down the side there is room for all twelve, for the group headings that say what
  * each is counted in, and for a figure beside each name - so the legend that says which line is
  * which is also the table that says what each line came to. That answers the objection to reading
  * a chart by hovering it: every figure on the plot is also written down.
@@ -32,7 +32,7 @@ import net.runelite.client.ui.FontManager;
  * That is the crosshair's other half - see {@link DelveChart#drawCrosshair} for why the per-delve
  * figures are not in a tooltip.
  *
- * <p>Pointing at a row brings its line forward on the plot and pushes the other seven back;
+ * <p>Pointing at a row brings its line forward on the plot and pushes the others back;
  * clicking one takes its line off. Neither ever changes another row's colour: a colour belongs to
  * a counter for as long as the window is open.
  *
@@ -111,7 +111,7 @@ class RunLegendPanel extends JPanel
 	/**
 	 * A group's name over the rows it covers, with the unit's colour as a stripe down the side -
 	 * the same shape {@link CombatTablePanel} uses, and the thing that keeps the unit legible now
-	 * that the row colours are spent on telling eight lines apart.
+	 * that the row colours are spent on telling the lines apart.
 	 */
 	private static JPanel groupHeading(CombatMetric.Group group)
 	{
@@ -209,7 +209,7 @@ class RunLegendPanel extends JPanel
 	 * One counter: its swatch, its name, its figure, and a meter behind them.
 	 *
 	 * <p>The figure is set in text ink rather than in the line's colour. The swatch carries the
-	 * identity, and a column of eight numbers each in a different colour is a column nothing can
+	 * identity, and a column of twelve numbers each in a different colour is a column nothing can
 	 * be read off.
 	 */
 	private final class Row extends JPanel
@@ -311,7 +311,11 @@ class RunLegendPanel extends JPanel
 			g.fillRect(0, 0, (int) (getWidth() * PanelStyle.METER_WIDTH * fill), getHeight());
 		}
 
-		/** A filled square while the line is on the chart, a hollow one once it is off. */
+		/**
+		 * A filled square while the line is on the chart, a hollow one once it is off - and split
+		 * down the middle for a dashed line, which is what tells it from the solid line sharing
+		 * its colour.
+		 */
 		private final class Swatch extends JPanel
 		{
 			private Swatch()
@@ -329,6 +333,14 @@ class RunLegendPanel extends JPanel
 				if (off)
 				{
 					g.drawRect(0, y, SWATCH - 1, SWATCH - 1);
+					return;
+				}
+
+				if (metric.seriesDashed())
+				{
+					int half = (SWATCH - 1) / 2;
+					g.fillRect(0, y, half, SWATCH);
+					g.fillRect(SWATCH - half, y, half, SWATCH);
 					return;
 				}
 
