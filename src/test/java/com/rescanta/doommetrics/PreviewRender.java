@@ -58,8 +58,9 @@ final class PreviewRender
 	}
 
 	/**
-	 * The two chatboxes a player can have, and what each draws a game message's words in: the
-	 * game's own colour for that box, which RuneLite leaves alone unless the player has set one.
+	 * The two chatboxes a player can have, and what each draws the plugin's words in: the colour
+	 * RuneLite gives a {@link ChatAnnouncement#TYPE} line on that box, the game's own unless the
+	 * player has set one.
 	 */
 	enum Chatbox
 	{
@@ -101,7 +102,8 @@ final class PreviewRender
 
 	/**
 	 * What a figure in a chat line is drawn in: RuneLite's default game message highlight, which
-	 * {@code ChatColorConfig} makes the same red for both chatboxes.
+	 * {@code ChatColorConfig} makes the same red for both chatboxes. It only reaches a line sent as
+	 * {@link ChatAnnouncement#TYPE}; any other type and the figures are drawn like the words.
 	 */
 	static final Color CHAT_HIGHLIGHT = new Color(0xEF1020);
 

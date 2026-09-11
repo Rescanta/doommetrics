@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import net.runelite.api.ChatMessageType;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 
@@ -22,6 +23,14 @@ import net.runelite.client.chat.ChatMessageBuilder;
  */
 final class ChatAnnouncement
 {
+	/**
+	 * What the line is sent as. {@code CONSOLE}, not {@code GAMEMESSAGE}: RuneLite keeps the game
+	 * message colours - the words' colour and the highlight red - against {@code CONSOLE} alone, so
+	 * a {@code GAMEMESSAGE} has neither tag swapped, the client drops them, and every figure comes
+	 * out in the plain white of the words.
+	 */
+	static final ChatMessageType TYPE = ChatMessageType.CONSOLE;
+
 	/** A stretch of the line: either words, or a figure drawn in the highlight colour. */
 	static final class Part
 	{
