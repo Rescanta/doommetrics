@@ -2039,7 +2039,7 @@ public class DoomMetricsPlugin extends Plugin
 	private void sendChat(ChatAnnouncement announcement)
 	{
 		chatMessageManager.queue(QueuedMessage.builder()
-			.type(ChatMessageType.GAMEMESSAGE)
+			.type(ChatAnnouncement.TYPE)
 			.runeLiteFormattedMessage(announcement.formatted())
 			.build());
 	}

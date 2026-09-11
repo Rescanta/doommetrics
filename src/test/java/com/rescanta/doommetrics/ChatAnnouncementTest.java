@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import net.runelite.api.ChatMessageType;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -117,6 +118,16 @@ public class ChatAnnouncementTest
 				+ "<colHIGHLIGHT>10:00<colNORMAL>, deep pace: <colHIGHLIGHT>60.0/hr<colNORMAL>.",
 			ChatAnnouncement.runEnded(run(10), EndReason.FINISHED, PaceMode.DEEP_AVERAGE)
 				.formatted());
+	}
+
+	/**
+	 * RuneLite swaps the tags for the game message colours on a {@code CONSOLE} line only. Sent as
+	 * a {@code GAMEMESSAGE} the tags are dropped and the figures are as white as the words.
+	 */
+	@Test
+	public void theLineIsSentWhereRuneLiteColoursIt()
+	{
+		assertEquals(ChatMessageType.CONSOLE, ChatAnnouncement.TYPE);
 	}
 
 	/** A run cleared down to {@code reached}, a minute a delve. */
