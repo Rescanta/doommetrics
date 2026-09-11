@@ -57,7 +57,7 @@ class TotalsStore
 	 * The stored combat tally for the current character, or null if there is nothing to read.
 	 *
 	 * <p>Kept beside the delve rate and for the same reasons: it is an aggregate that stops
-	 * growing - eight numbers, whatever the character has done - so writing it costs the same on
+	 * growing - a number per counter, whatever the character has done - so writing it costs the same on
 	 * the ten thousandth run as on the first, and an alt keeps its own.
 	 */
 	CombatTotals loadCombat()

@@ -210,8 +210,8 @@ class RunDetailWindow extends JFrame
 	}
 
 	/**
-	 * The run's own figures over the legend, stacked and scrolled together. Their height is eight
-	 * counters under four headings, which is fixed, so they scroll only when the window is made
+	 * The run's own figures over the legend, stacked and scrolled together. Their height is twelve
+	 * counters under five headings, which is fixed, so they scroll only when the window is made
 	 * short enough to need it.
 	 */
 	private JScrollPane sidebar()

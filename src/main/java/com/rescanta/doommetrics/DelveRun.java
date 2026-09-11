@@ -112,6 +112,9 @@ class DelveRun
 	 */
 	private final Map<Integer, CombatTotals> combatByDelve = new LinkedHashMap<>();
 
+	/** What each counter gained in the last few seconds, for the figures that show a hit landing. */
+	private final RecentGains recent = new RecentGains();
+
 	private Instant startedAt;
 
 	/** True when the run was already underway when we started watching, so times are incomplete. */
@@ -223,8 +226,12 @@ class DelveRun
 		return names;
 	}
 
-	/** Credits an attributed heal, prayer restore or spec hit to this trip, and to the delve. */
-	void recordCombat(CombatMetric metric, long amount)
+	/**
+	 * Credits an attributed heal, prayer restore or hit to this trip, and to the delve.
+	 *
+	 * @param at when it was credited, which is what decides how long it shows as a gain
+	 */
+	void recordCombat(CombatMetric metric, long amount, Instant at)
 	{
 		if (amount <= 0)
 		{
@@ -235,6 +242,13 @@ class DelveRun
 
 		combat.add(metric, amount);
 		combatByDelve.computeIfAbsent(currentLevel, level -> new CombatTotals()).add(metric, amount);
+		recent.add(metric, amount, at);
+	}
+
+	/** What {@code metric} has gained in the last few seconds, or 0 - see {@link RecentGains}. */
+	long recentGain(CombatMetric metric, Instant now)
+	{
+		return recent.get(metric, now);
 	}
 
 	/**

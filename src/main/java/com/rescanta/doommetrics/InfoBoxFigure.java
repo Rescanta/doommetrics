@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.ToLongFunction;
 
 /**
  * The single figure an infobox square can hold, and everything needed to draw it: the text, the
@@ -39,11 +40,16 @@ public enum InfoBoxFigure
 	ELDRITCH_PRAYER("Eldritch prayer", CombatMetric.ELDRITCH_PRAYER),
 	ZCB_DAMAGE("ZCB damage", CombatMetric.ZCB_DAMAGE),
 	OTHER_SPEC_DAMAGE("Other spec damage", CombatMetric.OTHER_SPEC_DAMAGE),
+	SCYTHE_PUNISH("Scythe punish", CombatMetric.SCYTHE_PUNISH),
+	NOXIOUS_HALBERD_PUNISH("Noxious halberd punish", CombatMetric.NOXIOUS_HALBERD_PUNISH),
+	CRYSTAL_HALBERD_PUNISH("Crystal halberd punish", CombatMetric.CRYSTAL_HALBERD_PUNISH),
+	OTHER_MELEE_PUNISH("Other melee punish", CombatMetric.OTHER_MELEE_PUNISH),
 
 	ALL_SPELL_HEALING("All spell healing", CombatMetric.Group.SPELL_HEAL),
 	ALL_SPEC_HEALING("All spec healing", CombatMetric.Group.SPEC_HEAL),
 	ALL_PRAYER_RESTORED("All prayer restored", CombatMetric.Group.PRAYER),
-	ALL_SPEC_DAMAGE("All spec damage", CombatMetric.Group.DAMAGE);
+	ALL_SPEC_DAMAGE("All spec damage", CombatMetric.Group.DAMAGE),
+	ALL_PUNISH_DAMAGE("All punish damage", CombatMetric.Group.PUNISH);
 
 	// Held rather than fetched for the reason the overlay holds its own copy: values() hands out a
 	// fresh array every call, and a group figure walks it up to three times a frame.
@@ -110,7 +116,11 @@ public enum InfoBoxFigure
 			}
 
 			default:
-				return DoomFormat.compact(amount(run));
+			{
+				// A gain just made reads as the gain for a few seconds, as on the panel.
+				long recent = recent(run, now);
+				return recent > 0 ? "+" + DoomFormat.compact(recent) : DoomFormat.compact(amount(run));
+			}
 		}
 	}
 
@@ -222,11 +232,20 @@ public enum InfoBoxFigure
 	/** The figure itself, for a counter: one source, or every source under one heading. */
 	private long amount(DelveRun run)
 	{
-		CombatTotals combat = run.getCombat();
+		return sum(run.getCombat()::get);
+	}
 
+	/** What the counter has just gained - see {@link RecentGains}. */
+	private long recent(DelveRun run, Instant now)
+	{
+		return sum(each -> run.recentGain(each, now));
+	}
+
+	private long sum(ToLongFunction<CombatMetric> figure)
+	{
 		if (metric != null)
 		{
-			return combat.get(metric);
+			return figure.applyAsLong(metric);
 		}
 
 		long total = 0;
@@ -235,7 +254,7 @@ public enum InfoBoxFigure
 		{
 			if (each.group() == group)
 			{
-				total += combat.get(each);
+				total += figure.applyAsLong(each);
 			}
 		}
 
