@@ -75,8 +75,9 @@ class DoomMetricsPanel extends PluginPanel
 		 *
 		 * @param target the delve being aimed for, or 0 when the target rows are switched off
 		 */
-		static Live of(DelveRun display, PaceMode mode, int target)
+		static Live of(DelveRun display, PaceMode configured, int target)
 		{
+			PaceMode mode = display.paceMode(configured);
 			boolean died = display.isFinished() && display.getEndReason() == EndReason.DIED;
 			String delveLabel;
 			String delveValue;

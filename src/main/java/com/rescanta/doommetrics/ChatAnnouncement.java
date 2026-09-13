@@ -90,8 +90,10 @@ final class ChatAnnouncement
 	 * The summary of a run that is over. A death is marked, but not the delve it came on, which is
 	 * the one past the delve the line already gives.
 	 */
-	static ChatAnnouncement runEnded(DelveRun run, EndReason reason, PaceMode mode)
+	static ChatAnnouncement runEnded(DelveRun run, EndReason reason, PaceMode configured)
 	{
+		PaceMode mode = run.paceMode(configured);
+
 		return of((reason == EndReason.DIED ? "Doom run over (died)" : "Doom run over")
 				+ ": cleared delve %s in %s, " + label(mode) + ": %s.",
 			run.lastLevel(),

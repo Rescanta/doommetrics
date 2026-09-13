@@ -77,6 +77,20 @@ class DelveChart extends JPanel
 	/** The delve under the pointer. */
 	private static final Color CROSSHAIR_COLOR = new Color(0xFF, 0xFF, 0xFF, 90);
 
+	/** The figures in the readout of the delve under the pointer, a step brighter than their labels. */
+	private static final Color READOUT_VALUE_COLOR = ColorScheme.TEXT_COLOR;
+
+	/** Between one label and figure of the readout and the next, and between it and the caption. */
+	private static final int READOUT_GAP = 12;
+
+	/**
+	 * The two lines on the time strip, named on its legend and in the readout. The full time is the
+	 * whole of a delve's segment, the walk between delves included; the kill time is the one the
+	 * game posts in chat.
+	 */
+	private static final String FULL_TIME = "Full time";
+	private static final String KILL_TIME = "Kill time";
+
 	private static final BasicStroke SERIES_STROKE =
 		new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
@@ -364,6 +378,7 @@ class DelveChart extends JPanel
 			drawTimeLegend(g2);
 			drawDrops(g2);
 			drawCrosshair(g2);
+			drawHeader(g2);
 		}
 		finally
 		{
@@ -479,14 +494,85 @@ class DelveChart extends JPanel
 
 		g2.setColor(AXIS_COLOR);
 		g2.drawLine(left(), countTop(), left(), countBottom());
+	}
+
+	/**
+	 * The line over the plots: what the counters' axis is counting on the left, and the delve under
+	 * the pointer read out on the right.
+	 *
+	 * <p>The readout sits in one place rather than following the crosshair, so it can never be drawn
+	 * over the caption whichever delve is pointed at. Where the window is too narrow for both, the
+	 * caption gives way for as long as the pointer is on a delve - it says the same thing on every
+	 * paint, and the readout is what was asked for.
+	 */
+	private void drawHeader(Graphics2D g2)
+	{
+		FontMetrics metrics = g2.getFontMetrics();
+		int baseline = PAD_TOP - 8;
 
 		// What the numbers up the side are. Not a unit, because three of them share this axis -
 		// which unit a line is counted in is on the legend, under its heading. The averaging is
 		// named here rather than left to be inferred from the shape of the lines.
-		g2.setColor(LABEL_COLOR);
-		g2.drawString(window > 0
+		String caption = window > 0
 			? "Counted per delve - bold lines are a " + window + " delve average"
-			: "Counted per delve", left(), PAD_TOP - 8);
+			: "Counted per delve";
+
+		String[][] readout = readout();
+		int readoutWidth = 0;
+
+		for (String[] part : readout)
+		{
+			readoutWidth += metrics.stringWidth(part[0]) + metrics.stringWidth(part[1]) + READOUT_GAP;
+		}
+
+		readoutWidth -= readout.length > 0 ? READOUT_GAP : 0;
+		int readoutLeft = Math.max(left(), right() - readoutWidth);
+
+		if (readout.length == 0 || left() + metrics.stringWidth(caption) + READOUT_GAP <= readoutLeft)
+		{
+			g2.setColor(LABEL_COLOR);
+			g2.drawString(caption, left(), baseline);
+		}
+
+		int x = readoutLeft;
+
+		for (String[] part : readout)
+		{
+			g2.setColor(LABEL_COLOR);
+			g2.drawString(part[0], x, baseline);
+			x += metrics.stringWidth(part[0]);
+
+			g2.setColor(READOUT_VALUE_COLOR);
+			g2.drawString(part[1], x, baseline);
+			x += metrics.stringWidth(part[1]) + READOUT_GAP;
+		}
+	}
+
+	/**
+	 * The delve under the pointer and its two times, each as a label and its figure, or nothing when
+	 * the pointer is off the plots. The counters' figures are not in here: they are on the legend
+	 * beside the chart, which has a row for each.
+	 */
+	private String[][] readout()
+	{
+		if (hovered <= 0)
+		{
+			return new String[0][];
+		}
+
+		String[] delve = {"Delve ", Integer.toString(hovered)};
+		RunDetail.Delve at = detail.at(hovered);
+
+		if (at == null)
+		{
+			return new String[][]{delve};
+		}
+
+		return new String[][]{
+			delve,
+			{FULL_TIME + " ", DoomFormat.duration(at.segment)},
+			{KILL_TIME + " ", at.fight == null ? "-" : DoomFormat.duration(at.fight)},
+		};
 	}
 
 	private void drawTimeGrid(Graphics2D g2)
@@ -816,8 +902,8 @@ class DelveChart extends JPanel
 		int x = left();
 
 		g2.setStroke(TIME_STROKE);
-		x = timeLegendEntry(g2, metrics, SEGMENT_COLOR, "Delve time", x, y);
-		timeLegendEntry(g2, metrics, FIGHT_COLOR, "Fight", x, y);
+		x = timeLegendEntry(g2, metrics, SEGMENT_COLOR, FULL_TIME, x, y);
+		timeLegendEntry(g2, metrics, FIGHT_COLOR, KILL_TIME, x, y);
 	}
 
 	private int timeLegendEntry(Graphics2D g2, FontMetrics metrics, Color color, String label,
@@ -833,7 +919,8 @@ class DelveChart extends JPanel
 	}
 
 	/**
-	 * The delve under the pointer, marked across both plots and named at the top.
+	 * The delve under the pointer, marked across both plots. Its times are read out over the plots
+	 * - see {@link #drawHeader}.
 	 *
 	 * <p>A line rather than a tooltip, because the answer it is asked for is eight figures wide and
 	 * a box holding eight figures covers the thing it is describing. The figures go to the table
@@ -852,15 +939,6 @@ class DelveChart extends JPanel
 		g2.setColor(CROSSHAIR_COLOR);
 		g2.drawLine(x, countTop(), x, countBottom());
 		g2.drawLine(x, stripTop(), x, stripBottom());
-
-		String text = "Delve " + hovered;
-		FontMetrics metrics = g2.getFontMetrics();
-		int width = metrics.stringWidth(text);
-		// Flipped to the inside at the right hand edge, where it would otherwise run off the plot.
-		int at = Math.min(x + 5, right() - width);
-
-		g2.setColor(LABEL_COLOR);
-		g2.drawString(text, Math.max(left(), at), PAD_TOP - 8 + metrics.getAscent() - 8);
 	}
 
 	// -- the drops ----------------------------------------------------------------------------

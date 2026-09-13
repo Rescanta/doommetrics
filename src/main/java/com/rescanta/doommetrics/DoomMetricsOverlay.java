@@ -94,7 +94,7 @@ class DoomMetricsOverlay extends OverlayPanel
 
 		if (config.showPace())
 		{
-			PaceMode mode = config.paceMode();
+			PaceMode mode = run.paceMode(config.paceMode());
 			addLine(mode.toString(), DoomFormat.pace(run.pace(mode)));
 		}
 

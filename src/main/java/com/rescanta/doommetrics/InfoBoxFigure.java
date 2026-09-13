@@ -98,7 +98,7 @@ public enum InfoBoxFigure
 				return DoomFormat.compactDuration(run.displayElapsed(now));
 
 			case PACE:
-				return DoomFormat.compactPace(run.pace(config.paceMode()));
+				return DoomFormat.compactPace(run.pace(run.paceMode(config.paceMode())));
 
 			case TIME_TO_TARGET:
 			{
@@ -139,7 +139,9 @@ public enum InfoBoxFigure
 				return DoomColors.PLAIN;
 
 			case PACE:
-				return run.pace(config.paceMode()) == null ? DoomColors.DIMMED : DoomColors.PLAIN;
+				return run.pace(run.paceMode(config.paceMode())) == null
+					? DoomColors.DIMMED
+					: DoomColors.PLAIN;
 
 			case TIME_TO_TARGET:
 				return run.hasReached(config.targetDelve())
@@ -182,11 +184,13 @@ public enum InfoBoxFigure
 
 			case PACE:
 			{
-				PaceMode mode = config.paceMode();
+				PaceMode mode = run.paceMode(config.paceMode());
 				Double pace = run.pace(mode);
 
 				return pace == null
-					? mode + "</br>Nothing deep enough to average yet"
+					? mode + (mode == PaceMode.RUN_THROUGHPUT
+						? "</br>No deep delve banked"
+						: "</br>Nothing deep enough to average yet")
 					: mode + "</br>" + DoomFormat.pace(pace);
 			}
 

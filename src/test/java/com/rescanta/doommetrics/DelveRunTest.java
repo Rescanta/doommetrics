@@ -319,6 +319,17 @@ public class DelveRunTest
 		assertEquals(40.0, run.pace(PaceMode.DEEP_AVERAGE), DELTA);
 	}
 
+	@Test
+	public void anEndedRunIsReadByRunPace()
+	{
+		DelveRun run = referenceRun();
+		assertEquals(PaceMode.DEEP_AVERAGE, run.paceMode(PaceMode.DEEP_AVERAGE));
+
+		run.end(EndReason.FINISHED, at(1700), -1);
+		assertEquals(PaceMode.RUN_THROUGHPUT, run.paceMode(PaceMode.DEEP_AVERAGE));
+		assertEquals(PaceMode.RUN_THROUGHPUT, run.paceMode(PaceMode.RUN_THROUGHPUT));
+	}
+
 	/**
 	 * The 15-delve trip from the log that was previously reported as a single delve in 22:47.
 	 * Delve boundaries are the wall clock times the game messages landed at.

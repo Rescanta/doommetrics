@@ -611,12 +611,11 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Records the pet against the run in progress.
+	 * Places the pet on the delve it came off.
 	 *
-	 * <p>The pet is the one drop the loot pile cannot be relied on for: it is handed over the
-	 * moment it rolls rather than waiting to be claimed with the rest, so this chat line is the
-	 * only sight of it there is. Should it turn up in the pile as well, keying loot by item id
-	 * means the run still only counts it once.
+	 * <p>The pet is the one drop the loot pile cannot be relied on to show, so this chat line is the
+	 * sight of it there is. It is not claimed here: like the rest of the pile it only leaves with
+	 * the claim, and dying loses it - see {@link #claimLootPile}.
 	 *
 	 * <p>Attributing it to the Doom needs no further checking, because there is nothing else to
 	 * attribute it to - a pet rolled while a delve is in progress came from the thing being fought.
@@ -628,7 +627,6 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		recordLoot(ItemID.DOMPET, 1);
 		run.landedOne(ItemID.DOMPET, itemName(ItemID.DOMPET));
 		log.debug("Pet dropped on delve {}", run.dropLevel());
 	}
@@ -653,6 +651,15 @@ public class DoomMetricsPlugin extends Plugin
 		Map<Integer, Integer> claimed = notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE));
 		notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
 			.forEach((itemId, quantity) -> claimed.merge(itemId, quantity, Math::max));
+
+		// The pet goes with the claim whether or not the pile showed it, since its chat line may be
+		// the only sight of it the run had.
+		int pets = run.held(ItemID.DOMPET);
+
+		if (pets > 0)
+		{
+			claimed.merge(ItemID.DOMPET, pets, Math::max);
+		}
 
 		claimed.forEach((itemId, quantity) ->
 		{
