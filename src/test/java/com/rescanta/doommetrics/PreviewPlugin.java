@@ -1,11 +1,12 @@
 package com.rescanta.doommetrics;
 
 /**
- * The plugin as far as the overlay is concerned: something with a run to draw.
+ * The plugin as far as the overlay is concerned: something with a run to draw, and the pictures to
+ * draw its counters with.
  *
- * <p>The overlay asks its plugin for one thing, so the preview harness supplies exactly that and
- * leaves the rest of the plugin - the client, the config manager, the executor - unbuilt. Nothing
- * here starts up, so none of the injected fields are ever touched.
+ * <p>The overlay asks its plugin for those two things, so the preview harness supplies exactly
+ * that and leaves the rest of the plugin - the client, the config manager, the executor - unbuilt.
+ * Nothing here starts up, so none of the injected fields are ever touched.
  */
 class PreviewPlugin extends DoomMetricsPlugin
 {
@@ -15,5 +16,11 @@ class PreviewPlugin extends DoomMetricsPlugin
 	DelveRun getDisplayRun()
 	{
 		return run;
+	}
+
+	@Override
+	Icons getIcons()
+	{
+		return PreviewIcons.INSTANCE;
 	}
 }

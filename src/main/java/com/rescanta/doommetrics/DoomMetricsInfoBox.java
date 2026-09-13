@@ -37,6 +37,32 @@ class DoomMetricsInfoBox extends InfoBox
 			DoomMetricsPlugin.CLEAR_OPTION, "Doom Metrics"));
 	}
 
+	/**
+	 * The square's picture: what its figure counts, when it counts one thing and the config asks
+	 * for icons, and the plugin's own the rest of the time - a group, a figure that is not a
+	 * counter, or an icon the game has not handed over yet.
+	 *
+	 * <p>The client scales this once, when it is told the picture has changed, rather than every
+	 * frame - so the plugin looks at it on every tick and tells the client when it moves.
+	 */
+	@Override
+	public BufferedImage getImage()
+	{
+		CombatMetric metric = config.infoboxFigure().metric();
+
+		if (config.counterIcons() && metric != null)
+		{
+			BufferedImage picture = plugin.getIcons().counter(metric);
+
+			if (picture != null)
+			{
+				return picture;
+			}
+		}
+
+		return super.getImage();
+	}
+
 	@Override
 	public boolean render()
 	{

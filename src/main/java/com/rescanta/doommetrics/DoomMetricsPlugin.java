@@ -37,6 +37,7 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
@@ -56,12 +57,14 @@ import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.InfoBoxMenuClicked;
 import net.runelite.client.events.OverlayMenuClicked;
 import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.game.ItemEquipmentStats;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStats;
+import net.runelite.client.game.SpriteManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
@@ -230,6 +233,9 @@ public class DoomMetricsPlugin extends Plugin
 	private ItemManager itemManager;
 
 	@Inject
+	private SpriteManager spriteManager;
+
+	@Inject
 	private ClientThread clientThread;
 
 	private DoomMetricsPanel panel;
@@ -237,6 +243,12 @@ public class DoomMetricsPlugin extends Plugin
 
 	/** The square, up for as long as the plugin is. It decides for itself when to draw. */
 	private DoomMetricsInfoBox infoBox;
+
+	/** The picture the client last scaled for the square - see {@link #refreshInfoBoxPicture}. */
+	private BufferedImage infoBoxPicture;
+
+	/** The pictures drawn in place of names, from the game, for as long as the plugin is up. */
+	private volatile GameIcons icons;
 
 	/** Read on the Swing thread when the detail window is built, cleared on shutdown. */
 	private volatile BufferedImage icon;
@@ -373,6 +385,12 @@ public class DoomMetricsPlugin extends Plugin
 
 		icon = ImageUtil.loadImageResource(DoomMetricsPlugin.class, "panel_icon.png");
 		panel = new DoomMetricsPanel(this::openDetailWindow);
+
+		// Asked for up front, so they are in hand by the time anything is drawn with them.
+		icons = new GameIcons(itemManager, spriteManager,
+			() -> SwingUtilities.invokeLater(this::iconsArrived));
+		icons.preload(NOTABLE_DROPS);
+		panel.setIcons(icons);
 		navButton = NavigationButton.builder()
 			.tooltip("Doom Metrics")
 			.icon(icon)
@@ -399,12 +417,67 @@ public class DoomMetricsPlugin extends Plugin
 		navButton = null;
 		panel = null;
 		icon = null;
+		icons = null;
+		infoBoxPicture = null;
 
 		// The window outlives the side panel unless it is taken down explicitly, and a disabled
 		// plugin leaving a frame on screen would go on drawing data it no longer maintains.
 		SwingUtilities.invokeLater(this::closeDetailWindow);
 
 		reset();
+	}
+
+	/**
+	 * The pictures drawn in place of names: the game's, while the plugin is up, and none at all
+	 * otherwise. Package-private so the preview harness can hand over its own.
+	 */
+	Icons getIcons()
+	{
+		GameIcons held = icons;
+		return held == null ? Icons.NONE : held;
+	}
+
+	/**
+	 * Hands the pictures over again as each one arrives from the game, so a name drawn in words
+	 * while its picture was on its way is swapped for it. Swing thread.
+	 */
+	private void iconsArrived()
+	{
+		DoomMetricsPanel shown = panel;
+
+		if (shown != null)
+		{
+			shown.setIcons(getIcons());
+		}
+
+		if (detailWindow != null)
+		{
+			detailWindow.setIcons(getIcons());
+		}
+	}
+
+	/**
+	 * Tells the client when the square's picture has changed - a single counter picked, icons
+	 * switched on or off, or the icon arriving from the game. The client scales an infobox's
+	 * picture once, when told to, rather than on every frame, so a picture swapped without telling
+	 * it would never be drawn. Looked at once a tick, which costs a comparison.
+	 */
+	private void refreshInfoBoxPicture()
+	{
+		DoomMetricsInfoBox box = infoBox;
+
+		if (box == null)
+		{
+			return;
+		}
+
+		BufferedImage picture = box.getImage();
+
+		if (picture != infoBoxPicture)
+		{
+			infoBoxPicture = picture;
+			infoBoxManager.updateInfoBoxImage(box);
+		}
 	}
 
 	private void reset()
@@ -455,6 +528,26 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		return lastRun;
+	}
+
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if (!DoomMetricsConfig.GROUP.equals(event.getGroup())
+			|| !"hideEmptyCounters".equals(event.getKey()))
+		{
+			return;
+		}
+
+		// The overlay reads the setting every frame; the window only when told.
+		boolean hideEmpty = config.hideEmptyCounters();
+		SwingUtilities.invokeLater(() ->
+		{
+			if (detailWindow != null)
+			{
+				detailWindow.setHideEmpty(hideEmpty);
+			}
+		});
 	}
 
 	@Subscribe
@@ -536,7 +629,8 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		recordLoot(ItemID.DOMPET, 1);
-		log.debug("Pet dropped on delve {}", run.currentLevel());
+		run.landedOne(ItemID.DOMPET, itemName(ItemID.DOMPET));
+		log.debug("Pet dropped on delve {}", run.dropLevel());
 	}
 
 	/**
@@ -553,25 +647,12 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		ItemContainer pile = client.getItemContainer(InventoryID.DOM_LOOTPILE);
-
-		if (pile == null)
-		{
-			return;
-		}
-
-		// Totalled across the pile before anything is recorded, because two of the same unique are
-		// two separate slots holding one each, and reporting them one slot at a time would look
-		// like the same single drop seen twice.
-		Map<Integer, Integer> claimed = new LinkedHashMap<>();
-
-		for (Item item : pile.getItems())
-		{
-			if (NOTABLE_DROPS.contains(item.getId()))
-			{
-				claimed.merge(item.getId(), Math.max(1, item.getQuantity()), Integer::sum);
-			}
-		}
+		// Both copies of the pile, taking the larger count of each drop. The claim script reads the
+		// first, which is the one the game's own loot tracking reads; the second is the pile as it
+		// stands mid-run, read too so a claim never misses a drop the run watched land.
+		Map<Integer, Integer> claimed = notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE));
+		notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
+			.forEach((itemId, quantity) -> claimed.merge(itemId, quantity, Math::max));
 
 		claimed.forEach((itemId, quantity) ->
 		{
@@ -581,11 +662,82 @@ public class DoomMetricsPlugin extends Plugin
 		});
 	}
 
+	/**
+	 * How many of each notable drop a copy of the pile holds, keyed by item id. Empty for a pile
+	 * the game has not sent.
+	 *
+	 * <p>Totalled across the pile, because two of the same unique are two separate slots holding
+	 * one each, and reporting them one slot at a time would look like the same single drop seen
+	 * twice.
+	 */
+	private static Map<Integer, Integer> notableDrops(ItemContainer pile)
+	{
+		Map<Integer, Integer> drops = new LinkedHashMap<>();
+
+		if (pile == null)
+		{
+			return drops;
+		}
+
+		for (Item item : pile.getItems())
+		{
+			if (NOTABLE_DROPS.contains(item.getId()))
+			{
+				drops.merge(item.getId(), Math.max(1, item.getQuantity()), Integer::sum);
+			}
+		}
+
+		return drops;
+	}
+
 	/** Names the item from the cache, so the history is not pinned to names hardcoded here. */
 	private void recordLoot(int itemId, int quantity)
 	{
-		ItemComposition item = itemManager.getItemComposition(itemId);
-		run.recordLoot(itemId, item == null ? null : item.getName(), quantity);
+		run.recordLoot(itemId, itemName(itemId), quantity);
+	}
+
+	@Subscribe
+	public void onItemContainerChanged(ItemContainerChanged event)
+	{
+		long started = System.nanoTime();
+		handleItemContainerChanged(event);
+		reportSlow("onItemContainerChanged", started);
+	}
+
+	/**
+	 * Watches the loot pile grow, and places each notable drop on the delve it came off.
+	 *
+	 * <p>Only a count going up is a drop. The game sends the pile over again and again while a
+	 * unique sits in it - and warns about it on every descend - so being told the pile holds an eye
+	 * says nothing on its own; being told it holds one more eye than it did is the eye dropping.
+	 * Both copies of the pile are watched, and a drop that shows up in both is placed once: the
+	 * second copy to show it finds the run already knows.
+	 *
+	 * <p>This places drops, and does not claim them. What the run walked out with is still decided
+	 * at the claim - see {@link #claimLootPile}.
+	 */
+	private void handleItemContainerChanged(ItemContainerChanged event)
+	{
+		int containerId = event.getContainerId();
+
+		if (run == null
+			|| (containerId != InventoryID.DOM_LOOTPILE && containerId != InventoryID.DOM_LOOTPILE_DURING))
+		{
+			return;
+		}
+
+		Map<Integer, Integer> drops = notableDrops(event.getItemContainer());
+		log.debug("Loot pile {} sent on delve {} (between delves: {}), notable drops {}",
+			containerId, run.currentLevel(), run.dropLevel() != run.currentLevel(), drops);
+
+		drops.forEach((itemId, quantity) ->
+		{
+			if (run.sawInPile(itemId, itemName(itemId), quantity))
+			{
+				log.debug("Item {} landed on delve {}, pile now holds {}",
+					itemId, run.dropLevel(), quantity);
+			}
+		});
 	}
 
 	/**
@@ -673,7 +825,12 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		int widgetId = event.getParam1();
-		boolean claiming = widgetId == InterfaceID.DomEndLevelUi.BTN_CLAIM;
+		// Three ways to claim: the claim button, and taking the whole pile to the inventory or
+		// straight to the bank. Missing either of the last two loses the claim, because the run is
+		// closed out as the game resets the delve - ahead of the claim script that would read it.
+		boolean claiming = widgetId == InterfaceID.DomEndLevelUi.BTN_CLAIM
+			|| widgetId == InterfaceID.DomEndLevelUi.BTN_INV_ALL
+			|| widgetId == InterfaceID.DomEndLevelUi.BTN_BANK_ALL;
 
 		if (!claiming && widgetId != InterfaceID.DomEndLevelUi.BTN_LEAVE)
 		{
@@ -1512,6 +1669,7 @@ public class DoomMetricsPlugin extends Plugin
 		trackAbandonedRun();
 		trackPunish();
 		refreshLive();
+		refreshInfoBoxPicture();
 	}
 
 	/**
@@ -1790,6 +1948,17 @@ public class DoomMetricsPlugin extends Plugin
 		punishTracker.reset();
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
+
+		if (partial)
+		{
+			// Whatever is already in the pile dropped before we were watching, on delves we cannot
+			// name. A fresh run starts with an empty pile, so only a joined one needs this.
+			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE))
+				.forEach(run::pileAlreadyHeld);
+			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
+				.forEach(run::pileAlreadyHeld);
+		}
+
 		openSession(startedAt);
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
 	}
@@ -2167,6 +2336,8 @@ public class DoomMetricsPlugin extends Plugin
 		if (detailWindow == null)
 		{
 			detailWindow = new RunDetailWindow(icon, () -> detailWindow = null);
+			detailWindow.setIcons(getIcons());
+			detailWindow.setHideEmpty(config.hideEmptyCounters());
 			// Whatever was last pushed across, so a window opened mid-delve shows the run it is
 			// in the middle of rather than filling in on the next clear.
 			detailWindow.setDetail(windowDetail);

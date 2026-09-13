@@ -3,6 +3,8 @@ package com.rescanta.doommetrics;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
+import net.runelite.api.gameval.ItemID;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -421,5 +423,143 @@ public class DelveRunTest
 	public void aRunWithNoLootListsNone()
 	{
 		assertTrue(referenceRun().getLoot().isEmpty());
+	}
+
+	/** Loot lands in the pile when a delve is cleared, so a drop seen then came off that delve. */
+	@Test
+	public void aDropLandsOnTheDelveJustCleared()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2);
+		run.complete(2, at(120), null);
+
+		assertTrue(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(2, landed.get(0).level);
+		assertEquals(1, landed.get(0).quantity);
+	}
+
+	/**
+	 * The pile and the chat line clearing the delve can arrive either way round. Seen first, the
+	 * pile is the delve still being fought, not the one cleared before it.
+	 */
+	@Test
+	public void aPileSeenAheadOfTheClearLandsOnTheDelveBeingFought()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2);
+
+		run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 1);
+		run.complete(2, at(120), null);
+
+		assertEquals(2, run.getLanded().get(0).level);
+	}
+
+	/**
+	 * The game warns about a unique on every descend while it sits in the pile, and sends the pile
+	 * over again each time. An eye off delve 10 is on delve 10 alone, and a second one off delve 20
+	 * is on delve 20 alone.
+	 */
+	@Test
+	public void aDropStillInThePileIsNotPlacedAgainOnEveryDelveAfter()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		for (int level = 1; level <= 25; level++)
+		{
+			run.enterLevel(level);
+			run.complete(level, at(level * 60), null);
+
+			int held = level >= 20 ? 2 : level >= 10 ? 1 : 0;
+
+			if (held > 0)
+			{
+				run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", held);
+			}
+		}
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(2, landed.size());
+		assertEquals(10, landed.get(0).level);
+		assertEquals(20, landed.get(1).level);
+		assertEquals(1, landed.get(1).quantity);
+		assertEquals(2, landed.get(1).heldAfter);
+	}
+
+	/** Two copies of the pile are watched, and a drop showing up in both dropped once. */
+	@Test
+	public void twoCopiesOfThePilePlaceADropOnce()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		assertTrue(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+		assertFalse(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+
+		assertEquals(1, run.getLanded().size());
+	}
+
+	/** The pile empties when it is claimed. That takes back nothing, and a later drop still counts. */
+	@Test
+	public void aPileBeingEmptiedTakesNothingBack()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 2);
+
+		assertFalse(run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 0));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(2, landed.get(0).quantity);
+	}
+
+	/** A run joined part way through has drops in its pile from delves nobody saw. */
+	@Test
+	public void aJoinedRunDoesNotPlaceWhatWasAlreadyInThePile()
+	{
+		DelveRun run = new DelveRun(START, 14, true);
+		run.pileAlreadyHeld(ItemID.EYE_OF_AYAK_UNCHARGED, 1);
+		run.complete(14, at(60), null);
+
+		assertFalse(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 1));
+
+		run.enterLevel(15);
+		run.complete(15, at(120), null);
+		assertTrue(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 2));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(15, landed.get(0).level);
+		assertEquals(1, landed.get(0).quantity);
+	}
+
+	/** The pet is announced rather than seen in the pile, and lands as one more than there was. */
+	@Test
+	public void thePetLandsFromItsChatLine()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2);
+
+		run.landedOne(ItemID.DOMPET, "Dom");
+
+		assertEquals(1, run.getLanded().size());
+		assertEquals(2, run.getLanded().get(0).level);
+		assertEquals(1, run.getLanded().get(0).heldAfter);
+	}
+
+	@Test
+	public void anUnnamedDropIsNotPlaced()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		assertFalse(run.sawInPile(ItemID.AVERNIC_TREADS, null, 1));
+		assertTrue(run.getLanded().isEmpty());
 	}
 }

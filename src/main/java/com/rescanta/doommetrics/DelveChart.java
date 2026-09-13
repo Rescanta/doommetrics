@@ -1,23 +1,31 @@
 package com.rescanta.doommetrics;
 
+import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Stroke;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.geom.Path2D;
+import java.awt.image.BufferedImage;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.IntConsumer;
+import java.util.function.IntFunction;
 import javax.swing.JPanel;
+import javax.swing.ToolTipManager;
+import net.runelite.api.Constants;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
@@ -25,7 +33,7 @@ import net.runelite.client.ui.FontManager;
  * One run, delve by delve: what each of the counters gave back on each delve, and how long each
  * delve took.
  *
- * <p>Two plots, stacked, sharing one delve axis. The upper one carries the twelve counters, a line
+ * <p>Two plots, stacked, sharing one delve axis. The upper one carries the eight counters, a line
  * each. The lower one carries the clock: the delve's segment and, under it, the fight the game
  * timed, with the band between them - the restocking, the walk in, the drop down the hole - filled.
  * They are two plots rather than one with two scales, because a second axis is two charts drawn on
@@ -44,6 +52,11 @@ import net.runelite.client.ui.FontManager;
  * <p>Lines rather than dots, because the deepest runs go past three hundred delves and at that
  * width a dot per delve per series is a smear. Markers are drawn only when the delves are far
  * enough apart to hit.
+ *
+ * <p>The run's notable drops sit in a lane over the counters, each as its item's icon above the
+ * delve it came off - over the plot rather than on it, so an icon never hides the lines, and
+ * sharing the delve axis, so a drop can be read against what that delve cost. A drop the run did
+ * not walk out with is still drawn where it dropped, faded.
  *
  * <p>Swing thread only.
  */
@@ -70,18 +83,6 @@ class DelveChart extends JPanel
 	/** The one series brought forward when the reader points at its name. */
 	private static final BasicStroke EMPHASIS_STROKE =
 		new BasicStroke(2.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-
-	/**
-	 * The dash a punish line is drawn with - see {@link CombatMetric#seriesDashed()}. Long enough
-	 * for each dash to hold its hue at two pixels, with gaps short enough to read as one line.
-	 */
-	private static final float[] DASH = {6f, 4f};
-
-	private static final BasicStroke DASHED_SERIES_STROKE =
-		new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f, DASH, 0f);
-
-	private static final BasicStroke DASHED_EMPHASIS_STROKE =
-		new BasicStroke(2.6f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f, DASH, 0f);
 
 	private static final BasicStroke TIME_STROKE =
 		new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
@@ -148,6 +149,29 @@ class DelveChart extends JPanel
 	 */
 	private static final int[] TIME_STEPS = {5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600};
 
+	/** A drop's icon: the item as the game draws it in the inventory, at the size it draws it. */
+	private static final int ICON_WIDTH = Constants.ITEM_SPRITE_WIDTH;
+	private static final int ICON_HEIGHT = Constants.ITEM_SPRITE_HEIGHT;
+
+	/** Between two icons side by side, between two rows of them, and between the lane and plot. */
+	private static final int ICON_GAP = 3;
+
+	/**
+	 * The most rows the lane stacks icons into when they are too close to sit side by side. Past
+	 * this they overlap in the top row: a run with more drops than that bunched together is worth
+	 * a crowded lane rather than a plot squeezed down to make room for it.
+	 */
+	private static final int MAX_ICON_ROWS = 3;
+
+	/** How much of a lost drop is drawn - enough to see what it was, and that it is gone. */
+	private static final float LOST_ALPHA = 0.35f;
+
+	/** The hairline from an icon down to the plot, which says which delve it is over. */
+	private static final Color DROP_TICK = new Color(0xFF, 0xFF, 0xFF, 50);
+
+	/** The game's own colour for a stack's count. */
+	private static final Color STACK_COLOR = new Color(0xFF, 0xFF, 0x00);
+
 	private RunDetail detail = RunDetail.empty();
 
 	/** Counters the reader has switched off. Never repainted for the ones left on - see below. */
@@ -165,6 +189,15 @@ class DelveChart extends JPanel
 	};
 
 	private int deepest;
+
+	/** Hands back an item's icon, or null while there is none to be had. */
+	private IntFunction<BufferedImage> itemIcons = itemId -> null;
+
+	/** Where each drop's icon was last drawn, in the order the run's drops are listed. */
+	private Rectangle[] dropBounds = new Rectangle[0];
+
+	/** How many rows of icons the lane took on the last paint, or 0 for a run with no drops. */
+	private int iconRows;
 
 	/** How many delves the average is taken over, or 0 for a run too short to draw one through. */
 	private int window;
@@ -184,7 +217,8 @@ class DelveChart extends JPanel
 			@Override
 			public void mouseMoved(MouseEvent event)
 			{
-				hover(nearestDelve(event.getX(), event.getY()));
+				RunDetail.Drop drop = dropAt(event.getX(), event.getY());
+				hover(drop != null ? drop.level : nearestDelve(event.getX(), event.getY()));
 			}
 		});
 
@@ -196,6 +230,20 @@ class DelveChart extends JPanel
 				hover(0);
 			}
 		});
+
+		// For the drop icons, which name themselves on hover. Nothing else here has a tooltip.
+		ToolTipManager.sharedInstance().registerComponent(this);
+	}
+
+	/**
+	 * @param itemIcons hands back an item's icon for a drop, or null while there is none - when
+	 *                  the drop is drawn as a box holding its initial. Asked on every paint, so it
+	 *                  has to be cheap; handing it over again repaints with whatever has arrived.
+	 */
+	void setItemIcons(IntFunction<BufferedImage> itemIcons)
+	{
+		this.itemIcons = itemIcons;
+		repaint();
 	}
 
 	/** @param onHover told the delve under the pointer, or 0 when the pointer leaves the plot */
@@ -254,7 +302,7 @@ class DelveChart extends JPanel
 
 		for (RunDetail.Delve delve : detail.delves())
 		{
-			for (CombatMetric metric : CombatMetric.values())
+			for (CombatMetric metric : CombatMetric.DISPLAYED)
 			{
 				if (!hidden.contains(metric))
 				{
@@ -299,9 +347,14 @@ class DelveChart extends JPanel
 
 			if (detail.isEmpty() || getWidth() < PAD_LEFT + PAD_RIGHT + 40)
 			{
+				iconRows = 0;
+				dropBounds = new Rectangle[0];
 				drawEmpty(g2);
 				return;
 			}
+
+			// First, because where the lane ends is where the counters begin.
+			layoutDrops();
 
 			drawCountGrid(g2);
 			drawTimeGrid(g2);
@@ -309,6 +362,7 @@ class DelveChart extends JPanel
 			drawTimes(g2);
 			drawCounters(g2);
 			drawTimeLegend(g2);
+			drawDrops(g2);
 			drawCrosshair(g2);
 		}
 		finally
@@ -355,7 +409,13 @@ class DelveChart extends JPanel
 
 	private int countTop()
 	{
-		return PAD_TOP;
+		return PAD_TOP + laneHeight();
+	}
+
+	/** The room the drop icons take over the counters: none at all for a run without a drop. */
+	private int laneHeight()
+	{
+		return iconRows * (ICON_HEIGHT + ICON_GAP);
 	}
 
 	private int countBottom()
@@ -426,7 +486,7 @@ class DelveChart extends JPanel
 		g2.setColor(LABEL_COLOR);
 		g2.drawString(window > 0
 			? "Counted per delve - bold lines are a " + window + " delve average"
-			: "Counted per delve", left(), countTop() - 8);
+			: "Counted per delve", left(), PAD_TOP - 8);
 	}
 
 	private void drawTimeGrid(Graphics2D g2)
@@ -570,7 +630,7 @@ class DelveChart extends JPanel
 	 */
 	private void drawCounters(Graphics2D g2)
 	{
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			if (metric != emphasis)
 			{
@@ -601,9 +661,7 @@ class DelveChart extends JPanel
 
 		boolean front = emphasis == null || emphasis == metric;
 		Color color = front ? metric.seriesColor() : dim(metric.seriesColor());
-		Stroke stroke = metric.seriesDashed()
-			? (emphasis == metric ? DASHED_EMPHASIS_STROKE : DASHED_SERIES_STROKE)
-			: (emphasis == metric ? EMPHASIS_STROKE : SERIES_STROKE);
+		Stroke stroke = emphasis == metric ? EMPHASIS_STROKE : SERIES_STROKE;
 
 		if (window > 0)
 		{
@@ -777,8 +835,8 @@ class DelveChart extends JPanel
 	/**
 	 * The delve under the pointer, marked across both plots and named at the top.
 	 *
-	 * <p>A line rather than a tooltip, because the answer it is asked for is twelve figures wide and
-	 * a box holding twelve figures covers the thing it is describing. The figures go to the table
+	 * <p>A line rather than a tooltip, because the answer it is asked for is eight figures wide and
+	 * a box holding eight figures covers the thing it is describing. The figures go to the table
 	 * beside the chart instead, which already has a row for each of them.
 	 */
 	private void drawCrosshair(Graphics2D g2)
@@ -802,7 +860,198 @@ class DelveChart extends JPanel
 		int at = Math.min(x + 5, right() - width);
 
 		g2.setColor(LABEL_COLOR);
-		g2.drawString(text, Math.max(left(), at), countTop() - 8 + metrics.getAscent() - 8);
+		g2.drawString(text, Math.max(left(), at), PAD_TOP - 8 + metrics.getAscent() - 8);
+	}
+
+	// -- the drops ----------------------------------------------------------------------------
+
+	/**
+	 * Places every drop's icon over its delve, stacking the ones too close together to sit side by
+	 * side, and sizes the lane to fit them.
+	 *
+	 * <p>Worked out on every paint because it depends on the width, and it is a handful of drops.
+	 */
+	private void layoutDrops()
+	{
+		List<RunDetail.Drop> drops = detail.drops();
+		int[] lefts = new int[drops.size()];
+
+		for (int i = 0; i < drops.size(); i++)
+		{
+			// Kept inside the component, so a drop on the first or last delve is not cut in half.
+			int centred = xFor(drops.get(i).level) - ICON_WIDTH / 2;
+			lefts[i] = Math.max(0, Math.min(getWidth() - ICON_WIDTH, centred));
+		}
+
+		int[] rows = stackRows(lefts, ICON_WIDTH + ICON_GAP, MAX_ICON_ROWS);
+		iconRows = 0;
+
+		for (int row : rows)
+		{
+			iconRows = Math.max(iconRows, row + 1);
+		}
+
+		// Row 0 is the one nearest the plot, so the usual single drop sits right over its delve.
+		dropBounds = new Rectangle[drops.size()];
+		int nearest = countTop() - ICON_GAP - ICON_HEIGHT;
+
+		for (int i = 0; i < drops.size(); i++)
+		{
+			int y = nearest - rows[i] * (ICON_HEIGHT + ICON_GAP);
+			dropBounds[i] = new Rectangle(lefts[i], y, ICON_WIDTH, ICON_HEIGHT);
+		}
+	}
+
+	/**
+	 * Which row of the lane each icon goes in: the lowest one it fits in without overlapping an
+	 * icon already there, or the last row when none has room.
+	 *
+	 * @param lefts   where each icon starts, in any order
+	 * @param spacing how far along one icon has to start from the one before it to not overlap it
+	 */
+	static int[] stackRows(int[] lefts, int spacing, int maxRows)
+	{
+		Integer[] order = new Integer[lefts.length];
+
+		for (int i = 0; i < order.length; i++)
+		{
+			order[i] = i;
+		}
+
+		Arrays.sort(order, (a, b) -> Integer.compare(lefts[a], lefts[b]));
+
+		int[] rows = new int[lefts.length];
+		int[] free = new int[maxRows];
+		Arrays.fill(free, Integer.MIN_VALUE);
+
+		for (int i : order)
+		{
+			int row = maxRows - 1;
+
+			for (int r = 0; r < maxRows; r++)
+			{
+				if (lefts[i] >= free[r])
+				{
+					row = r;
+					break;
+				}
+			}
+
+			rows[i] = row;
+			free[row] = lefts[i] + spacing;
+		}
+
+		return rows;
+	}
+
+	/** Every drop's icon, with a hairline down to the delve it is over. */
+	private void drawDrops(Graphics2D g2)
+	{
+		List<RunDetail.Drop> drops = detail.drops();
+
+		// The hairlines first, so an icon stacked over another is never crossed out by its line.
+		g2.setStroke(HAIRLINE);
+		g2.setColor(DROP_TICK);
+
+		for (int i = 0; i < drops.size(); i++)
+		{
+			Rectangle at = dropBounds[i];
+			int x = xFor(drops.get(i).level);
+			g2.drawLine(x, at.y + at.height, x, countTop());
+		}
+
+		for (int i = 0; i < drops.size(); i++)
+		{
+			drawDrop(g2, drops.get(i), dropBounds[i]);
+		}
+	}
+
+	private void drawDrop(Graphics2D g2, RunDetail.Drop drop, Rectangle at)
+	{
+		Composite composite = g2.getComposite();
+
+		if (!drop.kept)
+		{
+			g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, LOST_ALPHA));
+		}
+
+		BufferedImage image = itemIcons.apply(drop.itemId);
+
+		if (image != null && image.getWidth() > 0 && image.getHeight() > 0)
+		{
+			// Centred in its slot, and never enlarged: a sprite is pixel art, and one to one is how
+			// the game draws it. One larger than the slot is fitted rather than stretched.
+			double scale = Math.min(1, Math.min((double) at.width / image.getWidth(),
+				(double) at.height / image.getHeight()));
+			int width = (int) Math.round(image.getWidth() * scale);
+			int height = (int) Math.round(image.getHeight() * scale);
+
+			g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+				RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+			g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+			g2.drawImage(image, at.x + (at.width - width) / 2, at.y + (at.height - height) / 2,
+				width, height, null);
+		}
+		else
+		{
+			// Nothing to draw it with - no game to take an icon from. A box with the item's initial
+			// keeps the drop on the chart and legible.
+			FontMetrics metrics = g2.getFontMetrics();
+			String initial = drop.name.isEmpty() ? "?" : drop.name.substring(0, 1);
+
+			g2.setStroke(HAIRLINE);
+			g2.setColor(LABEL_COLOR);
+			g2.drawRoundRect(at.x + 2, at.y + 1, at.width - 5, at.height - 3, 6, 6);
+			g2.drawString(initial, at.x + (at.width - metrics.stringWidth(initial)) / 2,
+				at.y + (at.height + metrics.getAscent()) / 2 - 1);
+		}
+
+		if (drop.quantity > 1)
+		{
+			// Where the game puts a stack's count, and how: yellow over a shadow.
+			String count = Integer.toString(drop.quantity);
+			int baseline = at.y + g2.getFontMetrics().getAscent() - 2;
+
+			g2.setColor(Color.BLACK);
+			g2.drawString(count, at.x + 1, baseline + 1);
+			g2.setColor(STACK_COLOR);
+			g2.drawString(count, at.x, baseline);
+		}
+
+		g2.setComposite(composite);
+	}
+
+	/** The drop whose icon is under the pointer, or null for none. */
+	private RunDetail.Drop dropAt(int px, int py)
+	{
+		List<RunDetail.Drop> drops = detail.drops();
+
+		// Last drawn is on top, so it is the one the pointer is over where two overlap.
+		for (int i = Math.min(drops.size(), dropBounds.length) - 1; i >= 0; i--)
+		{
+			if (dropBounds[i].contains(px, py))
+			{
+				return drops.get(i);
+			}
+		}
+
+		return null;
+	}
+
+	@Override
+	public String getToolTipText(MouseEvent event)
+	{
+		RunDetail.Drop drop = dropAt(event.getX(), event.getY());
+
+		if (drop == null)
+		{
+			return null;
+		}
+
+		String name = drop.quantity > 1 ? drop.quantity + " x " + drop.name : drop.name;
+		return drop.kept
+			? name + " - delve " + drop.level
+			: name + " - delve " + drop.level + ", lost when the run ended unclaimed";
 	}
 
 	/** The delve nearest the pointer, or 0 when the pointer is outside either plot. */

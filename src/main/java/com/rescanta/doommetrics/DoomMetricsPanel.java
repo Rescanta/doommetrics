@@ -324,6 +324,12 @@ class DoomMetricsPanel extends PluginPanel
 		combatPanel.setTotals(totals);
 	}
 
+	/** @param icons the pictures to draw in place of the counters' names - see {@link Icons} */
+	void setIcons(Icons icons)
+	{
+		combatPanel.setIcons(icons);
+	}
+
 	/** Rebuilds the milestone table. Called only when a row actually changed. */
 	void setRows(List<MilestoneTablePanel.Row> rows)
 	{

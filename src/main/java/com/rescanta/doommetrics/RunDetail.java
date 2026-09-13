@@ -55,10 +55,40 @@ final class RunDetail
 		}
 	}
 
-	private static final RunDetail EMPTY =
-		new RunDetail(Collections.emptyList(), new CombatTotals(), false, false, 0);
+	/** A notable drop, on the delve it came off. */
+	static final class Drop
+	{
+		final int level;
+		final int itemId;
+		final String name;
+
+		/** How many landed on that delve at once - almost always one, and drawn as one icon. */
+		final int quantity;
+
+		/**
+		 * False once the run is over without this having been claimed: died with it in the pile,
+		 * or left it there. It still dropped where it dropped, so it is still drawn - faded.
+		 */
+		final boolean kept;
+
+		Drop(int level, int itemId, String name, int quantity, boolean kept)
+		{
+			this.level = level;
+			this.itemId = itemId;
+			this.name = name;
+			this.quantity = quantity;
+			this.kept = kept;
+		}
+	}
+
+	private static final RunDetail EMPTY = new RunDetail(Collections.emptyList(),
+		Collections.emptyList(), new CombatTotals(), false, false, 0);
 
 	private final List<Delve> delves;
+
+	/** The run's notable drops, in the order they landed, on cleared delves only. */
+	private final List<Drop> drops;
+
 	private final CombatTotals totals;
 
 	/**
@@ -73,10 +103,11 @@ final class RunDetail
 	/** The delve the player died on, or 0 for a run that is going or ended any other way. */
 	private final int diedOn;
 
-	private RunDetail(List<Delve> delves, CombatTotals totals, boolean started, boolean finished,
-		int diedOn)
+	private RunDetail(List<Delve> delves, List<Drop> drops, CombatTotals totals, boolean started,
+		boolean finished, int diedOn)
 	{
 		this.delves = delves;
+		this.drops = drops;
 		this.totals = totals;
 		this.started = started;
 		this.finished = finished;
@@ -118,13 +149,49 @@ final class RunDetail
 
 		boolean died = run.isFinished() && run.getEndReason() == EndReason.DIED;
 
-		return new RunDetail(Collections.unmodifiableList(delves), totals, true,
+		return new RunDetail(Collections.unmodifiableList(delves), dropsOf(run), totals, true,
 			run.isFinished(), died ? Math.max(0, run.getDiedOnLevel()) : 0);
+	}
+
+	/**
+	 * The run's drops, each marked with whether it was walked out with.
+	 *
+	 * <p>A drop is only on the chart once the delve it came off is: the pile can be seen growing a
+	 * moment before the chat line that clears the delve, and there is no column for it until then.
+	 *
+	 * <p>A drop is kept while the run is still going - it is in the pile, and nothing has lost it
+	 * yet - and afterwards only if the claim reached it. The second eye of a run is kept by a claim
+	 * of two and not by a claim of one, which is why each drop carries the count it brought the
+	 * pile to rather than a flag for its item.
+	 */
+	private static List<Drop> dropsOf(DelveRun run)
+	{
+		List<Drop> drops = new ArrayList<>();
+		int deepest = run.lastLevel();
+
+		for (DelveRun.Landed landed : run.getLanded())
+		{
+			if (landed.level < 1 || landed.level > deepest)
+			{
+				continue;
+			}
+
+			boolean kept = !run.isFinished() || run.claimed(landed.itemId) >= landed.heldAfter;
+			drops.add(new Drop(landed.level, landed.itemId, landed.name, landed.quantity, kept));
+		}
+
+		return Collections.unmodifiableList(drops);
 	}
 
 	List<Delve> delves()
 	{
 		return delves;
+	}
+
+	/** The run's notable drops, in the order they landed. */
+	List<Drop> drops()
+	{
+		return drops;
 	}
 
 	/** What the whole run earned - the sum of every delve's tally. */
@@ -186,6 +253,10 @@ final class RunDetail
 	 * <p>Which is what makes this cheap on the tick. A run four hundred delves deep is taken apart
 	 * once per clear rather than once per heal, and never at all on the ticks where nothing was
 	 * banked - which is almost all of them.
+	 *
+	 * <p>The drops are the one thing that can move between clears: the pile a delve's drop lands
+	 * in can arrive after the clear that banked the delve, and a claim decides which drops were
+	 * kept. Both are rare enough that counting them into the key costs nothing.
 	 */
 	static String keyFor(DelveRun run)
 	{
@@ -194,6 +265,7 @@ final class RunDetail
 			return "";
 		}
 
-		return run.lastLevel() + "|" + run.isFinished() + "|" + run.getDiedOnLevel();
+		return run.lastLevel() + "|" + run.isFinished() + "|" + run.getDiedOnLevel() + "|"
+			+ run.lootChanges();
 	}
 }

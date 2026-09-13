@@ -183,13 +183,47 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "counterIcons",
+		name = "Icons for counters",
+		description = "Draw each counter as the icon of what it counts - the Zaryte crossbow, the"
+			+ " blood barrage spell - in place of its name on the overlay. The side panel and the"
+			+ " run detail window always list counters by icon; hover a row there for its name."
+			+ "<br>The infobox takes the same icon when it holds a single counter."
+			+ "<br>Counters grouped into one line keep their heading, since a group has no one icon.",
+		position = 50,
+		section = countersSection
+	)
+	default boolean counterIcons()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "hideEmptyCounters",
+		name = "Hide counters at 0",
+		description = "Leave a ticked counter off the overlay until it has counted something, so"
+			+ " you can tick everything your gear might use and only see what is firing."
+			+ "<br>The overlay grows a line when a counter first counts, and a combined line"
+			+ " appears once anything under it has."
+			+ "<br>The run detail window starts those counters switched off, so their flat lines"
+			+ " are not on the chart. Click one there to put it back."
+			+ "<br>Untick to draw every counter from the start, greyed at 0.",
+		position = 51,
+		section = countersSection
+	)
+	default boolean hideEmptyCounters()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "metricGrouping",
 		name = "Group counters",
 		description = "How the counters ticked below are drawn."
 			+ "<br>Combined sums them into one line per heading, so ticking the ancient godsword"
 			+ " and the blowpipe gives a single Spec healing figure."
 			+ "<br>Separate gives each its own line.",
-		position = 51,
+		position = 52,
 		section = countersSection
 	)
 	default MetricDisplay metricGrouping()
@@ -201,7 +235,7 @@ public interface DoomMetricsConfig extends Config
 		keyName = "showBloodBarrage",
 		name = "Blood barrage heal",
 		description = "Count the hitpoints blood spells have healed you for.",
-		position = 52,
+		position = 53,
 		section = countersSection
 	)
 	default boolean showBloodBarrage()
@@ -210,22 +244,10 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "showOtherSpell",
-		name = "Other spell heal",
-		description = "Count the hitpoints your other spells have healed you for.",
-		position = 53,
-		section = countersSection
-	)
-	default boolean showOtherSpell()
-	{
-		return false;
-	}
-
-	@ConfigItem(
 		keyName = "showAgsHeal",
 		name = "AGS heal",
 		description = "Count the hitpoints the ancient godsword spec has healed you for.",
-		position = 54,
+		position = 55,
 		section = countersSection
 	)
 	default boolean showAgsHeal()
@@ -237,7 +259,7 @@ public interface DoomMetricsConfig extends Config
 		keyName = "showBpHeal",
 		name = "Blowpipe heal",
 		description = "Count the hitpoints the blowpipe spec has healed you for.",
-		position = 55,
+		position = 56,
 		section = countersSection
 	)
 	default boolean showBpHeal()
@@ -246,22 +268,10 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "showOtherSpecHeal",
-		name = "Other spec heal",
-		description = "Count the hitpoints your other special attacks have healed you for.",
-		position = 56,
-		section = countersSection
-	)
-	default boolean showOtherSpecHeal()
-	{
-		return false;
-	}
-
-	@ConfigItem(
 		keyName = "showEldritchPrayer",
 		name = "Eldritch prayer",
 		description = "Count the prayer points the eldritch staff spec has restored.",
-		position = 57,
+		position = 58,
 		section = countersSection
 	)
 	default boolean showEldritchPrayer()
@@ -273,24 +283,10 @@ public interface DoomMetricsConfig extends Config
 		keyName = "showZcbDamage",
 		name = "ZCB damage",
 		description = "Count the damage the zaryte crossbow spec has dealt.",
-		position = 58,
-		section = countersSection
-	)
-	default boolean showZcbDamage()
-	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "showOtherSpecDamage",
-		name = "Other spec damage",
-		description = "Count the damage every spec but the Zaryte crossbow's has dealt: the dragon"
-			+ " knife, dragon thrownaxe, rosewood blowpipe and toxic blowpipe, and any other."
-			+ " A spec swung at a melee punish counts as punish damage instead.",
 		position = 59,
 		section = countersSection
 	)
-	default boolean showOtherSpecDamage()
+	default boolean showZcbDamage()
 	{
 		return false;
 	}
@@ -300,7 +296,7 @@ public interface DoomMetricsConfig extends Config
 		name = "Scythe punish",
 		description = "Count the damage your scythe has dealt punishing the boss's prayer, its"
 			+ " strength-bonus hitsplats included.",
-		position = 60,
+		position = 61,
 		section = countersSection
 	)
 	default boolean showScythePunish()
@@ -313,7 +309,7 @@ public interface DoomMetricsConfig extends Config
 		name = "Noxious halberd punish",
 		description = "Count the damage your noxious halberd has dealt punishing the boss's prayer,"
 			+ " its spec and strength-bonus hitsplats included.",
-		position = 61,
+		position = 62,
 		section = countersSection
 	)
 	default boolean showNoxiousHalberdPunish()
@@ -326,24 +322,10 @@ public interface DoomMetricsConfig extends Config
 		name = "Crystal halberd punish",
 		description = "Count the damage your crystal halberd has dealt punishing the boss's prayer,"
 			+ " its spec and strength-bonus hitsplats included.",
-		position = 62,
-		section = countersSection
-	)
-	default boolean showCrystalHalberdPunish()
-	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "showOtherMeleePunish",
-		name = "Other melee punish",
-		description = "Count the damage any other melee weapon - a dragon dagger, dragon or burning"
-			+ " claws - has dealt punishing the boss's prayer, specs and strength-bonus hitsplats"
-			+ " included.",
 		position = 63,
 		section = countersSection
 	)
-	default boolean showOtherMeleePunish()
+	default boolean showCrystalHalberdPunish()
 	{
 		return false;
 	}

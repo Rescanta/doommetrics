@@ -100,6 +100,7 @@ public class PreviewWindow
 	{
 		JFrame frame = new JFrame("Doom Metrics - interface preview");
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		panel.setIcons(PreviewIcons.INSTANCE);
 		frame.setContentPane(content());
 		frame.setSize(1180, 780);
 		frame.setLocationRelativeTo(null);
@@ -216,10 +217,14 @@ public class PreviewWindow
 			() -> config.showTargetDelve, on -> config.showTargetDelve = on));
 		stack.add(labelled("Pace mode", pacePicker));
 		stack.add(labelled("Counters", groupingPicker));
+		stack.add(toggle("Icons for counters",
+			() -> config.counterIcons, on -> config.counterIcons = on));
+		stack.add(toggle("Hide counters at 0",
+			() -> config.hideEmptyCounters, on -> config.hideEmptyCounters = on));
 
 		stack.add(heading("Counters shown"));
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			stack.add(toggle(metric.overlayLabel(),
 				() -> config.counter(metric), on -> config.counter(metric, on)));
@@ -282,6 +287,7 @@ public class PreviewWindow
 			// The head of the detail window is the same rows the side panel draws, so a knob
 			// turned in the preview has to move both of them.
 			detail.setLive(scene.live(config));
+			detail.setHideEmpty(config.hideEmptyCounters);
 		}
 
 		canvas.repaint();
@@ -293,7 +299,10 @@ public class PreviewWindow
 		if (detail == null)
 		{
 			detail = new RunDetailWindow(null, () -> detail = null);
+			detail.setIcons(PreviewIcons.INSTANCE);
 		}
+
+		detail.setHideEmpty(config.hideEmptyCounters);
 
 		detail.setLive(scene.live(config));
 		detail.setDetail(scene.detail());
