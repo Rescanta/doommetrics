@@ -7,6 +7,7 @@ import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -22,8 +23,8 @@ import net.runelite.client.ui.FontManager;
 /**
  * The chart's legend and its table of figures, which are the same thing.
  *
- * <p>Twelve lines need twelve names, and a legend drawn across the top of a plot has room for about
- * three of them. Down the side there is room for all twelve, for the group headings that say what
+ * <p>Eight lines need eight names, and a legend drawn across the top of a plot has room for about
+ * three of them. Down the side there is room for all eight, for the group headings that say what
  * each is counted in, and for a figure beside each name - so the legend that says which line is
  * which is also the table that says what each line came to. That answers the objection to reading
  * a chart by hovering it: every figure on the plot is also written down.
@@ -36,6 +37,11 @@ import net.runelite.client.ui.FontManager;
  * clicking one takes its line off. Neither ever changes another row's colour: a colour belongs to
  * a counter for as long as the window is open.
  *
+ * <p>A counter the run has not counted anything on starts switched off, so a run that used three of
+ * the eight draws three lines rather than five flat ones along the bottom. Its row stays, and a
+ * click puts its line on like any other. Whether a counter is empty goes by the whole run, never
+ * by the delve being pointed at, so lines do not come and go as the pointer moves.
+ *
  * <p>Swing thread only.
  */
 class RunLegendPanel extends JPanel
@@ -43,13 +49,27 @@ class RunLegendPanel extends JPanel
 	/** The swatch beside each name: the colour of that counter's line, at the weight it is drawn. */
 	private static final int SWATCH = 9;
 
+	/** How much of a switched-off counter's icon is drawn, as its name is drawn in grey. */
+	private static final float OFF_ALPHA = 0.35f;
+
 	private final Row[] rows = new Row[CombatMetric.values().length];
 	private final JLabel heading = PanelStyle.caption("This run", SwingConstants.RIGHT);
-
 	/** Counters the reader has clicked off. */
-	private final Set<CombatMetric> hidden = EnumSet.noneOf(CombatMetric.class);
+	private final Set<CombatMetric> clickedOff = EnumSet.noneOf(CombatMetric.class);
+
+	/** Counters the reader has clicked on while they were still at 0, overriding the default. */
+	private final Set<CombatMetric> clickedOn = EnumSet.noneOf(CombatMetric.class);
+
+	/** Counters whose lines are off the chart, clicked off or empty, as the chart was last told. */
+	private Set<CombatMetric> hidden = EnumSet.noneOf(CombatMetric.class);
+
+	/** Whether a counter the run has not counted anything on starts switched off. */
+	private boolean hideEmpty = true;
 
 	private RunDetail detail = RunDetail.empty();
+
+	/** What each row's name is drawn as - a picture where there is one, the words otherwise. */
+	private Icons icons = Icons.NONE;
 
 	/** The delve being read out, or 0 for the whole run. */
 	private int delve;
@@ -74,6 +94,7 @@ class RunLegendPanel extends JPanel
 	void setToggleListener(Consumer<Set<CombatMetric>> onHiddenChanged)
 	{
 		this.onHiddenChanged = onHiddenChanged;
+		onHiddenChanged.accept(EnumSet.copyOf(hidden));
 	}
 
 	/** @param onEmphasis handed the counter being pointed at, or null when none is */
@@ -93,7 +114,7 @@ class RunLegendPanel extends JPanel
 		CombatMetric.Group group = null;
 		int striped = 0;
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			if (metric.group() != group)
 			{
@@ -131,6 +152,32 @@ class RunLegendPanel extends JPanel
 		return panel;
 	}
 
+	/**
+	 * @param icons the pictures to draw in place of the counters' names. Handed over again as they
+	 *              arrive from the game, and a name stays in words until its picture has.
+	 */
+	void setIcons(Icons icons)
+	{
+		this.icons = icons;
+
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		{
+			rows[metric.ordinal()].showName();
+		}
+	}
+
+	/** @param hideEmpty whether a counter the run has not counted anything on starts switched off */
+	void setHideEmpty(boolean hideEmpty)
+	{
+		if (this.hideEmpty == hideEmpty)
+		{
+			return;
+		}
+
+		this.hideEmpty = hideEmpty;
+		refresh();
+	}
+
 	void setDetail(RunDetail detail)
 	{
 		this.detail = detail;
@@ -160,10 +207,11 @@ class RunLegendPanel extends JPanel
 	 */
 	private void refresh()
 	{
+		updateHidden();
 		CombatTotals totals = totals();
 		long[] largest = new long[CombatMetric.Unit.values().length];
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			if (!hidden.contains(metric))
 			{
@@ -173,13 +221,40 @@ class RunLegendPanel extends JPanel
 			}
 		}
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			rows[metric.ordinal()].set(totals.get(metric), largest[metric.unit().ordinal()],
 				hidden.contains(metric));
 		}
 
 		heading.setText(delve > 0 ? "Delve " + delve : "This run");
+	}
+
+	/**
+	 * Works out which lines are off - the ones clicked off, and the ones the run has counted
+	 * nothing on unless they were clicked back on - and tells the chart when that has changed.
+	 *
+	 * <p>A counter that was only off for being empty comes on by itself once it counts something,
+	 * so a live run's lines appear as they start to matter.
+	 */
+	private void updateHidden()
+	{
+		CombatTotals run = detail.totals();
+		Set<CombatMetric> off = EnumSet.copyOf(clickedOff);
+
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		{
+			if (hideEmpty && run.get(metric) <= 0 && !clickedOn.contains(metric))
+			{
+				off.add(metric);
+			}
+		}
+
+		if (!off.equals(hidden))
+		{
+			hidden = off;
+			onHiddenChanged.accept(EnumSet.copyOf(off));
+		}
 	}
 
 	/** What the column is reading: one delve's figures, or the run's. */
@@ -194,22 +269,27 @@ class RunLegendPanel extends JPanel
 		return at == null ? new CombatTotals() : at.combat;
 	}
 
-	private void toggle(CombatMetric metric)
+	void toggle(CombatMetric metric)
 	{
-		if (!hidden.remove(metric))
+		if (hidden.contains(metric))
 		{
-			hidden.add(metric);
+			clickedOff.remove(metric);
+			clickedOn.add(metric);
+		}
+		else
+		{
+			clickedOn.remove(metric);
+			clickedOff.add(metric);
 		}
 
 		refresh();
-		onHiddenChanged.accept(EnumSet.copyOf(hidden));
 	}
 
 	/**
 	 * One counter: its swatch, its name, its figure, and a meter behind them.
 	 *
 	 * <p>The figure is set in text ink rather than in the line's colour. The swatch carries the
-	 * identity, and a column of twelve numbers each in a different colour is a column nothing can
+	 * identity, and a column of eight numbers each in a different colour is a column nothing can
 	 * be read off.
 	 */
 	private final class Row extends JPanel
@@ -224,6 +304,10 @@ class RunLegendPanel extends JPanel
 
 		private double fill;
 		private boolean off;
+
+		/** What the name was last drawn as, so a hover that changes neither redraws nothing. */
+		private BufferedImage shownIcon;
+		private boolean shownOff;
 
 		private Row(CombatMetric metric, Color stripe)
 		{
@@ -284,15 +368,33 @@ class RunLegendPanel extends JPanel
 				: ColorScheme.LIGHT_GRAY_COLOR);
 			name.setForeground(off ? ColorScheme.MEDIUM_GRAY_COLOR : ColorScheme.TEXT_COLOR);
 
+			// Led by the name, which is the only place it is written when an icon stands in for it.
 			String tooltip = off
 				? "Click to put this line back on the chart"
 				: DoomFormat.count(amount) + " " + metric.unit().description()
 					+ " - click to take this line off the chart";
 
-			setToolTipText(sources.isEmpty() ? tooltip : "<html>" + tooltip + sources + "</html>");
+			setToolTipText("<html>" + metric.label() + "<br>" + tooltip + sources + "</html>");
 
 			fill = off || amount <= 0 || largest <= 0 ? 0 : (double) amount / largest;
+			showName();
 			repaint();
+		}
+
+		/** The name, or the icon standing in for it - faded while the line is off, as the words are. */
+		private void showName()
+		{
+			BufferedImage icon = icons.smallCounter(metric);
+
+			if (icon == shownIcon && off == shownOff)
+			{
+				return;
+			}
+
+			shownIcon = icon;
+			shownOff = off;
+			PanelStyle.nameOrIcon(name, metric.label(),
+				icon == null || !off ? icon : IconArt.fade(icon, OFF_ALPHA));
 		}
 
 		@Override
@@ -312,9 +414,7 @@ class RunLegendPanel extends JPanel
 		}
 
 		/**
-		 * A filled square while the line is on the chart, a hollow one once it is off - and split
-		 * down the middle for a dashed line, which is what tells it from the solid line sharing
-		 * its colour.
+		 * A filled square while the line is on the chart, and a hollow one once it is off.
 		 */
 		private final class Swatch extends JPanel
 		{
@@ -333,14 +433,6 @@ class RunLegendPanel extends JPanel
 				if (off)
 				{
 					g.drawRect(0, y, SWATCH - 1, SWATCH - 1);
-					return;
-				}
-
-				if (metric.seriesDashed())
-				{
-					int half = (SWATCH - 1) / 2;
-					g.fillRect(0, y, half, SWATCH);
-					g.fillRect(SWATCH - half, y, half, SWATCH);
 					return;
 				}
 

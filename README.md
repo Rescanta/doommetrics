@@ -19,7 +19,8 @@ was cleared, so restocking, eating and dropping down the hole are charged to the
 precede. That makes the segments sum to the total run time. The clock is wall clock and never
 pauses.
 
-A run ends when you die, when you claim loot or leave from the end of delve panel, or when you
+A run ends when you die, when you claim loot - to your inventory or straight to the bank - or
+leave from the end of delve panel, or when you
 otherwise leave the cave. **Dying part way into a delve costs you nothing that was already
 banked** - the reported total is the time through the previous delve, and the partial delve is
 discarded from every figure.
@@ -90,7 +91,7 @@ Set **Display** to `Infobox` and the panel comes down, replaced by a single info
 icon with one figure over it, sat in the infobox bar with everything else you have up there.
 
 A square holds one number, so **Infobox figure** picks which. It can be the delve you are on, the
-run timer, the pace, the time left to your target delve, any of the twelve counters, or any of the
+run timer, the pace, the time left to your target delve, any of the eight counters, or any of the
 five counter headings with its sources summed. The figures are shortened to fit: `1.2k` for a
 counter past a thousand, `1h23` for a run past the hour and `10h` past ten of them, and `40.1` for
 a pace. What was dropped to make them fit is in the tooltip - the unit, the full precision, and
@@ -142,35 +143,31 @@ messages are switched off altogether.
 
 The plugin can also count what your gear and spellbook gave back. Every counter is off by default;
 tick the ones you want under **Counters** and they appear on the overlay under the pace and in the
-side panel's table. The run detail chart draws all twelve whatever the checkboxes say - it is a
+side panel's table. The run detail chart draws all eight whatever the checkboxes say - it is a
 window you opened to look at one run in full, and a counter you had not thought to tick is exactly
 the thing worth finding there.
 
 | Counter | Group | Counted in |
 |---|---|---|
 | Blood barrage | Spell healing | hitpoints healed |
-| Other spells | Spell healing | hitpoints healed |
 | Ancient godsword | Spec healing | hitpoints healed |
 | Blowpipe | Spec healing | hitpoints healed |
-| Other specs | Spec healing | hitpoints healed |
 | Eldritch staff | Prayer restored | prayer points restored |
 | Zaryte crossbow | Spec damage | damage dealt |
-| Other specs | Spec damage | damage dealt |
 | Scythe of vitur | Punish damage | damage dealt |
 | Noxious halberd | Punish damage | damage dealt |
 | Crystal halberd | Punish damage | damage dealt |
-| Other melee | Punish damage | damage dealt |
 
-The Zaryte crossbow has a damage counter to itself. **Other specs** under spec damage takes the
-dragon knife, dragon thrownaxe, rosewood blowpipe and toxic blowpipe - which hit for about the same
-as each other, so one line does for all four - along with the damage of any other spec, the ancient
-godsword and eldritch staff included. Point at it in the side panel for the full list.
+Every counter names one weapon or spell. What falls outside them - other healing spells, other
+specs' heals and damage, and punishes with any other melee weapon - is still tallied and saved with
+the run, but is not drawn anywhere, and is not added into a heading's figure either: a combined
+line or a heading's infobox square adds up the counters listed under it and nothing else.
 
 **Punish damage** is what a melee punish hit for. When the boss prays against magic and ranged,
 the melee swing that answers it lands with full accuracy and brings strength-bonus hitsplats in
 behind it, and the swing and those hitsplats are both counted, under the weapon that swung. The
-scythe and both halberds have a row each; any other melee weapon - a dragon dagger, dragon or
-burning claws - goes under **Other melee**. A spec swung at a punish, the halberds' included, is
+scythe and both halberds have a row each; a punish with any other melee weapon is tallied but not
+shown. A spec swung at a punish, the halberds' included, is
 counted here rather than under spec damage.
 
 A swing counts if the boss was praying when it was made, or if it cut the boss's beam off. The
@@ -180,9 +177,12 @@ swing is counted, and no weapon can swing again inside that, so nothing thrown o
 punish is over is taken for part of it.
 
 Each figure is drawn in the colour of what it is counted in - hitpoints red, prayer blue, damage
-yellow - so which lines are which is legible without reading the labels. A counter that has not
-fired yet stays grey at zero rather than disappearing, so the overlay does not resize under you
-mid-delve and a spec you expected to be firing is visibly not.
+yellow - so which lines are which is legible without reading the labels.
+
+A counter that has not counted anything yet is left off the overlay, so you can tick everything
+your gear might use and only see the lines that are firing; each one appears the first time it
+counts. Untick **Hide counters at 0** to draw every ticked counter from the start, grey at zero -
+the overlay then never resizes mid-delve, and a spec you expected to be firing is visibly not.
 
 A counter that has just gained shows the gain for five ticks before going back to the run's
 total. A scythe punish that hits for 30 and brings 67 in strength-bonus hitsplats turns `500` into
@@ -201,6 +201,13 @@ Eldritch         180           Prayer           180
 ZCB           12,470           Spec dmg      12,470
 Scythe         1,836           Punish dmg     1,836
 ```
+
+**Icons for counters** draws each separate counter as the icon of what it counts instead of its
+name: the blood barrage spell, the zaryte crossbow, the scythe and so on, as the game draws them.
+An icon is a line of text high,
+so switching it on moves no rows. A combined line keeps its heading, since it sums several
+sources. It is off by default. With it on, the infobox square wears the icon too when it holds a
+single counter; a delve number, a clock or a group total keeps the plugin's own icon.
 
 ### What is not counted
 
@@ -248,6 +255,8 @@ Behind the chevron icon, top to bottom:
 - **Lifetime** - the same rate and delve count over everything this character has ever done.
 - **Milestones** - the lifetime table, below.
 - **Open run detail** - this run, delve by delve, in a window of its own.
+
+The counters in the panel are always listed by icon, with the name one hover away.
 
 ## Milestones
 
@@ -308,9 +317,9 @@ Counters                  |/     \__/‾‾\__/‾‾\__\
              This run    0 |__Eldritch__________
 Spell healing               |
  ■ Blood barrage    806     | 2:00
- ■ Other spells     124     | ▁▂▃▃▄▄▅▅▆▆▇▇  Delve time
-Spec healing                | ▁▁▂▂▃▃▄▄▅▅▆▆  Fight
- ■ Ancient godsword  58   0:00
+Spec healing                | ▁▂▃▃▄▄▅▅▆▆▇▇  Delve time
+ ■ Ancient godsword  58     | ▁▁▂▂▃▃▄▄▅▅▆▆  Fight
+ ■ Blowpipe          47   0:00
  ...                        1     5    10    15
                                     Delve
 ```
@@ -321,9 +330,8 @@ spec are like sizes and can be read against each other. Which unit a line is cou
 legend, under the heading it is listed beneath - hitpoints, prayer points or damage, the same five
 headings the side panel uses.
 
-The chart's colours are eight hues checked as a set for colour blindness, and there are twelve
-lines. Rather than add hues nobody checked, the four punish lines take the first four colours again
-and are drawn dashed, with a split swatch beside their names in the legend.
+The chart's colours are eight hues checked as a set for colour blindness, one for each of the eight
+counters, so no two lines share a colour.
 
 The lower strip is the clock: how long each delve took, and under it the fight the game timed. The
 band between them is everything the delve cost that was not the fight - the restocking, the walk
@@ -338,7 +346,22 @@ down, and reading one never depends on landing the pointer on a two pixel dot.
 **Point at a counter's name** to bring its line forward and push the others back, and click it
 to take the line off altogether - which also gives the counters left on the plot the height they
 were sharing with it. A colour belongs to a counter for as long as the window is open, so switching
-one off never repaints the rest.
+one off never repaints the rest. With **Hide counters at 0** on, as it is by default, a counter the run has not
+counted anything on starts switched off, so the chart is not crowded with flat lines along the
+bottom; it comes on by itself once it counts, and a click puts it on sooner. The legend lists each counter by its icon; hovering the row names
+it.
+
+### Drops
+
+The eye, avernic treads, mokhaiotl cloth and the pet are drawn as their icons in a lane over the
+counters, each above the delve it came off, and listed under **Drops** beside the chart. A drop is
+placed when the loot pile is seen holding more of it than before - not when the game warns you
+about it, which it does on every descend for as long as the drop sits unclaimed. So an eye off
+delve 10 is on delve 10 alone, and a second eye off delve 20 is on delve 20 alone.
+
+A drop you did not walk out with - still in the pile when you died, or left behind - stays where
+it dropped, faded. The pet is yours the moment it rolls, so it never fades. Drops close enough
+together to overlap are stacked, and pointing at an icon or a row in the list names it.
 
 ### Long runs
 
@@ -383,15 +406,17 @@ rather than the whole file.
 
 | Setting | Default | Notes |
 |---|---|---|
+| Icons for counters | off | Draw each counter as its weapon or spell icon instead of its name, in the overlay and the infobox |
+| Hide counters at 0 | on | Leave a counter off the overlay until it has counted something, and start it switched off on the run detail chart |
 | Group counters | Separate | One line per counter, or one per group |
 | Blood barrage heal | off | Hitpoints healed by blood spells |
-| Other spell heal | off | Hitpoints healed by your other spells |
 | AGS heal | off | Hitpoints healed by the ancient godsword spec |
 | Blowpipe heal | off | Hitpoints healed by the blowpipe spec |
-| Other spec heal | off | Hitpoints healed by your other specs |
 | Eldritch prayer | off | Prayer points restored by the eldritch staff spec |
 | ZCB damage | off | Damage dealt by the zaryte crossbow spec |
-| Other spec damage | off | Damage dealt by every other spec - knives, thrownaxes and blowpipes included |
+| Scythe punish | off | Damage your scythe dealt punishing the boss's prayer |
+| Noxious halberd punish | off | Damage your noxious halberd dealt punishing the boss's prayer, its spec included |
+| Crystal halberd punish | off | Damage your crystal halberd dealt punishing the boss's prayer, its spec included |
 
 ### Advanced
 

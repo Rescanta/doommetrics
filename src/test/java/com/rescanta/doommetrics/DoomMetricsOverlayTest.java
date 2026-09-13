@@ -4,6 +4,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.time.Duration;
+import java.time.Instant;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.components.ComponentConstants;
 import static org.junit.Assert.assertEquals;
@@ -36,7 +37,7 @@ public class DoomMetricsOverlayTest
 
 	/**
 	 * The least space worth leaving between a label and the figure beside it. The tightest row
-	 * there is - "Other spells" beside five figures - clears it with two pixels to spare.
+	 * there is clears it with room to spare.
 	 */
 	private static final int GAP = 6;
 
@@ -51,7 +52,7 @@ public class DoomMetricsOverlayTest
 		String figure = DoomFormat.count(WIDEST_FIGURE);
 		String gain = "+" + DoomFormat.count(WIDEST_GAIN);
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			assertFits(metrics, metric.overlayLabel(), figure);
 			assertFits(metrics, metric.overlayLabel(), gain);
@@ -96,9 +97,90 @@ public class DoomMetricsOverlayTest
 			}
 		}
 
+		// With zeros drawn, so both runs have a line for every counter and only the figures differ.
+		PreviewScene deep = PreviewScene.named("deep");
+		PreviewScene ceiling = PreviewScene.named("ceiling");
+		deep.config.hideEmptyCounters = false;
+		ceiling.config.hideEmptyCounters = false;
+
 		assertEquals("a run's widest figures should not cost the overlay a line",
-			draw(PreviewScene.named("deep")).getHeight(),
-			draw(PreviewScene.named("ceiling")).getHeight());
+			draw(deep).getHeight(), draw(ceiling).getHeight());
+	}
+
+	/** The catch-alls are counted but never drawn, alone or summed into a combined line. */
+	@Test
+	public void neverDrawsTheCatchAlls()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin();
+		Instant now = Instant.now();
+		DelveRun run = new DelveRun(now.minusSeconds(600), 5, false);
+		plugin.run = run;
+		config.allCounters(true);
+		config.hideEmptyCounters = true;
+
+		BufferedImage before = draw(plugin, config);
+
+		run.recordCombat(CombatMetric.OTHER_SPELL_HEAL, 90, now.minusSeconds(60));
+		run.recordCombat(CombatMetric.OTHER_SPEC_HEAL, 90, now.minusSeconds(60));
+		run.recordCombat(CombatMetric.OTHER_SPEC_DAMAGE, 90, now.minusSeconds(60));
+		run.recordCombat(CombatMetric.OTHER_MELEE_PUNISH, 90, now.minusSeconds(60));
+
+		assertEquals("separate", before.getHeight(), draw(plugin, config).getHeight());
+
+		config.grouping = MetricDisplay.COMBINED;
+		assertEquals("combined", before.getHeight(), draw(plugin, config).getHeight());
+	}
+
+	/** A line per counter that has counted something, and none for one still at 0. */
+	@Test
+	public void leavesCountersAtZeroOffUnlessAskedToDrawThem()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin();
+		Instant now = Instant.now();
+		DelveRun run = new DelveRun(now.minusSeconds(600), 5, false);
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 300, now.minusSeconds(60));
+		plugin.run = run;
+
+		config.allCounters(true);
+		int hidden = draw(plugin, config).getHeight();
+
+		config.hideEmptyCounters = false;
+		int drawn = draw(plugin, config).getHeight();
+
+		assertEquals("every counter drawn but the crossbow is still at 0",
+			(CombatMetric.DISPLAYED.size() - 1) * lineHeight(), drawn - hidden);
+
+		// Combined, a group with nothing counted under it has no line either.
+		config.grouping = MetricDisplay.COMBINED;
+		int combinedDrawn = draw(plugin, config).getHeight();
+
+		config.hideEmptyCounters = true;
+		int combinedHidden = draw(plugin, config).getHeight();
+
+		assertEquals("only the spec damage line has counted anything",
+			(CombatMetric.Group.values().length - 1) * lineHeight(),
+			combinedDrawn - combinedHidden);
+
+		// The line arrives with the first thing it counts.
+		run.recordCombat(CombatMetric.SCYTHE_PUNISH, 40, now.minusSeconds(30));
+		assertEquals(combinedHidden + lineHeight(), draw(plugin, config).getHeight());
+	}
+
+	/** How much taller one more line makes the overlay: the line and the gap under it. */
+	private static int lineHeight()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin();
+		plugin.run = new DelveRun(Instant.now().minusSeconds(60), 5, false);
+		config.allCounters(false);
+
+		config.showPace = false;
+		int without = draw(plugin, config).getHeight();
+
+		config.showPace = true;
+		return draw(plugin, config).getHeight() - without;
 	}
 
 	@Test
@@ -120,6 +202,47 @@ public class DoomMetricsOverlayTest
 				assertNull(style + " is drawn by the infobox, or not at all", drawn);
 			}
 		}
+	}
+
+	/**
+	 * An icon is a line of text high, so switching icons on swaps each counter's name for its
+	 * picture without moving a single row - the overlay stays the size you placed it at.
+	 */
+	@Test
+	public void iconsTakeTheNamesPlaceWithoutResizingTheOverlay()
+	{
+		for (MetricDisplay grouping : MetricDisplay.values())
+		{
+			// A run walked out of, so its clock has stopped and the two drawings differ only where
+			// the icons do.
+			PreviewScene scene = PreviewScene.named("lingering");
+			scene.config.grouping = grouping;
+			BufferedImage names = draw(scene);
+
+			scene.config.counterIcons = true;
+			BufferedImage icons = draw(scene);
+
+			assertEquals(grouping + " width", names.getWidth(), icons.getWidth());
+			assertEquals(grouping + " height", names.getHeight(), icons.getHeight());
+			assertEquals(grouping + ": only separate counters have an icon each",
+				grouping == MetricDisplay.SEPARATE, !samePixels(names, icons));
+		}
+	}
+
+	private static boolean samePixels(BufferedImage a, BufferedImage b)
+	{
+		for (int y = 0; y < a.getHeight(); y++)
+		{
+			for (int x = 0; x < a.getWidth(); x++)
+			{
+				if (a.getRGB(x, y) != b.getRGB(x, y))
+				{
+					return false;
+				}
+			}
+		}
+
+		return true;
 	}
 
 	private static void assertFits(FontMetrics metrics, String left, String right)
@@ -150,6 +273,11 @@ public class DoomMetricsOverlayTest
 		PreviewPlugin plugin = new PreviewPlugin();
 		plugin.run = scene.run;
 
-		return PreviewRender.overlay(new DoomMetricsOverlay(plugin, scene.config));
+		return draw(plugin, scene.config);
+	}
+
+	private static BufferedImage draw(PreviewPlugin plugin, PreviewConfig config)
+	{
+		return PreviewRender.overlay(new DoomMetricsOverlay(plugin, config));
 	}
 }

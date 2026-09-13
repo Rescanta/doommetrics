@@ -9,6 +9,7 @@ import net.runelite.client.ui.FontManager;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -112,14 +113,21 @@ public class DoomMetricsInfoBoxTest
 		assertEquals("hitpoints, and the colour says so", CombatMetric.Unit.HITPOINTS.color(),
 			box.getTextColor());
 
-		// The two spec heals this run has, plus the one it has not, summed under their heading.
+		// The two spec heals, summed under their heading.
 		config.infoboxFigure = InfoBoxFigure.ALL_SPEC_HEALING;
 		assertEquals("105", box.getText());
 
-		config.infoboxFigure = InfoBoxFigure.OTHER_SPEC_HEAL;
+		// A catch-all is still counted, but it is not a row under the heading, so not in its sum.
+		plugin.run.recordCombat(CombatMetric.OTHER_SPEC_HEAL, 40, Instant.now());
+		assertEquals("105", box.getText());
+
+		plugin.run = new DelveRun(Instant.now().minusSeconds(60), 1, false);
+		config.infoboxFigure = InfoBoxFigure.AGS_HEAL;
 		assertEquals("0", box.getText());
 		assertEquals("a counter that has not fired is drawn back", DoomColors.DIMMED,
 			box.getTextColor());
+
+		plugin.run = scene.run;
 
 		// The shape rather than the figure: a live clock read twice can differ by a second.
 		config.infoboxFigure = InfoBoxFigure.RUN_TIMER;
@@ -222,6 +230,58 @@ public class DoomMetricsInfoBoxTest
 		config.infoboxFigure = InfoBoxFigure.DELVE;
 		assertEquals("32", box.getText());
 		assertEquals("Died on delve 32", box.getTooltip());
+	}
+
+	/**
+	 * With icons on, a square holding one counter wears that counter's icon, and every other square
+	 * keeps the plugin's own - a delve number or a heading has no one thing to picture.
+	 */
+	@Test
+	public void wearsTheCountersIconOnlyWhenAskedAndOnlyForOneCounter()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin();
+		BufferedImage own = PreviewRender.icon();
+		DoomMetricsInfoBox box = new DoomMetricsInfoBox(own, plugin, config);
+
+		plugin.run = PreviewScene.named("deep").run;
+		config.displayStyle = DisplayStyle.INFOBOX;
+		config.infoboxFigure = InfoBoxFigure.ZCB_DAMAGE;
+
+		assertSame("icons are off unless switched on", own, box.getImage());
+
+		config.counterIcons = true;
+		assertSame(PreviewIcons.INSTANCE.counter(CombatMetric.ZCB_DAMAGE), box.getImage());
+
+		config.infoboxFigure = InfoBoxFigure.BLOOD_BARRAGE_HEAL;
+		assertSame(PreviewIcons.INSTANCE.counter(CombatMetric.BLOOD_BARRAGE_HEAL), box.getImage());
+
+		config.infoboxFigure = InfoBoxFigure.ALL_SPEC_DAMAGE;
+		assertSame("a heading sums several counters", own, box.getImage());
+
+		config.infoboxFigure = InfoBoxFigure.DELVE;
+		assertSame("a delve number is not counted in anything", own, box.getImage());
+	}
+
+	@Test
+	public void keepsItsOwnPictureUntilTheCountersArrives()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin()
+		{
+			@Override
+			Icons getIcons()
+			{
+				return Icons.NONE;
+			}
+		};
+		BufferedImage own = PreviewRender.icon();
+		DoomMetricsInfoBox box = new DoomMetricsInfoBox(own, plugin, config);
+
+		config.counterIcons = true;
+		config.infoboxFigure = InfoBoxFigure.ZCB_DAMAGE;
+
+		assertSame(own, box.getImage());
 	}
 
 	private static DoomMetricsInfoBox box(PreviewPlugin plugin, PreviewConfig config)

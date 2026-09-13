@@ -110,6 +110,19 @@ public class PreviewShots
 		written.add(shot(overlay(deep, PreviewRender.Backdrop.GLARE),
 			directory.resolve("backdrop-glare.png")));
 
+		// The counters drawn as icons, separate and combined, and the squares that take one.
+		PreviewConfig iconic = new PreviewConfig();
+		iconic.adopt(deep.config);
+		iconic.counterIcons = true;
+		written.add(shot(overlay(deep, iconic, PreviewRender.Backdrop.CAVE),
+			directory.resolve("icons-overlay.png")));
+		iconic.grouping = MetricDisplay.COMBINED;
+		written.add(shot(overlay(deep, iconic, PreviewRender.Backdrop.CAVE),
+			directory.resolve("icons-overlay-combined.png")));
+		iconic.grouping = deep.config.grouping;
+		written.add(shot(infoBoxes(deep, iconic, PreviewRender.Backdrop.CAVE),
+			directory.resolve("icons-infobox.png")));
+
 		// The same for chat: the opaque box, and the transparent one over the brightest floor,
 		// which is the hardest place for its white words to be read.
 		written.add(shot(chat(deep, PreviewRender.Chatbox.OPAQUE, PreviewRender.Backdrop.CAVE),
@@ -126,11 +139,16 @@ public class PreviewShots
 
 	private static BufferedImage overlay(PreviewScene scene, PreviewRender.Backdrop backdrop)
 	{
+		return overlay(scene, scene.config, backdrop);
+	}
+
+	private static BufferedImage overlay(PreviewScene scene, PreviewConfig config,
+		PreviewRender.Backdrop backdrop)
+	{
 		PreviewPlugin plugin = new PreviewPlugin();
 		plugin.run = scene.run;
 
-		BufferedImage drawn = PreviewRender.overlay(
-			new DoomMetricsOverlay(plugin, scene.config));
+		BufferedImage drawn = PreviewRender.overlay(new DoomMetricsOverlay(plugin, config));
 
 		return PreviewRender.scale(PreviewRender.against(drawn, backdrop, 8), ZOOM);
 	}
@@ -138,17 +156,23 @@ public class PreviewShots
 	/**
 	 * Every figure the square can hold, for one scene, in one picture.
 	 *
-	 * <p>All sixteen rather than the one the scene has picked, because the square only ever shows
+	 * <p>All of them rather than the one the scene has picked, because the square only ever shows
 	 * one and the thing worth judging is the set: whether every figure is legible at that size,
 	 * and whether the colours tell the units apart when the labels are not there to.
 	 */
 	private static BufferedImage infoBoxes(PreviewScene scene, PreviewRender.Backdrop backdrop)
 	{
+		return infoBoxes(scene, scene.config, backdrop);
+	}
+
+	private static BufferedImage infoBoxes(PreviewScene scene, PreviewConfig settings,
+		PreviewRender.Backdrop backdrop)
+	{
 		PreviewPlugin plugin = new PreviewPlugin();
 		plugin.run = scene.run;
 
 		PreviewConfig config = new PreviewConfig();
-		config.adopt(scene.config);
+		config.adopt(settings);
 		config.displayStyle = DisplayStyle.INFOBOX;
 
 		DoomMetricsInfoBox box = new DoomMetricsInfoBox(PreviewRender.icon(), plugin, config);
@@ -170,6 +194,7 @@ public class PreviewShots
 		DoomMetricsPanel panel = new DoomMetricsPanel(() ->
 		{
 		});
+		panel.setIcons(PreviewIcons.INSTANCE);
 
 		panel.setLive(scene.live(scene.config));
 		panel.setStats(scene.stats);
@@ -196,6 +221,8 @@ public class PreviewShots
 		RunDetailWindow window = new RunDetailWindow(null, () ->
 		{
 		});
+		window.setIcons(PreviewIcons.INSTANCE);
+		window.setHideEmpty(scene.config.hideEmptyCounters);
 
 		window.setLive(scene.live(scene.config));
 		window.setDetail(scene.detail());

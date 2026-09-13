@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import net.runelite.api.gameval.ItemID;
 
 /**
  * One state of the interface, built out of invented numbers rather than out of a game.
@@ -185,7 +186,13 @@ final class PreviewScene
 
 	private static PreviewScene deep(Instant now)
 	{
-		DelveRun run = run(23, now, counters(1));
+		// A cloth, an eye, and a second eye ten delves later - the second placed where it landed,
+		// and nothing on the delves between, which is what the game's warning on every descend
+		// must not be read as.
+		DelveRun run = run(23, now, counters(1),
+			landing(7, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"),
+			landing(10, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
+			landing(20, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"));
 
 		// Aiming for a delve, which is the fullest the run section gets: the two figures at the
 		// head of it and three rows under them.
@@ -214,7 +221,12 @@ final class PreviewScene
 
 	private static PreviewScene died(Instant now)
 	{
-		DelveRun run = run(31, now, counters(2));
+		// The treads were still in the pile, so they went with the run and are drawn faded. The
+		// pet was yours the moment it rolled, so it is not.
+		DelveRun run = run(31, now, counters(2),
+			landing(12, ItemID.AVERNIC_TREADS, "Avernic treads"),
+			landing(25, ItemID.DOMPET, "Dom"));
+		run.recordLoot(ItemID.DOMPET, "Dom", 1);
 		run.end(EndReason.DIED, now, 32);
 
 		return new PreviewScene("died", "The seconds after a death, when the overlay grows a row "
@@ -225,7 +237,10 @@ final class PreviewScene
 
 	private static PreviewScene lingering(Instant now)
 	{
-		DelveRun run = run(27, now, counters(2));
+		// Claimed on the way out, so the treads are kept.
+		DelveRun run = run(27, now, counters(2),
+			landing(14, ItemID.AVERNIC_TREADS, "Avernic treads"));
+		run.recordLoot(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
 		run.end(EndReason.FINISHED, now, 0);
 
 		return new PreviewScene("lingering", "A run walked out of, still up for the linger "
@@ -301,7 +316,16 @@ final class PreviewScene
 	 */
 	private static PreviewScene record(Instant now)
 	{
-		DelveRun run = run(350, now, counters(40));
+		// Three drops a few delves apart, which at this width is closer than two icons can sit
+		// side by side - what the lane stacks into rows for. Died, so all but the pet are lost.
+		DelveRun run = run(350, now, counters(40),
+			landing(40, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
+			landing(88, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"),
+			landing(91, ItemID.AVERNIC_TREADS, "Avernic treads"),
+			landing(95, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
+			landing(160, ItemID.DOMPET, "Dom"),
+			landing(301, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+		run.recordLoot(ItemID.DOMPET, "Dom", 1);
 		run.end(EndReason.DIED, now, 351);
 
 		return new PreviewScene("record", "Deeper than the world record: the depth the run detail "
@@ -319,8 +343,11 @@ final class PreviewScene
 	 * one: a counter is credited to whichever delve was being fought when it fired, so a run whose
 	 * figures were added at the end would put every one of them on the delve after the last, and
 	 * the chart would draw an empty run with one spike off the end of it.
+	 *
+	 * <p>The same goes for {@code landings}: each is seen landing in the pile just after the delve
+	 * it came off is cleared, which is where the plugin sees one.
 	 */
-	private static DelveRun run(int reached, Instant now, long[] counters)
+	private static DelveRun run(int reached, Instant now, long[] counters, Landing... landings)
 	{
 		Duration total = Duration.ofSeconds(20);
 
@@ -346,9 +373,37 @@ final class PreviewScene
 
 			at = at.plus(delveLength(level));
 			run.complete(level, at, fightLength(level, random));
+
+			for (Landing landing : landings)
+			{
+				if (landing.level == level)
+				{
+					run.landedOne(landing.itemId, landing.name);
+				}
+			}
 		}
 
 		return run;
+	}
+
+	/** A notable drop for a scene's run: what it was, and the delve it came off. */
+	private static final class Landing
+	{
+		private final int level;
+		private final int itemId;
+		private final String name;
+
+		private Landing(int level, int itemId, String name)
+		{
+			this.level = level;
+			this.itemId = itemId;
+			this.name = name;
+		}
+	}
+
+	private static Landing landing(int level, int itemId, String name)
+	{
+		return new Landing(level, itemId, name);
 	}
 
 	/**

@@ -20,7 +20,8 @@ import java.util.function.ToLongFunction;
  *
  * <p>The constant names are what the config stores, so renaming one silently resets the choice of
  * whoever had it picked, the same way {@link CombatMetric#key()} works. The labels may be reworded
- * freely.
+ * freely. The catch-all counters had squares once; a square still saved as one of them fails to
+ * read back and the client falls back to the default, {@link #DELVE}.
  *
  * <p>Public because the config interface returns it - see {@link DisplayStyle} for why that
  * matters.
@@ -33,17 +34,13 @@ public enum InfoBoxFigure
 	TIME_TO_TARGET("Time to target"),
 
 	BLOOD_BARRAGE_HEAL("Blood barrage heal", CombatMetric.BLOOD_BARRAGE_HEAL),
-	OTHER_SPELL_HEAL("Other spell heal", CombatMetric.OTHER_SPELL_HEAL),
 	AGS_HEAL("AGS heal", CombatMetric.AGS_HEAL),
 	BLOWPIPE_HEAL("Blowpipe heal", CombatMetric.BLOWPIPE_HEAL),
-	OTHER_SPEC_HEAL("Other spec heal", CombatMetric.OTHER_SPEC_HEAL),
 	ELDRITCH_PRAYER("Eldritch prayer", CombatMetric.ELDRITCH_PRAYER),
 	ZCB_DAMAGE("ZCB damage", CombatMetric.ZCB_DAMAGE),
-	OTHER_SPEC_DAMAGE("Other spec damage", CombatMetric.OTHER_SPEC_DAMAGE),
 	SCYTHE_PUNISH("Scythe punish", CombatMetric.SCYTHE_PUNISH),
 	NOXIOUS_HALBERD_PUNISH("Noxious halberd punish", CombatMetric.NOXIOUS_HALBERD_PUNISH),
 	CRYSTAL_HALBERD_PUNISH("Crystal halberd punish", CombatMetric.CRYSTAL_HALBERD_PUNISH),
-	OTHER_MELEE_PUNISH("Other melee punish", CombatMetric.OTHER_MELEE_PUNISH),
 
 	ALL_SPELL_HEALING("All spell healing", CombatMetric.Group.SPELL_HEAL),
 	ALL_SPEC_HEALING("All spec healing", CombatMetric.Group.SPEC_HEAL),
@@ -51,9 +48,10 @@ public enum InfoBoxFigure
 	ALL_SPEC_DAMAGE("All spec damage", CombatMetric.Group.DAMAGE),
 	ALL_PUNISH_DAMAGE("All punish damage", CombatMetric.Group.PUNISH);
 
-	// Held rather than fetched for the reason the overlay holds its own copy: values() hands out a
-	// fresh array every call, and a group figure walks it up to three times a frame.
-	private static final CombatMetric[] METRICS = CombatMetric.values();
+	// Held as an array for the reason the overlay holds its own copy: a group figure walks it up to
+	// three times a frame. Only the counters drawn, so a heading sums what its rows show.
+	private static final CombatMetric[] METRICS =
+		CombatMetric.DISPLAYED.toArray(new CombatMetric[0]);
 
 	private final String label;
 
@@ -227,6 +225,12 @@ public enum InfoBoxFigure
 					: tooltip + "</br>Counted from:</br>" + String.join("</br>", sources);
 			}
 		}
+	}
+
+	/** The one source this figure counts, or null for a group or a figure that is not a counter. */
+	CombatMetric metric()
+	{
+		return metric;
 	}
 
 	/** The figure itself, for a counter: one source, or every source under one heading. */

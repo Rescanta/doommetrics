@@ -168,4 +168,41 @@ public class DelveChartTest
 		assertEquals(0, DelveChart.ceilTo(-5, 20));
 		assertEquals(0, DelveChart.ceilTo(10, 0));
 	}
+
+	/** Icons with room between them all sit in the row nearest the plot. */
+	@Test
+	public void iconsFarApartShareOneRow()
+	{
+		assertArrayEquals(new int[]{0, 0, 0},
+			DelveChart.stackRows(new int[]{10, 60, 200}, 30, 3));
+	}
+
+	/** Too close to sit side by side, each goes up a row, and the last row takes the overflow. */
+	@Test
+	public void iconsTooCloseTogetherStack()
+	{
+		assertArrayEquals(new int[]{0, 1, 2, 2, 0},
+			DelveChart.stackRows(new int[]{100, 110, 120, 125, 130}, 30, 3));
+	}
+
+	/** Two drops off the same delve are two icons, one over the other. */
+	@Test
+	public void twoDropsOffOneDelveStack()
+	{
+		assertArrayEquals(new int[]{0, 1}, DelveChart.stackRows(new int[]{50, 50}, 30, 3));
+	}
+
+	/** The rows are worked out left to right whatever order the drops are listed in. */
+	@Test
+	public void rowsDoNotDependOnTheOrderTheDropsLanded()
+	{
+		assertArrayEquals(new int[]{1, 0, 0},
+			DelveChart.stackRows(new int[]{110, 100, 300}, 30, 3));
+	}
+
+	@Test
+	public void noDropsNeedNoRows()
+	{
+		assertEquals(0, DelveChart.stackRows(new int[0], 30, 3).length);
+	}
 }

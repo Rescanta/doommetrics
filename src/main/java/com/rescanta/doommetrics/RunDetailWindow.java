@@ -44,6 +44,10 @@ class RunDetailWindow extends JFrame
 
 	private final DelveChart chart = new DelveChart();
 	private final RunLegendPanel legend = new RunLegendPanel();
+	private final RunDropsPanel drops = new RunDropsPanel();
+
+	/** The drops, under their heading - only on show for a run that has any. */
+	private final JPanel dropsSection = PanelStyle.section("Drops", drops);
 	private final JPanel summary = PanelStyle.column(3);
 
 	/** The two figures at the head of the sidebar - see {@link DoomMetricsPanel.Live}. */
@@ -77,12 +81,18 @@ class RunDetailWindow extends JFrame
 		});
 
 		// The chart and its legend are two halves of one thing: pointing at a delve moves the
-		// legend's column onto that delve, and pointing at a name brings that line forward.
-		chart.setHoverListener(legend::setDelve);
+		// legend's column onto that delve, and pointing at a name brings that line forward. The
+		// drops list is read the same way, lighting up whatever came off the delve pointed at.
+		chart.setHoverListener(level ->
+		{
+			legend.setDelve(level);
+			drops.setDelve(level);
+		});
 		legend.setToggleListener(chart::setHidden);
 		legend.setEmphasisListener(chart::setEmphasis);
 
 		buildSummary();
+		dropsSection.setVisible(false);
 
 		JPanel content = new JPanel(new BorderLayout(10, 0));
 		content.setBackground(PanelStyle.BACKGROUND);
@@ -121,6 +131,26 @@ class RunDetailWindow extends JFrame
 	{
 		chart.setDetail(detail);
 		legend.setDetail(detail);
+		drops.setDetail(detail);
+		dropsSection.setVisible(!detail.drops().isEmpty());
+	}
+
+	/** @param hideEmpty whether a counter the run has not counted anything on is left out */
+	void setHideEmpty(boolean hideEmpty)
+	{
+		legend.setHideEmpty(hideEmpty);
+	}
+
+	/**
+	 * @param icons the pictures of the drops on the chart, and of the counters and drops named
+	 *              beside it. The plugin hands over the game's own, again as each arrives; the
+	 *              preview harness, which has no game, hands over copies it keeps with its tests.
+	 */
+	void setIcons(Icons icons)
+	{
+		chart.setItemIcons(icons::item);
+		legend.setIcons(icons);
+		drops.setIcons(icons);
 	}
 
 	/**
@@ -210,16 +240,22 @@ class RunDetailWindow extends JFrame
 	}
 
 	/**
-	 * The run's own figures over the legend, stacked and scrolled together. Their height is twelve
-	 * counters under five headings, which is fixed, so they scroll only when the window is made
-	 * short enough to need it.
+	 * The run's own figures over its drops and the legend, stacked and scrolled together. Their
+	 * height is eight counters under five headings and a drop or two, so they scroll only when
+	 * the window is made short enough to need it.
 	 */
 	private JScrollPane sidebar()
 	{
+		// A hidden section takes its gap with it, so a run without drops lays out as it always did.
+		JPanel lower = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
+		lower.setBackground(PanelStyle.BACKGROUND);
+		lower.add(dropsSection, BorderLayout.NORTH);
+		lower.add(PanelStyle.section("Counters", legend), BorderLayout.CENTER);
+
 		JPanel stack = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
 		stack.setBackground(PanelStyle.BACKGROUND);
 		stack.add(PanelStyle.section("This run", PanelStyle.card(summary)), BorderLayout.NORTH);
-		stack.add(PanelStyle.section("Counters", legend), BorderLayout.CENTER);
+		stack.add(lower, BorderLayout.CENTER);
 
 		// The legend is a grid; wrapping it in a BorderLayout stops the viewport stretching its
 		// rows to fill the height.

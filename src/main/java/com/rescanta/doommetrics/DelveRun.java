@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,6 +94,64 @@ class DelveRun
 	}
 
 	/**
+	 * A notable drop as it landed in the loot pile, placed on the delve it came off.
+	 *
+	 * <p>Kept apart from {@link #loot}, which is what was claimed: this is where each drop turned
+	 * up, whether or not the run went on to walk out with it.
+	 */
+	static final class Landed
+	{
+		/** The delve it came off. */
+		final int level;
+
+		final int itemId;
+		final String name;
+
+		/** How many landed on this delve at once - almost always one. */
+		final int quantity;
+
+		/**
+		 * How many of this item the pile held once these landed, so the second eye out of a run
+		 * reads 2 - which is what a claim has to reach for this one to have been walked out with.
+		 */
+		final int heldAfter;
+
+		Landed(int level, int itemId, String name, int quantity, int heldAfter)
+		{
+			this.level = level;
+			this.itemId = itemId;
+			this.name = name;
+			this.quantity = quantity;
+			this.heldAfter = heldAfter;
+		}
+	}
+
+	/** Every notable drop this trip has seen land, in the order they landed. */
+	private final List<Landed> landed = new ArrayList<>();
+
+	/**
+	 * How many of each notable drop the pile is known to hold, keyed by item id - the figure a new
+	 * reading of the pile is measured against, so a pile that has not grown places nothing.
+	 *
+	 * <p>The game puts up a warning about a unique every time you try to descend with it still in
+	 * the pile, and the pile itself is sent over again and again. Only a count going up is a drop.
+	 */
+	private final Map<Integer, Integer> held = new HashMap<>();
+
+	/**
+	 * Bumped whenever a drop lands or a claim is read, so the detail window can tell that something
+	 * about the drops has changed without comparing them - see {@link RunDetail#keyFor}.
+	 */
+	private int lootChanges;
+
+	/**
+	 * True from a clear until the game announces the next delve, which is what decides whether a
+	 * drop seen now came off the delve just cleared or the one still being fought - see
+	 * {@link #dropLevel}.
+	 */
+	private boolean betweenDelves;
+
+	/**
 	 * What this trip's gear and spellbook gave back: healing, prayer and spec damage, by source.
 	 * See {@link CombatTracker} for what does and does not get counted.
 	 */
@@ -150,6 +209,7 @@ class DelveRun
 	void enterLevel(int level)
 	{
 		currentLevel = level;
+		betweenDelves = false;
 	}
 
 	/**
@@ -178,6 +238,7 @@ class DelveRun
 		splits.add(split);
 		lastClearedAt = at;
 		currentLevel = level + 1;
+		betweenDelves = true;
 		return split;
 	}
 
@@ -200,11 +261,89 @@ class DelveRun
 		if (drop == null)
 		{
 			loot.put(itemId, new Drop(name, quantity));
+			lootChanges++;
 		}
 		else if (quantity > drop.quantity)
 		{
 			drop.quantity = quantity;
+			lootChanges++;
 		}
+	}
+
+	/** How many of a notable drop this trip has claimed, or 0 for none. */
+	int claimed(int itemId)
+	{
+		Drop drop = loot.get(itemId);
+		return drop == null ? 0 : drop.quantity;
+	}
+
+	/**
+	 * Notes that the loot pile has been seen holding {@code quantity} of a notable drop while the run
+	 * is going, and places however many that is more than before on the delve they came off.
+	 *
+	 * <p>A reading that holds no more than the last one places nothing, which is what makes it safe
+	 * to feed every copy of the pile the game sends, and to feed two copies of it: the first to show
+	 * a new drop places it, and the other finds nothing left to place. A reading holding fewer is a
+	 * pile being emptied, and changes nothing either - a drop that landed stays where it landed.
+	 *
+	 * @return true if this placed a drop
+	 */
+	boolean sawInPile(int itemId, String name, int quantity)
+	{
+		int before = held.getOrDefault(itemId, 0);
+
+		if (name == null || quantity <= before)
+		{
+			return false;
+		}
+
+		held.put(itemId, quantity);
+		landed.add(new Landed(dropLevel(), itemId, name, quantity - before, quantity));
+		lootChanges++;
+		return true;
+	}
+
+	/**
+	 * Places one more of a notable drop than the run has seen - for the pet, which is announced in
+	 * chat rather than turning up in the pile.
+	 */
+	void landedOne(int itemId, String name)
+	{
+		sawInPile(itemId, name, held.getOrDefault(itemId, 0) + 1);
+	}
+
+	/**
+	 * Takes what the pile already holds as having been there before we were watching, so a run
+	 * joined part way through does not place every drop already in it on the first delve we see.
+	 */
+	void pileAlreadyHeld(int itemId, int quantity)
+	{
+		held.merge(itemId, quantity, Math::max);
+	}
+
+	/**
+	 * The delve a drop seen now came off.
+	 *
+	 * <p>Loot only lands in the pile when a delve is cleared, so that is always the delve just
+	 * cleared - but the pile and the chat line clearing the delve can arrive either way round. Seen
+	 * after the clear, it is the delve before the one we are waiting to drop into; seen before, it
+	 * is the delve still being fought, whose clear is on its way.
+	 */
+	int dropLevel()
+	{
+		return betweenDelves ? lastLevel() : currentLevel;
+	}
+
+	/** Every notable drop this trip has seen land, in the order they landed. */
+	List<Landed> getLanded()
+	{
+		return Collections.unmodifiableList(landed);
+	}
+
+	/** Moves whenever a drop lands or a claim is read - see {@link #lootChanges}. */
+	int lootChanges()
+	{
+		return lootChanges;
 	}
 
 	/**

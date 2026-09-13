@@ -23,6 +23,8 @@ class PreviewConfig implements DoomMetricsConfig
 	boolean showRunTimer = true;
 	boolean showPace = true;
 	boolean showTargetDelve = false;
+	boolean counterIcons = false;
+	boolean hideEmptyCounters = true;
 	int targetDelve = 50;
 
 	PreviewConfig()
@@ -65,6 +67,8 @@ class PreviewConfig implements DoomMetricsConfig
 		showPace = other.showPace;
 		showTargetDelve = other.showTargetDelve;
 		targetDelve = other.targetDelve;
+		counterIcons = other.counterIcons;
+		hideEmptyCounters = other.hideEmptyCounters;
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
@@ -127,15 +131,21 @@ class PreviewConfig implements DoomMetricsConfig
 	}
 
 	@Override
-	public boolean showBloodBarrage()
+	public boolean counterIcons()
 	{
-		return counter(CombatMetric.BLOOD_BARRAGE_HEAL);
+		return counterIcons;
 	}
 
 	@Override
-	public boolean showOtherSpell()
+	public boolean hideEmptyCounters()
 	{
-		return counter(CombatMetric.OTHER_SPELL_HEAL);
+		return hideEmptyCounters;
+	}
+
+	@Override
+	public boolean showBloodBarrage()
+	{
+		return counter(CombatMetric.BLOOD_BARRAGE_HEAL);
 	}
 
 	@Override
@@ -151,12 +161,6 @@ class PreviewConfig implements DoomMetricsConfig
 	}
 
 	@Override
-	public boolean showOtherSpecHeal()
-	{
-		return counter(CombatMetric.OTHER_SPEC_HEAL);
-	}
-
-	@Override
 	public boolean showEldritchPrayer()
 	{
 		return counter(CombatMetric.ELDRITCH_PRAYER);
@@ -166,12 +170,6 @@ class PreviewConfig implements DoomMetricsConfig
 	public boolean showZcbDamage()
 	{
 		return counter(CombatMetric.ZCB_DAMAGE);
-	}
-
-	@Override
-	public boolean showOtherSpecDamage()
-	{
-		return counter(CombatMetric.OTHER_SPEC_DAMAGE);
 	}
 
 	@Override
@@ -190,11 +188,5 @@ class PreviewConfig implements DoomMetricsConfig
 	public boolean showCrystalHalberdPunish()
 	{
 		return counter(CombatMetric.CRYSTAL_HALBERD_PUNISH);
-	}
-
-	@Override
-	public boolean showOtherMeleePunish()
-	{
-		return counter(CombatMetric.OTHER_MELEE_PUNISH);
 	}
 }
