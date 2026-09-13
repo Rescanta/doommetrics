@@ -56,6 +56,7 @@ import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.InfoBoxMenuClicked;
@@ -238,6 +239,12 @@ public class DoomMetricsPlugin extends Plugin
 	@Inject
 	private ClientThread clientThread;
 
+	@Inject
+	private EventBus eventBus;
+
+	/** Logs what the game shows around a delve's end, under the debug setting. See the class. */
+	private LootDiagnostics lootDiagnostics;
+
 	private DoomMetricsPanel panel;
 	private NavigationButton navButton;
 
@@ -402,6 +409,10 @@ public class DoomMetricsPlugin extends Plugin
 		infoBox = new DoomMetricsInfoBox(icon, this, config);
 		infoBoxManager.addInfoBox(infoBox);
 
+		lootDiagnostics = new LootDiagnostics(client, config, () -> run != null,
+			() -> run != null && run.isBetweenDelves());
+		eventBus.register(lootDiagnostics);
+
 		reset();
 		loadMilestones();
 		loadTotals();
@@ -410,6 +421,9 @@ public class DoomMetricsPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		eventBus.unregister(lootDiagnostics);
+		lootDiagnostics = null;
+
 		overlayManager.remove(overlay);
 		infoBoxManager.removeInfoBox(infoBox);
 		infoBox = null;
@@ -2459,7 +2473,7 @@ public class DoomMetricsPlugin extends Plugin
 		return config.showTargetDelve() ? config.targetDelve() : 0;
 	}
 
-	private static boolean isDoomBoss(int npcId)
+	static boolean isDoomBoss(int npcId)
 	{
 		return npcId == NpcID.DOM_BOSS || npcId == NpcID.DOM_BOSS_SHIELDED
 			|| npcId == NpcID.DOM_BOSS_BURROWED;
