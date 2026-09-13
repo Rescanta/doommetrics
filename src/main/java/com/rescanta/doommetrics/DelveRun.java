@@ -340,6 +340,12 @@ class DelveRun
 		return betweenDelves ? lastLevel() : currentLevel;
 	}
 
+	/** Whether a delve has been cleared and the game has not yet announced the next. */
+	boolean isBetweenDelves()
+	{
+		return betweenDelves;
+	}
+
 	/** Every notable drop this trip has seen land, in the order they landed. */
 	List<Landed> getLanded()
 	{
