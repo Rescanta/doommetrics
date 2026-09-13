@@ -87,6 +87,17 @@ public class ChatAnnouncementTest
 			ChatAnnouncement.runEnded(run(10), EndReason.FINISHED, PaceMode.DEEP_AVERAGE).text());
 	}
 
+	/** Deep pace is how fast more deep delves could be added, which an ended run will not do. */
+	@Test
+	public void anEndedRunGivesRunPaceWhateverTheSetting()
+	{
+		DelveRun run = run(10);
+		run.end(EndReason.DIED, START.plusSeconds(630), 11);
+
+		assertEquals("Doom run over (died): cleared delve 10 in 10:00, run pace: 18.0/hr.",
+			ChatAnnouncement.runEnded(run, EndReason.DIED, PaceMode.DEEP_AVERAGE).text());
+	}
+
 	/** The red is for the figures, all of them and nothing else. */
 	@Test
 	public void onlyTheFiguresAreHighlighted()

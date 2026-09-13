@@ -42,7 +42,8 @@ public interface DoomMetricsConfig extends Config
 		name = "Pace",
 		description = "Deep pace averages your delve 9+ times and ignores the shallow warm-up."
 			+ "<br>Run pace counts deep delves banked per hour of the whole run, warm-up included."
-			+ "<br>The choice drives both the overlay and the chat messages.",
+			+ "<br>The choice drives both the overlay and the chat messages."
+			+ "<br>Once a run is over, run pace is shown either way.",
 		position = 1
 	)
 	default PaceMode paceMode()

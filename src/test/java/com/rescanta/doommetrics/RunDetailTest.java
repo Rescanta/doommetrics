@@ -268,23 +268,32 @@ public class RunDetailTest
 		assertTrue(RunDetail.of(run).drops().get(0).kept);
 	}
 
-	/**
-	 * Dying loses the pile, so what was in it is drawn as lost. The pet is not in the pile - it is
-	 * handed over as it rolls - so it survives the death.
-	 */
+	/** Dying loses the pile, so what was in it is drawn as lost - the pet included. */
 	@Test
-	public void aDeathLosesWhatWasStillInThePileButNotThePet()
+	public void aDeathLosesWhatWasStillInThePileAndThePet()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
 		run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-		run.recordLoot(ItemID.DOMPET, "Dom", 1);
 		run.landedOne(ItemID.DOMPET, "Dom");
 		run.end(EndReason.DIED, at(90), 2);
 
 		List<RunDetail.Drop> drops = RunDetail.of(run).drops();
 		assertFalse("the treads went with the run", drops.get(0).kept);
-		assertTrue("the pet was already yours", drops.get(1).kept);
+		assertFalse("so did the pet", drops.get(1).kept);
+	}
+
+	/** The pet is only announced in chat, and the claim takes what the run saw land. */
+	@Test
+	public void aClaimKeepsThePetTheRunSawLand()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.landedOne(ItemID.DOMPET, "Dom");
+		run.recordLoot(ItemID.DOMPET, "Dom", run.held(ItemID.DOMPET));
+		run.end(EndReason.FINISHED, at(90), -1);
+
+		assertTrue(RunDetail.of(run).drops().get(0).kept);
 	}
 
 	/** A claim keeps the drops it reached: a claim of one eye keeps the first eye and not the second. */

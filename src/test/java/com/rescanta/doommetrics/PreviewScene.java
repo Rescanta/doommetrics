@@ -221,12 +221,11 @@ final class PreviewScene
 
 	private static PreviewScene died(Instant now)
 	{
-		// The treads were still in the pile, so they went with the run and are drawn faded. The
-		// pet was yours the moment it rolled, so it is not.
+		// The treads and the pet were still waiting on the claim, so they went with the run and are
+		// drawn faded.
 		DelveRun run = run(31, now, counters(2),
 			landing(12, ItemID.AVERNIC_TREADS, "Avernic treads"),
 			landing(25, ItemID.DOMPET, "Dom"));
-		run.recordLoot(ItemID.DOMPET, "Dom", 1);
 		run.end(EndReason.DIED, now, 32);
 
 		return new PreviewScene("died", "The seconds after a death, when the overlay grows a row "
@@ -317,7 +316,7 @@ final class PreviewScene
 	private static PreviewScene record(Instant now)
 	{
 		// Three drops a few delves apart, which at this width is closer than two icons can sit
-		// side by side - what the lane stacks into rows for. Died, so all but the pet are lost.
+		// side by side - what the lane stacks into rows for. Died, so every one of them is lost.
 		DelveRun run = run(350, now, counters(40),
 			landing(40, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
 			landing(88, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"),
@@ -325,7 +324,6 @@ final class PreviewScene
 			landing(95, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
 			landing(160, ItemID.DOMPET, "Dom"),
 			landing(301, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
-		run.recordLoot(ItemID.DOMPET, "Dom", 1);
 		run.end(EndReason.DIED, now, 351);
 
 		return new PreviewScene("record", "Deeper than the world record: the depth the run detail "

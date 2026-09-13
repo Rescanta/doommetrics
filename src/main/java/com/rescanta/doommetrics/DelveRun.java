@@ -303,6 +303,12 @@ class DelveRun
 		return true;
 	}
 
+	/** How many of a notable drop the pile is known to hold, or 0 for none. */
+	int held(int itemId)
+	{
+		return held.getOrDefault(itemId, 0);
+	}
+
 	/**
 	 * Places one more of a notable drop than the run has seen - for the pet, which is announced in
 	 * chat rather than turning up in the pile.
@@ -603,6 +609,16 @@ class DelveRun
 		long remaining = target - lastLevel();
 		long millis = remaining * mean.toMillis() - Duration.between(lastClearedAt, now).toMillis();
 		return Duration.ofMillis(Math.max(millis, (remaining - 1) * mean.toMillis()));
+	}
+
+	/**
+	 * The pace this run is read by: the one {@code configured} while the run is going, and run pace
+	 * once it is over. Deep pace says how fast more deep delves could be added, which a run that has
+	 * ended is not going to do - what is left to say is how fast it went, start to finish.
+	 */
+	PaceMode paceMode(PaceMode configured)
+	{
+		return isFinished() ? PaceMode.RUN_THROUGHPUT : configured;
 	}
 
 	Double pace(PaceMode mode)
