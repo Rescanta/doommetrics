@@ -24,9 +24,12 @@
 
 	<!-- Forbidden language features -->
 
+	<!-- Reflection, and method handles, which reach members the same way under another name.
+	     InvocationTargetException lives in java.lang.reflect but is only what
+	     SwingUtilities.invokeAndWait wraps a failure in - catching it reflects on nothing. -->
 	<module name="RegexpSingleline">
 		<property name="id" value="noReflection"/>
-		<property name="format" value="\bjava\.lang\.reflect\b|\bClass\.forName\s*\(|\.setAccessible\s*\(|\.getDeclared(Field|Method|Constructor)s?\s*\(|\.getMethod\s*\("/>
+		<property name="format" value="\bjava\.lang\.reflect\.(?!InvocationTargetException\b)|\bjava\.lang\.invoke\b|\bMethodHandles?\b|\bClass\.forName\s*\(|\.setAccessible\s*\(|\.get(Declared)?(Field|Method|Constructor)s?\s*\("/>
 		<property name="message" value="Reflection is forbidden in hub plugins (AGENTS.md: Forbidden Language Features)."/>
 	</module>
 
