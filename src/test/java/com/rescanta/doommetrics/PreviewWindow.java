@@ -85,6 +85,8 @@ public class PreviewWindow
 		new JComboBox<>(PreviewRender.Chatbox.values());
 	private final JComboBox<PaceMode> pacePicker = new JComboBox<>(PaceMode.values());
 	private final JComboBox<MetricDisplay> groupingPicker = new JComboBox<>(MetricDisplay.values());
+	private final JComboBox<TargetPrediction> predictionPicker =
+		new JComboBox<>(TargetPrediction.values());
 
 	/** Puts every control back to what the config says, for when a scene changes it underneath. */
 	private final List<Runnable> restaters = new ArrayList<>();
@@ -189,6 +191,13 @@ public class PreviewWindow
 		});
 		restaters.add(() -> groupingPicker.setSelectedItem(config.grouping));
 
+		predictionPicker.addActionListener(event ->
+		{
+			config.targetPrediction = (TargetPrediction) predictionPicker.getSelectedItem();
+			refresh();
+		});
+		restaters.add(() -> predictionPicker.setSelectedItem(config.targetPrediction));
+
 		note.setFont(FontManager.getRunescapeSmallFont());
 		note.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		note.setAlignmentX(0f);
@@ -215,6 +224,7 @@ public class PreviewWindow
 		stack.add(toggle("Pace", () -> config.showPace, on -> config.showPace = on));
 		stack.add(toggle("Target delve",
 			() -> config.showTargetDelve, on -> config.showTargetDelve = on));
+		stack.add(labelled("Prediction", predictionPicker));
 		stack.add(labelled("Pace mode", pacePicker));
 		stack.add(labelled("Counters", groupingPicker));
 		stack.add(toggle("Icons for counters",

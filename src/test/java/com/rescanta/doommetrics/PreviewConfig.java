@@ -26,6 +26,7 @@ class PreviewConfig implements DoomMetricsConfig
 	boolean counterIcons = false;
 	boolean hideEmptyCounters = true;
 	int targetDelve = 50;
+	TargetPrediction targetPrediction = TargetPrediction.REMAINING;
 
 	PreviewConfig()
 	{
@@ -67,6 +68,7 @@ class PreviewConfig implements DoomMetricsConfig
 		showPace = other.showPace;
 		showTargetDelve = other.showTargetDelve;
 		targetDelve = other.targetDelve;
+		targetPrediction = other.targetPrediction;
 		counterIcons = other.counterIcons;
 		hideEmptyCounters = other.hideEmptyCounters;
 
@@ -128,6 +130,12 @@ class PreviewConfig implements DoomMetricsConfig
 	public int targetDelve()
 	{
 		return targetDelve;
+	}
+
+	@Override
+	public TargetPrediction targetPrediction()
+	{
+		return targetPrediction;
 	}
 
 	@Override

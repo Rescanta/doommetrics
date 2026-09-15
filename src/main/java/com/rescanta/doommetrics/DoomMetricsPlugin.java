@@ -2315,7 +2315,8 @@ public class DoomMetricsPlugin extends Plugin
 		DelveRun detail = detailRun();
 		DoomMetricsPanel.Live live = display == null
 			? null
-			: DoomMetricsPanel.Live.of(display, config.paceMode(), targetDelve());
+			: DoomMetricsPanel.Live.of(display, config.paceMode(), targetDelve(),
+				config.targetPrediction());
 
 		// The same rows for the window, except that it keeps drawing a run the overlay's linger
 		// has taken down - so the head of the window cannot blank out from under a chart that is
@@ -2323,7 +2324,7 @@ public class DoomMetricsPlugin extends Plugin
 		DoomMetricsPanel.Live detailLive = detail == display
 			? live
 			: (detail == null ? null : DoomMetricsPanel.Live.of(detail, config.paceMode(),
-				targetDelve()));
+				targetDelve(), config.targetPrediction()));
 
 		DoomMetricsPanel.Stats stats = statsSnapshot();
 		boolean showCombat = run != null || sessionAlive(Instant.now());

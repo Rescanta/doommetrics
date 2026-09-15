@@ -284,6 +284,69 @@ public class DelveRunTest
 		assertEquals(Duration.ZERO, run.untilTarget(21, at(1680 + 600)));
 	}
 
+	/** The run so far and the time still to go, which holds still while delve 21 keeps to pace. */
+	@Test
+	public void predictsTheWholeRunToATarget()
+	{
+		DelveRun run = referenceRun();
+
+		// 28:00 through delve 20, and thirty delves at 1:30 to go.
+		assertEquals(Duration.ofMinutes(73), run.runToTarget(50, at(1680)));
+		assertEquals(Duration.ofMinutes(73), run.runToTarget(50, at(1710)));
+
+		assertNull(run.runToTarget(0, at(1680)));
+	}
+
+	/** An overrunning delve is the run getting slower, so the total counts up while it lasts. */
+	@Test
+	public void anOverrunningDelveAddsToTheWholeRun()
+	{
+		DelveRun run = referenceRun();
+
+		// 28:00 and three delves at 1:30.
+		assertEquals(Duration.ofSeconds(1950), run.runToTarget(23, at(1680 + 90)));
+		assertEquals(Duration.ofSeconds(1960), run.runToTarget(23, at(1680 + 100)));
+	}
+
+	/** Once there, the total is the real time to it, however much deeper the run goes. */
+	@Test
+	public void aReachedTargetKeepsTheTimeItActuallyTook()
+	{
+		DelveRun run = referenceRun();
+
+		// Delve 15 was cleared 10:00 in plus seven delves at 1:30.
+		assertEquals(Duration.ofSeconds(1230), run.runToTarget(15, at(1680)));
+		assertEquals(Duration.ofSeconds(1230), run.runToTarget(15, at(5000)));
+
+		run.enterLevel(21);
+		run.end(EndReason.DIED, at(1700), 21);
+		assertEquals("the run ending does not take it away",
+			Duration.ofSeconds(1230), run.runToTarget(15, at(1700)));
+		assertNull("a run over short of its target has nothing to predict",
+			run.runToTarget(50, at(1700)));
+	}
+
+	@Test
+	public void predictsNoWholeRunUntilANineIsCleared()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.complete(8, at(600), null);
+
+		assertNull(run.runToTarget(50, at(650)));
+	}
+
+	/** A run joined past its target was never seen clearing it, so there is no time to give. */
+	@Test
+	public void aTargetClearedBeforeTheRunWasJoinedHasNoTime()
+	{
+		DelveRun run = new DelveRun(START, 12, true);
+		run.complete(12, at(90), null);
+
+		assertTrue(run.hasReached(10));
+		assertNull(run.runToTarget(10, at(100)));
+	}
+
 	@Test
 	public void dyingReportsTheTimeThroughThePreviousDelve()
 	{
