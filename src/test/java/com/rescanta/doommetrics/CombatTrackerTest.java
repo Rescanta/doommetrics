@@ -159,8 +159,8 @@ public class CombatTrackerTest
 	public void aBlowpipeSpecHealsAndTheDamageGoesToTheGroupedTotal()
 	{
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
-		tracker.damaged(31, 101);
-		tracker.healed(15, 101);
+		tracker.damaged(31, 102);
+		tracker.healed(15, 102);
 
 		assertEquals(list("otherSpecDamage=31", "bpHeal=15"), recorded);
 	}
@@ -169,12 +169,65 @@ public class CombatTrackerTest
 	public void aZaryteSpecIsCreditedWithOneHitAndNoMore()
 	{
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100);
-		tracker.damaged(44, 101);
+		tracker.damaged(44, 102);
 
 		// The auto-attack behind it lands inside the window and is not part of the spec.
-		tracker.damaged(30, 102);
+		tracker.damaged(30, 103);
 
 		assertEquals(list("zcbDamage=44"), recorded);
+	}
+
+	/**
+	 * A blowpipe attacks every other tick, so the dart thrown before the spec is still in the air
+	 * when the energy moves and lands on that tick or the next. Neither is the spec, whose own dart
+	 * has to fly as well - and a window that took one of them had no budget left for the spec.
+	 */
+	@Test
+	public void theAutoAttackAheadOfAThrownSpecIsNotTheSpec()
+	{
+		tracker.damaged(12, 100);
+		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
+		tracker.damaged(9, 101);
+		tracker.damaged(31, 102);
+
+		assertEquals(list("otherSpecDamage=31"), recorded);
+	}
+
+	/** Duality throws two knives at once, and the knife thrown after them is not the spec. */
+	@Test
+	public void aDragonKnifeSpecIsTwoKnives()
+	{
+		tracker.specFired(SpecWeapon.DRAGON_KNIFE, 100);
+		tracker.damaged(14, 102);
+		tracker.damaged(11, 102);
+		tracker.damaged(9, 103);
+
+		assertEquals(list("otherSpecDamage=14", "otherSpecDamage=11"), recorded);
+	}
+
+	/** One axe. The throw a tick ahead of it lands a tick ahead too, before the window opens. */
+	@Test
+	public void aDragonThrownaxeSpecIsOneAxe()
+	{
+		tracker.specFired(SpecWeapon.DRAGON_THROWNAXE, 100);
+		tracker.damaged(15, 101);
+		tracker.damaged(20, 102);
+		tracker.damaged(18, 103);
+
+		assertEquals(list("otherSpecDamage=20"), recorded);
+	}
+
+	/** Two darts landing together, no heal behind either, and the dart after them not the spec. */
+	@Test
+	public void aRosewoodBlowpipeSpecIsTwoDartsAndHealsNothing()
+	{
+		tracker.specFired(SpecWeapon.ROSEWOOD_BLOWPIPE, 100);
+		tracker.damaged(10, 102);
+		tracker.damaged(8, 102);
+		tracker.healed(5, 102);
+		tracker.damaged(7, 103);
+
+		assertEquals(list("otherSpecDamage=10", "otherSpecDamage=8"), recorded);
 	}
 
 	@Test
@@ -203,8 +256,8 @@ public class CombatTrackerTest
 	public void aMissedSpecStillSpendsItsHit()
 	{
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100);
-		tracker.damaged(0, 101);
-		tracker.damaged(30, 102);
+		tracker.damaged(0, 102);
+		tracker.damaged(30, 103);
 
 		assertEquals(list("zcbDamage=0"), recorded);
 	}
@@ -258,7 +311,7 @@ public class CombatTrackerTest
 		tracker.damaged(52, 100);
 
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 103);
-		tracker.damaged(44, 104);
+		tracker.damaged(44, 105);
 
 		tracker.damaged(25, 108);
 		tracker.healed(25, 109);
@@ -290,6 +343,21 @@ public class CombatTrackerTest
 		tracker.prayerGained(24, 200);
 
 		assertEquals(list("eldritchPrayer=24"), recorded);
+	}
+
+	/**
+	 * The restore does not arrive with the spec. The staff casts from across the room and the
+	 * points only move once the spell has flown, which on a real trip was three ticks behind the
+	 * spec most of the time and six behind it at the outside - and a window that shut at three
+	 * counted five points of a delve where two specs gave back twenty-three.
+	 */
+	@Test
+	public void anEldritchRestoreThatFlewTheFullDistanceIsStillCounted()
+	{
+		tracker.specFired(SpecWeapon.ELDRITCH_STAFF, 100);
+		tracker.prayerGained(18, 106);
+
+		assertEquals(list("eldritchPrayer=18"), recorded);
 	}
 
 	@Test
@@ -336,7 +404,7 @@ public class CombatTrackerTest
 	public void aBlowpipeSpecThatDealsNoDamageHealsNothing()
 	{
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
-		tracker.damaged(0, 101);
+		tracker.damaged(0, 102);
 
 		assertEquals(list("otherSpecDamage=0"), recorded);
 	}
@@ -346,6 +414,11 @@ public class CombatTrackerTest
 	public void anUnlistedIdIsStillRecognisedByName()
 	{
 		assertEquals(SpecWeapon.BLOWPIPE, SpecWeapon.forItem(999_999, "Blazing blowpipe"));
+		assertEquals(SpecWeapon.ROSEWOOD_BLOWPIPE,
+			SpecWeapon.forItem(999_999, "Rosewood blowpipe"));
+		assertEquals(SpecWeapon.DRAGON_KNIFE, SpecWeapon.forItem(999_999, "Dragon knife(p++)"));
+		assertEquals(SpecWeapon.DRAGON_THROWNAXE,
+			SpecWeapon.forItem(999_999, "Dragon thrownaxe"));
 		assertEquals(SpecWeapon.ANCIENT_GODSWORD,
 			SpecWeapon.forItem(999_999, "Ancient godsword"));
 		assertEquals(SpecWeapon.ZARYTE_CROSSBOW, SpecWeapon.forItem(999_999, "Zaryte crossbow"));
@@ -354,6 +427,9 @@ public class CombatTrackerTest
 
 		assertEquals(SpecWeapon.OTHER, SpecWeapon.forItem(999_999, "Dragon claws"));
 		assertEquals(SpecWeapon.OTHER, SpecWeapon.forItem(999_999, null));
+
+		// A blowpipe, but not the toxic one: its spec gives back no heal to open a window for.
+		assertEquals(SpecWeapon.OTHER, SpecWeapon.forItem(999_999, "Camphor blowpipe"));
 		assertEquals(null, SpecWeapon.forItem(0, "Nothing at all"));
 	}
 
@@ -413,6 +489,30 @@ public class CombatTrackerTest
 			SpecWeapon.forItem(ItemID.TOXIC_BLOWPIPE_LOADED_ORNAMENT));
 		assertEquals(SpecWeapon.ELDRITCH_STAFF,
 			SpecWeapon.forItem(ItemID.NIGHTMARE_STAFF_ELDRITCH));
+		assertEquals(SpecWeapon.DRAGON_KNIFE,
+			SpecWeapon.forItem(ItemID.DRAGON_KNIFE));
+		assertEquals(SpecWeapon.DRAGON_KNIFE,
+			SpecWeapon.forItem(ItemID.DRAGON_KNIFE_P__));
+		assertEquals(SpecWeapon.DRAGON_THROWNAXE,
+			SpecWeapon.forItem(ItemID.DRAGON_THROWNAXE));
+		assertEquals(SpecWeapon.ROSEWOOD_BLOWPIPE,
+			SpecWeapon.forItem(ItemID.ROSEWOOD_BLOWPIPE));
+	}
+
+	/**
+	 * "Other specs" does not say which specs, so pointing at it lists them - and a weapon added to
+	 * the grouped figure is listed there without anybody having to remember to.
+	 */
+	@Test
+	public void theCatchAllListsTheSpecsItCounts()
+	{
+		assertEquals(list("Dragon knife", "Dragon thrownaxe", "Rosewood blowpipe", "Toxic blowpipe",
+			"Ancient godsword", "Eldritch staff", "Any other spec"),
+			CombatMetric.OTHER_SPEC_DAMAGE.sources());
+
+		// One weapon's figure is named by its own label, as is a catch-all no named weapon feeds.
+		assertTrue(CombatMetric.ZCB_DAMAGE.sources().isEmpty());
+		assertTrue(CombatMetric.OTHER_SPEC_HEAL.sources().isEmpty());
 	}
 
 	/** Anything else with a spec still fired one, and is grouped rather than thrown away. */

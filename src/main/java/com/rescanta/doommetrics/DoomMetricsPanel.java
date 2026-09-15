@@ -23,7 +23,7 @@ import net.runelite.client.ui.PluginPanel;
 /**
  * The side panel: the run in progress on top, the sitting beside the character's lifetime under it,
  * then the sitting's combat figures, the lifetime milestone table, and a button that opens the
- * history window.
+ * run detail window.
  *
  * <p>The run is drawn as two large figures with the rest of it in small type beneath, because
  * there are only two things a player reads while they are being hit - which delve they are on and
@@ -44,11 +44,11 @@ class DoomMetricsPanel extends PluginPanel
 	/** The figures mirrored from the overlay, or null when there is no run to show. */
 	static final class Live
 	{
-		/** How many rows a run can fill: delve, time, pace, and the target pair. */
-		static final int ROWS = 5;
+		/** How many rows a run can fill: delve, time, pace, the target, and its two predictions. */
+		static final int ROWS = 6;
 
 		/** Which of those rows are drawn large, at the head of the section. */
-		private static final int HERO_ROWS = 2;
+		static final int HERO_ROWS = 2;
 
 		/** Row labels in draw order, a null label meaning that row is switched off. */
 		final String[] labels;
@@ -73,10 +73,13 @@ class DoomMetricsPanel extends PluginPanel
 		 * The live rows of a run, formatted for drawing. The overlay draws the same figures itself
 		 * from the run; this is the panel's copy of them.
 		 *
-		 * @param target the delve being aimed for, or 0 when the target rows are switched off
+		 * @param target     the delve being aimed for, or 0 when the target rows are switched off
+		 * @param prediction which predicted times the target rows carry
 		 */
-		static Live of(DelveRun display, PaceMode mode, int target)
+		static Live of(DelveRun display, PaceMode configured, int target,
+			TargetPrediction prediction)
 		{
+			PaceMode mode = display.paceMode(configured);
 			boolean died = display.isFinished() && display.getEndReason() == EndReason.DIED;
 			String delveLabel;
 			String delveValue;
@@ -99,6 +102,8 @@ class DoomMetricsPanel extends PluginPanel
 			}
 
 			Instant now = Instant.now();
+			String remainingLabel = target > 0 ? prediction.remainingLabel(display, target) : null;
+			String totalLabel = target > 0 ? prediction.totalLabel(display) : null;
 
 			return new Live(
 				new String[]{
@@ -106,16 +111,18 @@ class DoomMetricsPanel extends PluginPanel
 					// The asterisk marks a run joined part way through, whose start is a guess.
 					display.isPartial() ? "Time*" : "Time",
 					mode.toString(),
-					target > 0 ? "Target" : null,
-					target > 0 ? "Predicted" : null,
+					target > 0 ? TargetPrediction.targetLabel(display, target) : null,
+					remainingLabel,
+					totalLabel,
 				},
 				new String[]{
 					delveValue,
 					DoomFormat.duration(display.displayElapsed(now)),
 					DoomFormat.pace(display.pace(mode)),
 					target > 0 ? Integer.toString(target) : null,
-					target > 0 ? DoomFormat.prediction(display.untilTarget(target, now),
-						display.hasReached(target)) : null,
+					remainingLabel != null
+						? TargetPrediction.remainingValue(display, target, now) : null,
+					totalLabel != null ? TargetPrediction.totalValue(display, target, now) : null,
 				},
 				display.isFinished(),
 				died);
@@ -180,7 +187,7 @@ class DoomMetricsPanel extends PluginPanel
 	private final JPanel runCard = PanelStyle.column(4);
 	private final JPanel runRows = PanelStyle.column(PanelStyle.ROW_GAP);
 	private final CombatTablePanel combatPanel = new CombatTablePanel();
-	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("Nothing banked yet.");
+	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("No delves completed yet.");
 
 	private final JLabel idleLabel = PanelStyle.caption("No run in progress",
 		SwingConstants.LEFT);
@@ -204,8 +211,8 @@ class DoomMetricsPanel extends PluginPanel
 	private final JLabel lifetimePace = PanelStyle.body("-", SwingConstants.RIGHT);
 	private final JLabel lifetimeDeep = PanelStyle.body("-", SwingConstants.RIGHT);
 
-	/** @param onOpenHistory invoked on the Swing thread when the history button is pressed */
-	DoomMetricsPanel(Runnable onOpenHistory)
+	/** @param onOpenDetail invoked on the Swing thread when the run detail button is pressed */
+	DoomMetricsPanel(Runnable onOpenDetail)
 	{
 		setBackground(PanelStyle.BACKGROUND);
 		setLayout(new DynamicGridLayout(0, 1, 0, PanelStyle.SECTION_GAP));
@@ -226,7 +233,7 @@ class DoomMetricsPanel extends PluginPanel
 		add(PanelStyle.section("Session & lifetime", PanelStyle.card(compare())));
 		add(PanelStyle.section("Session combat", combatPanel));
 		add(PanelStyle.section("Milestones", tablePanel));
-		add(historyButton(onOpenHistory));
+		add(detailButton(onOpenDetail));
 
 		setLive(null);
 		setStats(null);
@@ -324,6 +331,12 @@ class DoomMetricsPanel extends PluginPanel
 		combatPanel.setTotals(totals);
 	}
 
+	/** @param icons the pictures to draw in place of the counters' names - see {@link Icons} */
+	void setIcons(Icons icons)
+	{
+		combatPanel.setIcons(icons);
+	}
+
 	/** Rebuilds the milestone table. Called only when a row actually changed. */
 	void setRows(List<MilestoneTablePanel.Row> rows)
 	{
@@ -407,16 +420,16 @@ class DoomMetricsPanel extends PluginPanel
 		return panel;
 	}
 
-	private static JComponent historyButton(Runnable onOpenHistory)
+	private static JComponent detailButton(Runnable onOpenDetail)
 	{
-		JButton button = new JButton("Open history");
+		JButton button = new JButton("Open run detail");
 		button.setFont(FontManager.getRunescapeBoldFont());
 		button.setForeground(ColorScheme.TEXT_COLOR);
 		button.setBackground(PanelStyle.CARD);
 		button.setBorder(new EmptyBorder(7, 8, 7, 8));
 		button.setFocusPainted(false);
-		button.setToolTipText("Show the milestone table and depth per run in their own window");
-		button.addActionListener(event -> onOpenHistory.run());
+		button.setToolTipText("Break this run down delve by delve, in a window of its own");
+		button.addActionListener(event -> onOpenDetail.run());
 
 		// The panel is otherwise all text, so nothing about the button says it can be pressed
 		// until the pointer is over it.

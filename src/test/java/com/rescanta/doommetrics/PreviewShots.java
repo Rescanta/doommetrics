@@ -95,7 +95,9 @@ public class PreviewShots
 			written.add(shot(infoBoxes(scene, PreviewRender.Backdrop.CAVE),
 				directory.resolve(prefix + "-infobox.png")));
 			written.add(shot(panel(scene), directory.resolve(prefix + "-panel.png")));
-			written.add(shot(history(scene), directory.resolve(prefix + "-history.png")));
+			written.add(shot(detail(scene), directory.resolve(prefix + "-detail.png")));
+			written.add(shot(chat(scene, PreviewRender.Chatbox.TRANSPARENT,
+				PreviewRender.Backdrop.CAVE), directory.resolve(prefix + "-chat.png")));
 
 			index.append(prefix).append(" - ").append(scene.note).append(System.lineSeparator());
 		}
@@ -108,6 +110,26 @@ public class PreviewShots
 		written.add(shot(overlay(deep, PreviewRender.Backdrop.GLARE),
 			directory.resolve("backdrop-glare.png")));
 
+		// The counters drawn as icons, separate and combined, and the squares that take one.
+		PreviewConfig iconic = new PreviewConfig();
+		iconic.adopt(deep.config);
+		iconic.counterIcons = true;
+		written.add(shot(overlay(deep, iconic, PreviewRender.Backdrop.CAVE),
+			directory.resolve("icons-overlay.png")));
+		iconic.grouping = MetricDisplay.COMBINED;
+		written.add(shot(overlay(deep, iconic, PreviewRender.Backdrop.CAVE),
+			directory.resolve("icons-overlay-combined.png")));
+		iconic.grouping = deep.config.grouping;
+		written.add(shot(infoBoxes(deep, iconic, PreviewRender.Backdrop.CAVE),
+			directory.resolve("icons-infobox.png")));
+
+		// The same for chat: the opaque box, and the transparent one over the brightest floor,
+		// which is the hardest place for its white words to be read.
+		written.add(shot(chat(deep, PreviewRender.Chatbox.OPAQUE, PreviewRender.Backdrop.CAVE),
+			directory.resolve("chat-opaque.png")));
+		written.add(shot(chat(deep, PreviewRender.Chatbox.TRANSPARENT, PreviewRender.Backdrop.GLARE),
+			directory.resolve("chat-glare.png")));
+
 		Files.createDirectories(directory);
 		Files.write(directory.resolve("index.txt"),
 			index.toString().getBytes(StandardCharsets.UTF_8));
@@ -117,11 +139,16 @@ public class PreviewShots
 
 	private static BufferedImage overlay(PreviewScene scene, PreviewRender.Backdrop backdrop)
 	{
+		return overlay(scene, scene.config, backdrop);
+	}
+
+	private static BufferedImage overlay(PreviewScene scene, PreviewConfig config,
+		PreviewRender.Backdrop backdrop)
+	{
 		PreviewPlugin plugin = new PreviewPlugin();
 		plugin.run = scene.run;
 
-		BufferedImage drawn = PreviewRender.overlay(
-			new DoomMetricsOverlay(plugin, scene.config));
+		BufferedImage drawn = PreviewRender.overlay(new DoomMetricsOverlay(plugin, config));
 
 		return PreviewRender.scale(PreviewRender.against(drawn, backdrop, 8), ZOOM);
 	}
@@ -129,17 +156,23 @@ public class PreviewShots
 	/**
 	 * Every figure the square can hold, for one scene, in one picture.
 	 *
-	 * <p>All sixteen rather than the one the scene has picked, because the square only ever shows
+	 * <p>All of them rather than the one the scene has picked, because the square only ever shows
 	 * one and the thing worth judging is the set: whether every figure is legible at that size,
 	 * and whether the colours tell the units apart when the labels are not there to.
 	 */
 	private static BufferedImage infoBoxes(PreviewScene scene, PreviewRender.Backdrop backdrop)
 	{
+		return infoBoxes(scene, scene.config, backdrop);
+	}
+
+	private static BufferedImage infoBoxes(PreviewScene scene, PreviewConfig settings,
+		PreviewRender.Backdrop backdrop)
+	{
 		PreviewPlugin plugin = new PreviewPlugin();
 		plugin.run = scene.run;
 
 		PreviewConfig config = new PreviewConfig();
-		config.adopt(scene.config);
+		config.adopt(settings);
 		config.displayStyle = DisplayStyle.INFOBOX;
 
 		DoomMetricsInfoBox box = new DoomMetricsInfoBox(PreviewRender.icon(), plugin, config);
@@ -161,6 +194,7 @@ public class PreviewShots
 		DoomMetricsPanel panel = new DoomMetricsPanel(() ->
 		{
 		});
+		panel.setIcons(PreviewIcons.INSTANCE);
 
 		panel.setLive(scene.live(scene.config));
 		panel.setStats(scene.stats);
@@ -170,18 +204,30 @@ public class PreviewShots
 		return PreviewRender.scale(PreviewRender.component(panel), ZOOM);
 	}
 
-	/** The history window at the size it opens at. Left unscaled: it is large enough to read. */
-	private static BufferedImage history(PreviewScene scene)
+	/** Every line the scene's run would post to chat, as that chatbox shows them. */
+	private static BufferedImage chat(PreviewScene scene, PreviewRender.Chatbox box,
+		PreviewRender.Backdrop backdrop)
 	{
-		HistoryWindow window = new HistoryWindow(null, () ->
+		BufferedImage drawn = PreviewRender.chat(scene.chat(scene.config), box, backdrop);
+
+		return PreviewRender.scale(drawn == null
+			? PreviewRender.against(null, backdrop, 8, "(nothing posted to chat)")
+			: drawn, ZOOM);
+	}
+
+	/** The run detail window at the size it opens at. Left unscaled: it is large enough to read. */
+	private static BufferedImage detail(PreviewScene scene)
+	{
+		RunDetailWindow window = new RunDetailWindow(null, () ->
 		{
 		});
+		window.setIcons(PreviewIcons.INSTANCE);
+		window.setHideEmpty(scene.config.hideEmptyCounters);
 
-		window.setRows(scene.rows);
-		window.setLifetimeCombat(scene.lifetime);
-		window.setSeries(scene.series);
+		window.setLive(scene.live(scene.config));
+		window.setDetail(scene.detail());
 
-		return PreviewRender.window(window, 900, 560);
+		return PreviewRender.window(window, 980, 600);
 	}
 
 	private static String shot(BufferedImage image, Path file) throws IOException

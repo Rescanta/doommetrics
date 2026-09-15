@@ -14,6 +14,12 @@ import net.runelite.api.gameval.ItemID;
  * {@link #OTHER}: a spec was definitely fired, and grouping the ones nobody asked to break out is
  * better than pretending they did not happen.
  *
+ * <p>Not every weapon named here has a row of its own. The dragon knife, the dragon thrownaxe and
+ * both blowpipes share one damage figure with {@link #OTHER}, because they hit for about the same as
+ * each other. They are named anyway because a thrown spec lands on a different schedule from a
+ * swung one, and a window timed for the swing lets the thrower's auto-attacks in - see
+ * {@link #FLIGHT}. Being named is also what lets the panel say which specs that figure counts.
+ *
  * <p>Each weapon lists its effects with the delay it takes to arrive - see {@link SpecEffect}. That
  * is what lets several specs be in flight at once without stealing each other's hitsplats, which
  * they otherwise do constantly: chaining a spec into another one is ordinary play, and the second
@@ -25,7 +31,29 @@ enum SpecWeapon
 	 * Zaryte crossbow. One bolt, so one hitsplat, and no healing of its own - the spec drains the
 	 * target's defence rather than giving anything back.
 	 */
-	ZARYTE_CROSSBOW(damage(CombatMetric.ZCB_DAMAGE, 1)),
+	ZARYTE_CROSSBOW("Zaryte crossbow", projectile(CombatMetric.ZCB_DAMAGE, 1)),
+
+	/** Dragon knife. Duality throws two knives at once, each rolling its own hit, and heals nothing. */
+	DRAGON_KNIFE("Dragon knife", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 2)),
+
+	/**
+	 * Dragon thrownaxe. One axe, thrown on the very next tick whatever the attack timer says, so
+	 * the throw ahead of it is often only a tick in front.
+	 *
+	 * <p>That throw is still in the air when the energy moves, and from close in - where the axe's
+	 * reach puts you anyway - it lands before the window opens. From the far edge of longrange it
+	 * lands inside the window a tick ahead of the spec and is taken for it, which is the one case
+	 * here the timing cannot tell apart.
+	 */
+	DRAGON_THROWNAXE("Dragon thrownaxe", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1)),
+
+	/** Rosewood blowpipe. Rapid Burst fires two darts that land on the same tick, and heals nothing. */
+	ROSEWOOD_BLOWPIPE("Rosewood blowpipe", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 2)),
+
+	/** Toxic blowpipe. One dart, healing half of what it hits for, both landing together. */
+	BLOWPIPE("Toxic blowpipe",
+		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
+		heal(CombatMetric.BLOWPIPE_HEAL, 1)),
 
 	/**
 	 * Ancient godsword. Blood Sacrifice hits once immediately, then marks the target for eight
@@ -36,18 +64,13 @@ enum SpecWeapon
 	 * hitsplats separated by eight ticks, and crediting them with one wide window would let every
 	 * auto-attack between them read as spec damage.
 	 */
-	ANCIENT_GODSWORD(
+	ANCIENT_GODSWORD("Ancient godsword",
 		damage(CombatMetric.OTHER_SPEC_DAMAGE, 1),
 		sacrificeDamage(),
 		sacrificeHeal()),
 
-	/** Toxic blowpipe. One dart, healing half of what it hits for, both landing together. */
-	BLOWPIPE(
-		damage(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		heal(CombatMetric.BLOWPIPE_HEAL, 1)),
-
 	/** Eldritch nightmare staff. Restores prayer rather than hitpoints. */
-	ELDRITCH_STAFF(
+	ELDRITCH_STAFF("Eldritch staff",
 		damage(CombatMetric.OTHER_SPEC_DAMAGE, 1),
 		prayer(CombatMetric.ELDRITCH_PRAYER, 2)),
 
@@ -56,18 +79,55 @@ enum SpecWeapon
 	 * - dragon claws - so it is the cap that lets the group cover them all without letting a slow
 	 * weapon's window swallow an auto-attack behind it.
 	 */
-	OTHER(
+	OTHER(null,
 		damage(CombatMetric.OTHER_SPEC_DAMAGE, 4),
 		heal(CombatMetric.OTHER_SPEC_HEAL, 4));
 
 	/**
 	 * How long a spec's own hit may take to arrive, in game ticks.
 	 *
-	 * <p>Long enough for a bolt to cross the room and for the hit to land on the following tick,
-	 * short enough that the next auto-attack in the sequence is outside it. A weapon attacks every
-	 * four ticks at the fastest, so three keeps the two apart.
+	 * <p>Long enough for a dart, knife or axe thrown from as far off as they reach, and for the
+	 * Zaryte crossbow's bolt, which lands on the same delay at any range - all of them by the third
+	 * tick. Short enough that the next auto-attack is outside it: the fastest weapon here attacks
+	 * again two ticks after its spec, and that throw has to fly as well.
 	 */
 	private static final int PROMPT = 3;
+
+	/**
+	 * The earliest a thrown or fired spec can land, in game ticks after the spec.
+	 *
+	 * <p>A spec is timed from the tick the energy bar moved, and a melee hit - which the game lands
+	 * with no delay at all - arrives one tick after that: every Ancient godsword swing in a night's
+	 * worth of logs did. A bolt, dart, knife or axe spends at least a tick more in the air, so
+	 * nothing a ranged spec throws can land before the second tick.
+	 *
+	 * <p>What does land sooner is the auto-attack thrown before the spec, still in the air when the
+	 * energy moved. A blowpipe or a knife attacks every other tick, so one of those lands on the
+	 * spec's tick or the one after as a matter of course - and a window open from the start took it
+	 * for the spec, spent the budget on it, and turned the spec's own hit away.
+	 */
+	private static final int FLIGHT = 2;
+
+	/**
+	 * How long after an Eldritch spec its prayer restore may still arrive, in game ticks.
+	 *
+	 * <p>Longer than {@link #PROMPT}, because the points do not go up when the spec is fired but
+	 * when the spell it threw arrives - and a staff casts from up to ten tiles off. Timed against a
+	 * trip's worth of specs the restore landed three ticks behind the spec most of the time and six
+	 * behind it at the outside, so a window that shut at three took the ones cast from under the
+	 * boss and dropped the rest.
+	 *
+	 * <p>Which is not a rounding error: a spec is worth twenty-odd prayer points, and a delve where
+	 * two of them took the player from the nineties to the cap reported five. Seven ticks covers
+	 * the slowest seen with a tick in hand, and still shuts long before a restore potion drunk
+	 * after the spec could be mistaken for it.
+	 *
+	 * <p>What the extra ticks cost is the point of prayer that comes back on its own every twelfth
+	 * tick down there, which now lands inside a spec's window more often than not and is credited
+	 * to it. That is one point against the twenty the window was widened to save, and the only
+	 * over-count anything here allows.
+	 */
+	private static final int RESTORE = 7;
 
 	/**
 	 * When the Ancient godsword's Blood Sacrifice pays out, in ticks after the spec.
@@ -81,16 +141,24 @@ enum SpecWeapon
 
 	private static final int SACRIFICE_TO = 10;
 
+	private final String label;
 	private final List<SpecEffect> effects;
 
-	SpecWeapon(SpecEffect... effects)
+	SpecWeapon(String label, SpecEffect... effects)
 	{
+		this.label = label;
 		this.effects = Collections.unmodifiableList(Arrays.asList(effects));
 	}
 
 	private static SpecEffect damage(CombatMetric metric, int budget)
 	{
 		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, 0, PROMPT, budget);
+	}
+
+	/** A spec's hit that has to fly to its target - see {@link #FLIGHT}. */
+	private static SpecEffect projectile(CombatMetric metric, int budget)
+	{
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, PROMPT, budget);
 	}
 
 	private static SpecEffect heal(CombatMetric metric, int budget)
@@ -100,7 +168,7 @@ enum SpecWeapon
 
 	private static SpecEffect prayer(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, 0, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, 0, RESTORE, budget);
 	}
 
 	/** The Ancient godsword's delayed hit, which lands when the mark on the target expires. */
@@ -122,6 +190,26 @@ enum SpecWeapon
 		return effects;
 	}
 
+	/** The weapon's name as the panel lists it, or null for {@link #OTHER}, which is no one weapon. */
+	String label()
+	{
+		return label;
+	}
+
+	/** Whether anything this weapon's spec produces is credited to {@code metric}. */
+	boolean credits(CombatMetric metric)
+	{
+		for (SpecEffect effect : effects)
+		{
+			if (effect.metric() == metric)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	/**
 	 * The weapon held, or null if the slot is empty. An unarmed player has no special attack to
 	 * spend, so a null here means whatever moved the energy bar was not something we can attribute.
@@ -132,6 +220,22 @@ enum SpecWeapon
 		{
 			case ItemID.ZARYTE_XBOW:
 				return ZARYTE_CROSSBOW;
+
+			case ItemID.DRAGON_KNIFE:
+			case ItemID.DRAGON_KNIFE_P:
+			case ItemID.DRAGON_KNIFE_P_:
+			case ItemID.DRAGON_KNIFE_P__:
+			case ItemID.BR_DRAGON_KNIFE:
+				return DRAGON_KNIFE;
+
+			case ItemID.DRAGON_THROWNAXE:
+			case ItemID.BR_DRAGON_THROWNAXE:
+				return DRAGON_THROWNAXE;
+
+			// The empty one for the same reason as the toxic blowpipe's below.
+			case ItemID.ROSEWOOD_BLOWPIPE:
+			case ItemID.ROSEWOOD_BLOWPIPE_EMPTY:
+				return ROSEWOOD_BLOWPIPE;
 
 			case ItemID.ANCIENT_GODSWORD:
 			case ItemID.BR_ANCIENT_GODSWORD:
@@ -162,6 +266,10 @@ enum SpecWeapon
 	 * {@link #OTHER} rather than under the row the player is watching. The name is stable across
 	 * every one of those forms, so it catches what the list does not.
 	 *
+	 * <p>The toxic blowpipe is matched by its own name and its ornament's rather than by the word
+	 * blowpipe, which the Sailing ones carry too. None of them heals, and a match on the word gave
+	 * each of them a window for the heal the toxic one's spec gives back.
+	 *
 	 * @param name the item's name from the cache, or null if it could not be read
 	 */
 	static SpecWeapon forItem(int itemId, String name)
@@ -175,9 +283,24 @@ enum SpecWeapon
 
 		String lower = name.toLowerCase();
 
-		if (lower.contains("blowpipe"))
+		if (lower.contains("toxic blowpipe") || lower.contains("blazing blowpipe"))
 		{
 			return BLOWPIPE;
+		}
+
+		if (lower.contains("rosewood blowpipe"))
+		{
+			return ROSEWOOD_BLOWPIPE;
+		}
+
+		if (lower.contains("dragon knife"))
+		{
+			return DRAGON_KNIFE;
+		}
+
+		if (lower.contains("dragon thrownaxe"))
+		{
+			return DRAGON_THROWNAXE;
 		}
 
 		if (lower.contains("ancient godsword"))

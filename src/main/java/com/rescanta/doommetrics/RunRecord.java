@@ -67,9 +67,9 @@ class RunRecord
 	 * What this run's gear and spellbook gave back, by source - see {@link CombatMetric}. Null for
 	 * runs written before this was recorded, and for runs where nothing could be attributed.
 	 *
-	 * <p>This is what lets the history chart plot a metric per run rather than only in aggregate.
-	 * The lifetime figure is kept separately in config, so this is not what a total is read from -
-	 * which is why an older run missing it costs a point on a chart and nothing else.
+	 * <p>The lifetime figure is kept separately in config, so this is not what any total shown is
+	 * read from. It is written so a run's figures are recoverable at all: nothing displays this
+	 * file today - see {@link RunHistoryStore} - and a run is gone the moment the next one starts.
 	 */
 	CombatTotals combat;
 }

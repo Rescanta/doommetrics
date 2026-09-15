@@ -3,6 +3,8 @@ package com.rescanta.doommetrics;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
+import net.runelite.api.gameval.ItemID;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -147,10 +149,10 @@ public class DelveRunTest
 	}
 
 	@Test
-	public void runPaceCountsDelveEightAndChargesForTheWarmUp()
+	public void fullPaceCountsDelveEightAndChargesForTheShallowDelves()
 	{
-		// Thirteen deep delves (8 through 20) banked in 28:00.
-		assertEquals(27.86, referenceRun().runPace(), DELTA);
+		// Thirteen deep delves (8 through 20) completed in 28:00.
+		assertEquals(27.86, referenceRun().fullPace(), DELTA);
 	}
 
 	@Test
@@ -161,7 +163,7 @@ public class DelveRunTest
 	}
 
 	@Test
-	public void runPaceClimbsAsTheWarmUpAmortises()
+	public void fullPaceClimbsAsTheShallowDelvesAmortise()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 
@@ -178,15 +180,15 @@ public class DelveRunTest
 
 			if (level == 10)
 			{
-				assertEquals(13.85, run.runPace(), DELTA);
+				assertEquals(13.85, run.fullPace(), DELTA);
 			}
 			else if (level == 15)
 			{
-				assertEquals(23.41, run.runPace(), DELTA);
+				assertEquals(23.41, run.fullPace(), DELTA);
 			}
 		}
 
-		assertEquals(27.86, run.runPace(), DELTA);
+		assertEquals(27.86, run.fullPace(), DELTA);
 
 		// Deep pace is flat throughout because every delve 9+ took the same 1:30.
 		assertEquals(40.0, run.deepPace(), DELTA);
@@ -200,8 +202,8 @@ public class DelveRunTest
 		run.complete(8, at(600), null);
 
 		assertNull(run.deepPace());
-		// Delve 8 still counts towards run pace: one deep delve in 10:00.
-		assertEquals(6.0, run.runPace(), DELTA);
+		// Delve 8 still counts towards full pace: one deep delve in 10:00.
+		assertEquals(6.0, run.fullPace(), DELTA);
 	}
 
 	/**
@@ -282,6 +284,69 @@ public class DelveRunTest
 		assertEquals(Duration.ZERO, run.untilTarget(21, at(1680 + 600)));
 	}
 
+	/** The run so far and the time still to go, which holds still while delve 21 keeps to pace. */
+	@Test
+	public void predictsTheWholeRunToATarget()
+	{
+		DelveRun run = referenceRun();
+
+		// 28:00 through delve 20, and thirty delves at 1:30 to go.
+		assertEquals(Duration.ofMinutes(73), run.runToTarget(50, at(1680)));
+		assertEquals(Duration.ofMinutes(73), run.runToTarget(50, at(1710)));
+
+		assertNull(run.runToTarget(0, at(1680)));
+	}
+
+	/** An overrunning delve is the run getting slower, so the total counts up while it lasts. */
+	@Test
+	public void anOverrunningDelveAddsToTheWholeRun()
+	{
+		DelveRun run = referenceRun();
+
+		// 28:00 and three delves at 1:30.
+		assertEquals(Duration.ofSeconds(1950), run.runToTarget(23, at(1680 + 90)));
+		assertEquals(Duration.ofSeconds(1960), run.runToTarget(23, at(1680 + 100)));
+	}
+
+	/** Once there, the total is the real time to it, however much deeper the run goes. */
+	@Test
+	public void aReachedTargetKeepsTheTimeItActuallyTook()
+	{
+		DelveRun run = referenceRun();
+
+		// Delve 15 was cleared 10:00 in plus seven delves at 1:30.
+		assertEquals(Duration.ofSeconds(1230), run.runToTarget(15, at(1680)));
+		assertEquals(Duration.ofSeconds(1230), run.runToTarget(15, at(5000)));
+
+		run.enterLevel(21);
+		run.end(EndReason.DIED, at(1700), 21);
+		assertEquals("the run ending does not take it away",
+			Duration.ofSeconds(1230), run.runToTarget(15, at(1700)));
+		assertNull("a run over short of its target has nothing to predict",
+			run.runToTarget(50, at(1700)));
+	}
+
+	@Test
+	public void predictsNoWholeRunUntilANineIsCleared()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.complete(8, at(600), null);
+
+		assertNull(run.runToTarget(50, at(650)));
+	}
+
+	/** A run joined past its target was never seen clearing it, so there is no time to give. */
+	@Test
+	public void aTargetClearedBeforeTheRunWasJoinedHasNoTime()
+	{
+		DelveRun run = new DelveRun(START, 12, true);
+		run.complete(12, at(90), null);
+
+		assertTrue(run.hasReached(10));
+		assertNull(run.runToTarget(10, at(100)));
+	}
+
 	@Test
 	public void dyingReportsTheTimeThroughThePreviousDelve()
 	{
@@ -293,7 +358,7 @@ public class DelveRunTest
 		assertEquals(Duration.ofMinutes(28), run.clearedElapsed());
 		assertEquals(20, run.lastLevel());
 		assertEquals(21, run.getDiedOnLevel());
-		assertEquals(27.86, run.runPace(), DELTA);
+		assertEquals(27.86, run.fullPace(), DELTA);
 		assertEquals(40.0, run.deepPace(), DELTA);
 	}
 
@@ -317,6 +382,17 @@ public class DelveRunTest
 		assertEquals(40.0, run.pace(PaceMode.DEEP_AVERAGE), DELTA);
 	}
 
+	@Test
+	public void anEndedRunIsReadByFullPace()
+	{
+		DelveRun run = referenceRun();
+		assertEquals(PaceMode.DEEP_AVERAGE, run.paceMode(PaceMode.DEEP_AVERAGE));
+
+		run.end(EndReason.FINISHED, at(1700), -1);
+		assertEquals(PaceMode.RUN_THROUGHPUT, run.paceMode(PaceMode.DEEP_AVERAGE));
+		assertEquals(PaceMode.RUN_THROUGHPUT, run.paceMode(PaceMode.RUN_THROUGHPUT));
+	}
+
 	/**
 	 * The 15-delve trip from the log that was previously reported as a single delve in 22:47.
 	 * Delve boundaries are the wall clock times the game messages landed at.
@@ -336,7 +412,7 @@ public class DelveRunTest
 		assertEquals(Duration.ofSeconds(1406), run.clearedElapsed());
 
 		// Eight deep delves (8 through 15) in 23:26, not the single delve the old code counted.
-		assertEquals(20.48, run.runPace(), DELTA);
+		assertEquals(20.48, run.fullPace(), DELTA);
 		assertEquals(33.20, run.deepPace(), DELTA);
 	}
 
@@ -421,5 +497,284 @@ public class DelveRunTest
 	public void aRunWithNoLootListsNone()
 	{
 		assertTrue(referenceRun().getLoot().isEmpty());
+	}
+
+	/** Loot lands in the pile when a delve is cleared, so a drop seen then came off that delve. */
+	@Test
+	public void aDropLandsOnTheDelveJustCleared()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2);
+		run.complete(2, at(120), null);
+
+		assertTrue(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(2, landed.get(0).level);
+		assertEquals(1, landed.get(0).quantity);
+	}
+
+	/**
+	 * The pile and the chat line clearing the delve can arrive either way round. Seen first, the
+	 * pile is the delve still being fought, not the one cleared before it.
+	 */
+	@Test
+	public void aPileSeenAheadOfTheClearLandsOnTheDelveBeingFought()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2);
+
+		run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 1);
+		run.complete(2, at(120), null);
+
+		assertEquals(2, run.getLanded().get(0).level);
+	}
+
+	/**
+	 * The game warns about a unique on every descend while it sits in the pile, and sends the pile
+	 * over again each time. An eye off delve 10 is on delve 10 alone, and a second one off delve 20
+	 * is on delve 20 alone.
+	 */
+	@Test
+	public void aDropStillInThePileIsNotPlacedAgainOnEveryDelveAfter()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		for (int level = 1; level <= 25; level++)
+		{
+			run.enterLevel(level);
+			run.complete(level, at(level * 60), null);
+
+			int held = level >= 20 ? 2 : level >= 10 ? 1 : 0;
+
+			if (held > 0)
+			{
+				run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", held);
+			}
+		}
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(2, landed.size());
+		assertEquals(10, landed.get(0).level);
+		assertEquals(20, landed.get(1).level);
+		assertEquals(1, landed.get(1).quantity);
+		assertEquals(2, landed.get(1).heldAfter);
+	}
+
+	/** Two copies of the pile are watched, and a drop showing up in both dropped once. */
+	@Test
+	public void twoCopiesOfThePilePlaceADropOnce()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		assertTrue(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+		assertFalse(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+
+		assertEquals(1, run.getLanded().size());
+	}
+
+	/** The pile empties when it is claimed. That takes back nothing, and a later drop still counts. */
+	@Test
+	public void aPileBeingEmptiedTakesNothingBack()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 2);
+
+		assertFalse(run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 0));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(2, landed.get(0).quantity);
+	}
+
+	/** A run joined part way through has drops in its pile from delves nobody saw. */
+	@Test
+	public void aJoinedRunDoesNotPlaceWhatWasAlreadyInThePile()
+	{
+		DelveRun run = new DelveRun(START, 14, true);
+		run.pileAlreadyHeld(ItemID.EYE_OF_AYAK_UNCHARGED, 1);
+		run.complete(14, at(60), null);
+
+		assertFalse(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 1));
+
+		run.enterLevel(15);
+		run.complete(15, at(120), null);
+		assertTrue(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 2));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(15, landed.get(0).level);
+		assertEquals(1, landed.get(0).quantity);
+	}
+
+	/** The pet is announced rather than seen in the pile, and lands as one more than there was. */
+	@Test
+	public void thePetLandsFromItsChatLine()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2);
+
+		run.landedOne(ItemID.DOMPET, "Dom");
+
+		assertEquals(1, run.getLanded().size());
+		assertEquals(2, run.getLanded().get(0).level);
+		assertEquals(1, run.getLanded().get(0).heldAfter);
+	}
+
+	/**
+	 * Every descend with a unique in the pile brings its warning up again. The treads off delve 6
+	 * are on delve 6 alone, however many descends later they are still being warned about.
+	 */
+	@Test
+	public void aWarningRepeatedOnEveryDescendPlacesItsDropOnce()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		for (int level = 1; level <= 10; level++)
+		{
+			run.enterLevel(level);
+			run.complete(level, at(level * 60), null);
+			run.descending();
+
+			if (level >= 6)
+			{
+				run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
+			}
+		}
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(6, landed.get(0).level);
+	}
+
+	/** One warning per copy: a second cloth brings a second warning, and lands where it dropped. */
+	@Test
+	public void aSecondWarningInOneTryIsASecondCopy()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.descending();
+		assertTrue(run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+
+		run.enterLevel(2);
+		run.complete(2, at(120), null);
+		run.descending();
+		assertFalse("the cloth off delve 1", run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+		assertTrue("a new one off delve 2", run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(2, landed.size());
+		assertEquals(2, landed.get(1).level);
+		assertEquals(2, landed.get(1).heldAfter);
+	}
+
+	/** Backing out of a warning and trying again brings the same warnings up from the first. */
+	@Test
+	public void tryingAgainAfterBackingOutCountsTheWarningsAfresh()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		run.descending();
+		run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak");
+		run.descending();
+		assertFalse(run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak"));
+
+		assertEquals(1, run.getLanded().size());
+		assertEquals(1, run.held(ItemID.EYE_OF_AYAK));
+	}
+
+	/**
+	 * A run joined part way through gets warned about what was already in the pile before it has
+	 * gone down a delve we watched. Those are not drops off the delve just cleared.
+	 */
+	@Test
+	public void aJoinedRunTakesItsFirstWarningsAsAlreadyHeld()
+	{
+		DelveRun run = new DelveRun(START, 14, true);
+		run.complete(14, at(60), null);
+		run.descending();
+		assertFalse(run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
+
+		run.enterLevel(15);
+		run.complete(15, at(120), null);
+		run.descending();
+		run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
+		assertTrue(run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(15, landed.get(0).level);
+	}
+
+	/** The glowing hole says a unique dropped, not which - and saying it twice is still one. */
+	@Test
+	public void aSignalledUniqueIsPlacedOnceAsUnknown()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		assertTrue(run.uniqueSignalled());
+		assertFalse(run.uniqueSignalled());
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(DelveRun.UNKNOWN_UNIQUE, landed.get(0).itemId);
+		assertEquals(1, landed.get(0).level);
+	}
+
+	/** A warning naming the unique off the same delve turns the unknown into it. */
+	@Test
+	public void aWarningNamesTheUnknownUniqueOffItsDelve()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2);
+		run.complete(2, at(120), null);
+		run.uniqueSignalled();
+
+		run.descending();
+		run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(ItemID.AVERNIC_TREADS, landed.get(0).itemId);
+		assertEquals(2, landed.get(0).level);
+	}
+
+	/** A unique already in the pile being warned about says nothing about a new one. */
+	@Test
+	public void anOlderUniqueDoesNotNameANewUnknownOne()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.descending();
+		run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth");
+
+		run.enterLevel(2);
+		run.complete(2, at(120), null);
+		run.uniqueSignalled();
+		run.descending();
+		run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth");
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(2, landed.size());
+		assertEquals(DelveRun.UNKNOWN_UNIQUE, landed.get(1).itemId);
+	}
+
+	@Test
+	public void anUnnamedDropIsNotPlaced()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		assertFalse(run.sawInPile(ItemID.AVERNIC_TREADS, null, 1));
+		assertTrue(run.getLanded().isEmpty());
 	}
 }

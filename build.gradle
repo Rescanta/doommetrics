@@ -38,6 +38,13 @@ checkstyle {
 	maxWarnings = 0
 }
 
+// The plugin applies a Checkstyle task to every source set whatever the list above says, and run by
+// hand this one fails on test code the rules were never meant for - a Gson built without an
+// injector to hand it over. Switched off so it cannot be mistaken for a real failure.
+tasks.named('checkstyleTest') {
+	enabled = false
+}
+
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)
