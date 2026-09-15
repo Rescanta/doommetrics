@@ -222,10 +222,12 @@ final class PreviewScene
 	private static PreviewScene died(Instant now)
 	{
 		// The treads and the pet were still waiting on the claim, so they went with the run and are
-		// drawn faded.
+		// drawn faded - and so did whatever made the hole glow off the last delve, which no descend
+		// was ever tried with to name.
 		DelveRun run = run(31, now, counters(2),
 			landing(12, ItemID.AVERNIC_TREADS, "Avernic treads"),
-			landing(25, ItemID.DOMPET, "Dom"));
+			landing(25, ItemID.DOMPET, "Dom"),
+			landing(31, DelveRun.UNKNOWN_UNIQUE, DelveRun.UNKNOWN_UNIQUE_NAME));
 		run.end(EndReason.DIED, now, 32);
 
 		return new PreviewScene("died", "The seconds after a death, when the overlay grows a row "
@@ -374,7 +376,11 @@ final class PreviewScene
 
 			for (Landing landing : landings)
 			{
-				if (landing.level == level)
+				if (landing.level == level && landing.itemId == DelveRun.UNKNOWN_UNIQUE)
+				{
+					run.uniqueSignalled();
+				}
+				else if (landing.level == level)
 				{
 					run.landedOne(landing.itemId, landing.name);
 				}

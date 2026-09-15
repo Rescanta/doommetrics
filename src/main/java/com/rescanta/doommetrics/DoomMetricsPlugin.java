@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +54,8 @@ import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.callback.ClientThread;
@@ -73,6 +77,7 @@ import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.util.Text;
 
 @Slf4j
 @PluginDescriptor(
@@ -136,6 +141,16 @@ public class DoomMetricsPlugin extends Plugin
 		"You have a funny feeling like you would have been followed",
 		"You feel something weird sneaking into your backpack"
 	};
+
+	/**
+	 * The warning the game puts up for each unique in the pile as you try to go deeper - one per
+	 * copy, every try: "Your loot contains Dom! Are you sure you want to descend further?". The
+	 * name is taken from it only as a fallback, since the dialog also shows the item itself.
+	 */
+	private static final Pattern LOOT_WARNING = Pattern.compile("^Your loot contains (.+?)! Are you sure");
+
+	/** The menu option that goes deeper, on the hole and on the loot screen alike. */
+	private static final String DESCEND_OPTION = "Descend";
 
 	/**
 	 * How long one of our handlers may take before it is worth a line in the log.
@@ -583,6 +598,12 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
+		if (event.getType() == ChatMessageType.MESBOX)
+		{
+			lootWarning(event.getMessage());
+			return;
+		}
+
 		if (event.getType() != ChatMessageType.GAMEMESSAGE)
 		{
 			return;
@@ -590,7 +611,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (isPetMessage(event.getMessage()))
 		{
-			petDropped();
+			petClaimed();
 			return;
 		}
 
@@ -625,24 +646,89 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Places the pet on the delve it came off.
+	 * The pet leaving with a claim.
 	 *
-	 * <p>The pet is the one drop the loot pile cannot be relied on to show, so this chat line is the
-	 * sight of it there is. It is not claimed here: like the rest of the pile it only leaves with
-	 * the claim, and dying loses it - see {@link #claimLootPile}.
+	 * <p>The game says nothing about the pet until the loot is claimed, and then says this whether
+	 * or not the pet is new - "would have been followed" is the one already owned, which never
+	 * reaches the claimed loot at all. So this is the claim's word that the pet was in the pile.
+	 * One the warnings already placed stays where it is; one that dropped on the last delve, and so
+	 * never came up in a warning, is placed there.
 	 *
-	 * <p>Attributing it to the Doom needs no further checking, because there is nothing else to
-	 * attribute it to - a pet rolled while a delve is in progress came from the thing being fought.
+	 * <p>It lands in the same tick as the claim, ahead of the claimed loot that closes the run out -
+	 * see {@link #finishClaim}.
 	 */
-	private void petDropped()
+	private void petClaimed()
 	{
 		if (run == null)
 		{
 			return;
 		}
 
-		run.landedOne(ItemID.DOMPET, itemName(ItemID.DOMPET));
-		log.debug("Pet dropped on delve {}", run.dropLevel());
+		int pets = Math.max(1, run.held(ItemID.DOMPET));
+		run.sawInPile(ItemID.DOMPET, itemName(ItemID.DOMPET), pets);
+		recordLoot(ItemID.DOMPET, pets);
+		log.debug("Pet claimed, from delve {}", run.dropLevel());
+	}
+
+	/**
+	 * A "Your loot contains" warning, as you try to go deeper with a unique still in the pile.
+	 *
+	 * <p>This is the one sight of a unique nobody can skip: the loot screen is optional and the
+	 * pile is only sent when it is opened, but every descend brings these up, one per copy. The
+	 * dialog holds the item itself as well as its name, and the item is read on the way out of this
+	 * event rather than in it, once the dialog has been filled in.
+	 */
+	private void lootWarning(String message)
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		Matcher matcher = LOOT_WARNING.matcher(Text.removeTags(message));
+
+		if (!matcher.find())
+		{
+			return;
+		}
+
+		String named = matcher.group(1);
+
+		clientThread.invokeLater(() ->
+		{
+			if (run == null)
+			{
+				return;
+			}
+
+			Widget shown = client.getWidget(InterfaceID.Objectbox.ITEM);
+			int itemId = shown != null && NOTABLE_DROPS.contains(shown.getItemId())
+				? shown.getItemId()
+				: notableNamed(named);
+
+			if (itemId < 0)
+			{
+				log.debug("Loot warning for \"{}\", which is not a drop we track", named);
+				return;
+			}
+
+			boolean placed = run.warnedOf(itemId, itemName(itemId));
+			log.debug("Loot warning for item {} on delve {}, placed: {}", itemId, run.dropLevel(), placed);
+		});
+	}
+
+	/** The notable drop the game calls {@code name}, or -1 for none. */
+	private int notableNamed(String name)
+	{
+		for (int itemId : NOTABLE_DROPS)
+		{
+			if (name.equalsIgnoreCase(itemName(itemId)))
+			{
+				return itemId;
+			}
+		}
+
+		return -1;
 	}
 
 	/**
@@ -665,15 +751,6 @@ public class DoomMetricsPlugin extends Plugin
 		Map<Integer, Integer> claimed = notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE));
 		notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
 			.forEach((itemId, quantity) -> claimed.merge(itemId, quantity, Math::max));
-
-		// The pet goes with the claim whether or not the pile showed it, since its chat line may be
-		// the only sight of it the run had.
-		int pets = run.held(ItemID.DOMPET);
-
-		if (pets > 0)
-		{
-			claimed.merge(ItemID.DOMPET, pets, Math::max);
-		}
 
 		claimed.forEach((itemId, quantity) ->
 		{
@@ -759,6 +836,50 @@ public class DoomMetricsPlugin extends Plugin
 					itemId, run.dropLevel(), quantity);
 			}
 		});
+
+		// The claimed loot, filled in as the claim is confirmed - the surest sign the claim went
+		// through. Empty is the same copy being cleared as the loot is taken, long after.
+		if (containerId == InventoryID.DOM_LOOTPILE && !isEmpty(event.getItemContainer()))
+		{
+			finishClaim();
+		}
+	}
+
+	private static boolean isEmpty(ItemContainer container)
+	{
+		if (container == null)
+		{
+			return true;
+		}
+
+		for (Item item : container.getItems())
+		{
+			if (item.getId() > 0)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Closes out a run whose loot has just been claimed, reading the claim first.
+	 *
+	 * <p>Claiming is two clicks - "Claim and leave", then Confirm on the warning that it ends the run
+	 * - and only the second one claims anything. Backing out at the warning leaves you in the delve
+	 * with the run going. Everything that says the claim happened lands on the Confirm: the claimed
+	 * loot, the claim script, and the pet's chat line ahead of both.
+	 */
+	private void finishClaim()
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		claimLootPile();
+		endRun(EndReason.FINISHED, -1);
 	}
 
 	/**
@@ -826,9 +947,10 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Claiming loot and leaving are both explicit "I am done" clicks, and they are the only end
-	 * signal for a trip that never descended past delve 1: DOM_CURRENT_LEVEL_TEMP stays at zero
-	 * throughout delve 1, so it has no transition to fire on.
+	 * Trying to descend, and the clicks around a claim.
+	 *
+	 * <p>The claim and leaving are the only end signal for a trip that never descended past delve 1:
+	 * DOM_CURRENT_LEVEL_TEMP stays at zero throughout delve 1, so it has no transition to fire on.
 	 */
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
@@ -846,37 +968,44 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		int widgetId = event.getParam1();
-		// Three ways to claim: the claim button, and taking the whole pile to the inventory or
-		// straight to the bank. Missing either of the last two loses the claim, because the run is
-		// closed out as the game resets the delve - ahead of the claim script that would read it.
-		boolean claiming = widgetId == InterfaceID.DomEndLevelUi.BTN_CLAIM
-			|| widgetId == InterfaceID.DomEndLevelUi.BTN_INV_ALL
-			|| widgetId == InterfaceID.DomEndLevelUi.BTN_BANK_ALL;
 
-		if (!claiming && widgetId != InterfaceID.DomEndLevelUi.BTN_LEAVE)
+		// Trying to go deeper, from the hole or the loot screen. The warnings this brings up are
+		// counted afresh - but not the Descend on a warning itself, which is the same try going on
+		// to the next warning in the row.
+		if (widgetId == InterfaceID.DomEndLevelUi.BTN_DESCEND
+			|| (DESCEND_OPTION.equals(Text.removeTags(event.getMenuOption()))
+				&& WidgetUtil.componentToInterface(widgetId) != InterfaceID.OBJECTBOX))
 		{
+			run.descending();
 			return;
 		}
 
-		if (claiming)
-		{
-			// Read here rather than waiting for the claim script, which lands after this click and
-			// so after the run has been closed out and written - by which point there is no run
-			// left to hang the drops on.
-			claimLootPile();
-		}
+		// "Claim and leave" is not the claim: it asks for a Confirm first, and backing out of that
+		// carries on the run. The claim closes the run out when it lands - see finishClaim.
+		//
+		// Taking the claimed loot to the inventory or the bank, and leaving, all come after the
+		// claim on the same screen, so a run still open by then has had its claim missed.
+		boolean claimed = widgetId == InterfaceID.DomEndLevelUi.BTN_INV_ALL
+			|| widgetId == InterfaceID.DomEndLevelUi.BTN_BANK_ALL;
 
-		endRun(EndReason.FINISHED, -1);
+		if (claimed)
+		{
+			finishClaim();
+		}
+		else if (widgetId == InterfaceID.DomEndLevelUi.BTN_LEAVE)
+		{
+			endRun(EndReason.FINISHED, -1);
+		}
 	}
 
 	/**
 	 * The game's own signal that the loot has been claimed.
 	 *
 	 * <p>Claiming is the moment the pile becomes yours - leave any other way, or die, and it stays
-	 * behind - so it is the only moment worth reading the pile at, and this is the reading that is
-	 * certain to be at it. The claim button is watched as well, because that click is what closes
-	 * the run out and it cannot wait for this to arrive; between them one of the two is always in
-	 * time, and taking the largest count seen means it costs nothing when both are.
+	 * behind - so it is the only moment worth reading the pile at. The script fires on the Confirm,
+	 * in among the claimed loot arriving, so the claim is read once the tick's events are through
+	 * rather than in the middle of them. The claimed loot arriving closes the run out too, and
+	 * whichever gets there first does it - see {@link #finishClaim}.
 	 */
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event)
@@ -888,9 +1017,9 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void handleScriptPreFired(ScriptPreFired event)
 	{
-		if (event.getScriptId() == ScriptID.DOM_LOOT_CLAIM)
+		if (event.getScriptId() == ScriptID.DOM_LOOT_CLAIM && run != null)
 		{
-			claimLootPile();
+			clientThread.invokeLater(this::finishClaim);
 		}
 	}
 

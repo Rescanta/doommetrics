@@ -30,6 +30,9 @@ class RunDropsPanel extends JPanel
 	/** How much of a lost drop's icon is drawn, as its name is drawn in grey. */
 	private static final float LOST_ALPHA = 0.35f;
 
+	/** What an unknown unique is drawn as in place of a name. */
+	private static final BufferedImage UNKNOWN_ICON = IconArt.unknownUnique(IconArt.SMALL, IconArt.SMALL);
+
 	private RunDetail detail = RunDetail.empty();
 
 	/** What each drop is drawn as - its icon where there is one, its name otherwise. */
@@ -92,13 +95,19 @@ class RunDropsPanel extends JPanel
 	{
 		String text = drop.quantity > 1 ? drop.quantity + " x " + drop.name : drop.name;
 		Color ink = drop.kept ? ColorScheme.TEXT_COLOR : ColorScheme.MEDIUM_GRAY_COLOR;
-		BufferedImage icon = icons.smallItem(drop.itemId);
+		BufferedImage icon = drop.isUnknown() ? UNKNOWN_ICON : icons.smallItem(drop.itemId);
 
 		JLabel name = PanelStyle.body(text, SwingConstants.LEFT);
 		name.setForeground(ink);
 		name.setBorder(new EmptyBorder(3, 3, 3, 0));
 
-		if (icon != null)
+		if (drop.isUnknown())
+		{
+			// The mark and the words both: a question mark alone does not say what it is asking.
+			name.setIcon(new ImageIcon(drop.kept ? icon : IconArt.fade(icon, LOST_ALPHA)));
+			name.setIconTextGap(4);
+		}
+		else if (icon != null)
 		{
 			// The icon in place of the name, and a count beside it for the rare delve that dropped
 			// two - where the game would print the stack's size.
@@ -117,9 +126,17 @@ class RunDropsPanel extends JPanel
 		panel.add(where, BorderLayout.EAST);
 
 		// The name is always here, since the row may be showing the icon in its place.
-		panel.setToolTipText(drop.kept
-			? text
-			: "<html>" + text + "<br>Lost - the run ended without it being claimed</html>");
+		if (drop.isUnknown())
+		{
+			panel.setToolTipText("<html>" + text + "<br>" + RunDetail.UNKNOWN_UNIQUE_CANDIDATES
+				+ (drop.kept ? "" : "<br>" + DelveChart.lostHow(detail)) + "</html>");
+		}
+		else
+		{
+			panel.setToolTipText(drop.kept
+				? text
+				: "<html>" + text + "<br>Lost - the run ended without it being claimed</html>");
+		}
 
 		return panel;
 	}

@@ -45,6 +45,16 @@ class DelveRun
 	 */
 	private static final CombatTotals EMPTY_COMBAT = new CombatTotals();
 
+	/**
+	 * The item id a drop is placed under when the game said a unique dropped without saying which:
+	 * the hole glowing and the unique sound playing. Not a real item, so nothing is ever claimed
+	 * under it - see {@link #uniqueSignalled}.
+	 */
+	static final int UNKNOWN_UNIQUE = -1;
+
+	/** What an unknown unique is called where a name has to be written down. */
+	static final String UNKNOWN_UNIQUE_NAME = "Unknown unique";
+
 	static final class Split
 	{
 		final int level;
@@ -139,6 +149,24 @@ class DelveRun
 	private final Map<Integer, Integer> held = new HashMap<>();
 
 	/**
+	 * How many "Your loot contains" warnings each item has had since the last descend was tried,
+	 * keyed by item id.
+	 *
+	 * <p>The game puts up one warning per copy of a unique in the pile, one after another, each time
+	 * you try to go deeper. So the number of warnings one try brings up for an item is how many of
+	 * it the pile holds. Started over on every try, because backing out and trying again brings the
+	 * whole row of warnings up again from the first.
+	 */
+	private final Map<Integer, Integer> warned = new HashMap<>();
+
+	/**
+	 * Whether a warning can be trusted to be about a drop this run saw land. Not until a run joined
+	 * part way through has gone down a delve under our eyes: the first warnings it gets are about
+	 * whatever was already in the pile, from delves nobody watched.
+	 */
+	private boolean trustWarnings;
+
+	/**
 	 * Bumped whenever a drop lands or a claim is read, so the detail window can tell that something
 	 * about the drops has changed without comparing them - see {@link RunDetail#keyFor}.
 	 */
@@ -203,6 +231,7 @@ class DelveRun
 		this.currentLevel = currentLevel;
 		this.partial = partial;
 		this.pbAnchor = pbAnchor;
+		this.trustWarnings = !partial;
 	}
 
 	/** The game announced the delve we have just dropped into. */
@@ -210,6 +239,8 @@ class DelveRun
 	{
 		currentLevel = level;
 		betweenDelves = false;
+		warned.clear();
+		trustWarnings = true;
 	}
 
 	/**
@@ -239,6 +270,7 @@ class DelveRun
 		lastClearedAt = at;
 		currentLevel = level + 1;
 		betweenDelves = true;
+		warned.clear();
 		return split;
 	}
 
@@ -298,7 +330,67 @@ class DelveRun
 		}
 
 		held.put(itemId, quantity);
-		landed.add(new Landed(dropLevel(), itemId, name, quantity - before, quantity));
+		int level = dropLevel();
+		// A unique the game only signalled is this one, now that it has a name.
+		landed.removeIf(drop -> drop.itemId == UNKNOWN_UNIQUE && drop.level == level);
+		landed.add(new Landed(level, itemId, name, quantity - before, quantity));
+		lootChanges++;
+		return true;
+	}
+
+	/**
+	 * A descend was tried: the hole clicked, or the button on the loot screen. Whatever warnings it
+	 * brings up are counted from nothing - see {@link #warned}.
+	 */
+	void descending()
+	{
+		warned.clear();
+	}
+
+	/**
+	 * The game warned that the pile holds this item as you tried to go deeper. One warning is one
+	 * copy, so this try's count for the item is how many the pile holds, and anything over what the
+	 * run already knew about came off the delve just cleared.
+	 *
+	 * @return true if this placed a drop
+	 */
+	boolean warnedOf(int itemId, String name)
+	{
+		int count = warned.merge(itemId, 1, Integer::sum);
+
+		if (!trustWarnings)
+		{
+			pileAlreadyHeld(itemId, count);
+			return false;
+		}
+
+		return sawInPile(itemId, name, count);
+	}
+
+	/**
+	 * The game signalled a unique without naming it - the hole glowing and the unique sound - so
+	 * something is in the pile off this delve and nothing yet says what.
+	 *
+	 * <p>Placed as an unknown unique, which turns into the real drop if a warning, the loot screen or
+	 * the claim names it later - see {@link #sawInPile}. One that is never named was lost with the
+	 * run, because every way of keeping it would have named it. A second signal for the same delve
+	 * places nothing more: the glow says a unique dropped, not how many.
+	 *
+	 * @return true if this placed a drop
+	 */
+	boolean uniqueSignalled()
+	{
+		int level = dropLevel();
+
+		for (Landed drop : landed)
+		{
+			if (drop.itemId == UNKNOWN_UNIQUE && drop.level == level)
+			{
+				return false;
+			}
+		}
+
+		landed.add(new Landed(level, UNKNOWN_UNIQUE, UNKNOWN_UNIQUE_NAME, 1, 1));
 		lootChanges++;
 		return true;
 	}
@@ -309,10 +401,7 @@ class DelveRun
 		return held.getOrDefault(itemId, 0);
 	}
 
-	/**
-	 * Places one more of a notable drop than the run has seen - for the pet, which is announced in
-	 * chat rather than turning up in the pile.
-	 */
+	/** Places one more of a notable drop than the run has seen. */
 	void landedOne(int itemId, String name)
 	{
 		sawInPile(itemId, name, held.getOrDefault(itemId, 0) + 1);

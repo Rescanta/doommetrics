@@ -564,6 +564,147 @@ public class DelveRunTest
 		assertEquals(1, run.getLanded().get(0).heldAfter);
 	}
 
+	/**
+	 * Every descend with a unique in the pile brings its warning up again. The treads off delve 6
+	 * are on delve 6 alone, however many descends later they are still being warned about.
+	 */
+	@Test
+	public void aWarningRepeatedOnEveryDescendPlacesItsDropOnce()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		for (int level = 1; level <= 10; level++)
+		{
+			run.enterLevel(level);
+			run.complete(level, at(level * 60), null);
+			run.descending();
+
+			if (level >= 6)
+			{
+				run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
+			}
+		}
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(6, landed.get(0).level);
+	}
+
+	/** One warning per copy: a second cloth brings a second warning, and lands where it dropped. */
+	@Test
+	public void aSecondWarningInOneTryIsASecondCopy()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.descending();
+		assertTrue(run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+
+		run.enterLevel(2);
+		run.complete(2, at(120), null);
+		run.descending();
+		assertFalse("the cloth off delve 1", run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+		assertTrue("a new one off delve 2", run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(2, landed.size());
+		assertEquals(2, landed.get(1).level);
+		assertEquals(2, landed.get(1).heldAfter);
+	}
+
+	/** Backing out of a warning and trying again brings the same warnings up from the first. */
+	@Test
+	public void tryingAgainAfterBackingOutCountsTheWarningsAfresh()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		run.descending();
+		run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak");
+		run.descending();
+		assertFalse(run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak"));
+
+		assertEquals(1, run.getLanded().size());
+		assertEquals(1, run.held(ItemID.EYE_OF_AYAK));
+	}
+
+	/**
+	 * A run joined part way through gets warned about what was already in the pile before it has
+	 * gone down a delve we watched. Those are not drops off the delve just cleared.
+	 */
+	@Test
+	public void aJoinedRunTakesItsFirstWarningsAsAlreadyHeld()
+	{
+		DelveRun run = new DelveRun(START, 14, true);
+		run.complete(14, at(60), null);
+		run.descending();
+		assertFalse(run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
+
+		run.enterLevel(15);
+		run.complete(15, at(120), null);
+		run.descending();
+		run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
+		assertTrue(run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(15, landed.get(0).level);
+	}
+
+	/** The glowing hole says a unique dropped, not which - and saying it twice is still one. */
+	@Test
+	public void aSignalledUniqueIsPlacedOnceAsUnknown()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		assertTrue(run.uniqueSignalled());
+		assertFalse(run.uniqueSignalled());
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(DelveRun.UNKNOWN_UNIQUE, landed.get(0).itemId);
+		assertEquals(1, landed.get(0).level);
+	}
+
+	/** A warning naming the unique off the same delve turns the unknown into it. */
+	@Test
+	public void aWarningNamesTheUnknownUniqueOffItsDelve()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2);
+		run.complete(2, at(120), null);
+		run.uniqueSignalled();
+
+		run.descending();
+		run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(ItemID.AVERNIC_TREADS, landed.get(0).itemId);
+		assertEquals(2, landed.get(0).level);
+	}
+
+	/** A unique already in the pile being warned about says nothing about a new one. */
+	@Test
+	public void anOlderUniqueDoesNotNameANewUnknownOne()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.descending();
+		run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth");
+
+		run.enterLevel(2);
+		run.complete(2, at(120), null);
+		run.uniqueSignalled();
+		run.descending();
+		run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth");
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(2, landed.size());
+		assertEquals(DelveRun.UNKNOWN_UNIQUE, landed.get(1).itemId);
+	}
+
 	@Test
 	public void anUnnamedDropIsNotPlaced()
 	{
