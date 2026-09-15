@@ -62,9 +62,12 @@ class DoomMetricsOverlay extends OverlayPanel
 			return null;
 		}
 
-		panelComponent.getChildren().add(TitleComponent.builder()
-			.text("Doom Metrics")
-			.build());
+		if (!config.hidePluginName())
+		{
+			panelComponent.getChildren().add(TitleComponent.builder()
+				.text("Doom Metrics")
+				.build());
+		}
 
 		if (run.isFinished())
 		{

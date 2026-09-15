@@ -19,6 +19,7 @@ class PreviewConfig implements DoomMetricsConfig
 	InfoBoxFigure infoboxFigure = InfoBoxFigure.DELVE;
 	PaceMode paceMode = PaceMode.DEEP_AVERAGE;
 	MetricDisplay grouping = MetricDisplay.SEPARATE;
+	boolean hidePluginName = false;
 	boolean showDelveNumber = true;
 	boolean showRunTimer = true;
 	boolean showPace = true;
@@ -26,7 +27,7 @@ class PreviewConfig implements DoomMetricsConfig
 	boolean counterIcons = false;
 	boolean hideEmptyCounters = true;
 	int targetDelve = 50;
-	TargetPrediction targetPrediction = TargetPrediction.REMAINING;
+	TargetPrediction targetPrediction = TargetPrediction.FULL_RUN;
 
 	PreviewConfig()
 	{
@@ -63,6 +64,7 @@ class PreviewConfig implements DoomMetricsConfig
 		infoboxFigure = other.infoboxFigure;
 		paceMode = other.paceMode;
 		grouping = other.grouping;
+		hidePluginName = other.hidePluginName;
 		showDelveNumber = other.showDelveNumber;
 		showRunTimer = other.showRunTimer;
 		showPace = other.showPace;
@@ -100,6 +102,12 @@ class PreviewConfig implements DoomMetricsConfig
 	public MetricDisplay metricGrouping()
 	{
 		return grouping;
+	}
+
+	@Override
+	public boolean hidePluginName()
+	{
+		return hidePluginName;
 	}
 
 	@Override

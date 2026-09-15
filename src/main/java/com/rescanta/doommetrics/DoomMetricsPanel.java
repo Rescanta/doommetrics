@@ -187,7 +187,7 @@ class DoomMetricsPanel extends PluginPanel
 	private final JPanel runCard = PanelStyle.column(4);
 	private final JPanel runRows = PanelStyle.column(PanelStyle.ROW_GAP);
 	private final CombatTablePanel combatPanel = new CombatTablePanel();
-	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("Nothing banked yet.");
+	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("No delves completed yet.");
 
 	private final JLabel idleLabel = PanelStyle.caption("No run in progress",
 		SwingConstants.LEFT);

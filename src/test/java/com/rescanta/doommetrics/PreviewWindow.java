@@ -218,6 +218,8 @@ public class PreviewWindow
 		stack.add(labelled("Square", figurePicker));
 
 		stack.add(heading("Overlay rows"));
+		stack.add(toggle("Hide plugin name",
+			() -> config.hidePluginName, on -> config.hidePluginName = on));
 		stack.add(toggle("Delve number",
 			() -> config.showDelveNumber, on -> config.showDelveNumber = on));
 		stack.add(toggle("Run timer", () -> config.showRunTimer, on -> config.showRunTimer = on));

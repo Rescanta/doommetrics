@@ -62,7 +62,7 @@ public class ChatAnnouncementTest
 	public void thePaceIsNamedAfterTheSettingThatProducedIt()
 	{
 		// Delves 8, 9 and 10 banked in ten minutes.
-		assertEquals("Doom delve 10 cleared, run time: 10:00, run pace: 18.0/hr.",
+		assertEquals("Doom delve 10 cleared, run time: 10:00, full pace: 18.0/hr.",
 			ChatAnnouncement.delveCleared(run(10), 10, 0, PaceMode.RUN_THROUGHPUT).text());
 	}
 
@@ -89,12 +89,12 @@ public class ChatAnnouncementTest
 
 	/** Deep pace is how fast more deep delves could be added, which an ended run will not do. */
 	@Test
-	public void anEndedRunGivesRunPaceWhateverTheSetting()
+	public void anEndedRunGivesFullPaceWhateverTheSetting()
 	{
 		DelveRun run = run(10);
 		run.end(EndReason.DIED, START.plusSeconds(630), 11);
 
-		assertEquals("Doom run over (died): cleared delve 10 in 10:00, run pace: 18.0/hr.",
+		assertEquals("Doom run over (died): cleared delve 10 in 10:00, full pace: 18.0/hr.",
 			ChatAnnouncement.runEnded(run, EndReason.DIED, PaceMode.DEEP_AVERAGE).text());
 	}
 

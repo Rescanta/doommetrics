@@ -22,7 +22,7 @@ pauses.
 A run ends when you die, when you claim loot - to your inventory or straight to the bank - or
 leave from the end of delve panel, or when you
 otherwise leave the cave. **Dying part way into a delve costs you nothing that was already
-banked** - the reported total is the time through the previous delve, and the partial delve is
+done** - the reported total is the time through the previous delve, and the partial delve is
 discarded from every figure.
 
 A connection that drops does not end the run. Hopping and logging out put you back outside the
@@ -37,9 +37,9 @@ Pick one in the config; it drives both the overlay and the chat messages.
 | Mode | Formula | Answers |
 |---|---|---|
 | **Deep pace** (default) | `3600 / mean(delve 9+ times)` | How fast are my deep delves right now |
-| **Run pace** | `deep delves (8+) / total run time` | How many deep delves per hour am I actually banking |
+| **Full pace** | `deep delves (8+) / total run time` | How many deep delves per hour am I actually completing |
 
-Delve 8 counts as a deep delve for Run pace, but is excluded from the Deep pace average because
+Delve 8 counts as a deep delve for Full pace, but is excluded from the Deep pace average because
 it has a different amount of health to 9 and above. Neither floor is a setting. Where deep starts
 and where the health changes are facts about the fight rather than preferences, so they are
 constants.
@@ -47,9 +47,9 @@ constants.
 For a run to delve 20 where delves 1-7 took 8:00, delve 8 took 2:00 and delves 9-20 took 18:00:
 
 - **Deep pace** is `40.0/hr` - twelve delves at a flat 1:30 each.
-- **Run pace** is `27.9/hr` - thirteen deep delves banked across the full 28:00, warm-up included.
+- **Full pace** is `27.9/hr` - thirteen deep delves completed across the full 28:00, shallow delves included.
 
-Run pace starts low and climbs as the shallow delves amortise (13.8/hr at delve 10, 23.4/hr at
+Full pace starts low and climbs as the shallow delves amortise (13.8/hr at delve 10, 23.4/hr at
 delve 15, 27.9/hr at delve 20). Deep pace stays flat as long as your delve times do.
 
 Both are built on the contiguous segments, so the time you spend restocking counts against you.
@@ -133,7 +133,7 @@ rather than sitting still between clears, and it never drops below what the delv
 must take.
 
 Two things a flat average cannot know are left in on purpose, because every other figure here is a
-flat average too: delves 1-8 are quicker than the mean, so a target set during the warm-up reads
+flat average too: delves 1-8 are quicker than the mean, so a target set during delves 1-8 reads
 long, and delves get slower the deeper they go, so a distant target reads short.
 
 Landing on the target is announced in chat whatever the chat interval says, including when the
@@ -249,7 +249,7 @@ Behind the chevron icon, top to bottom:
 - **Current run** - the same rows as the overlay, so the numbers are somewhere other than over the
   game world.
 - **This session** - how long this sitting has been going, its deep pace, how many deep delves it
-  has banked, and the counters you have ticked. A sitting ends after half an hour without a run,
+  has completed, and the counters you have ticked. A sitting ends after half an hour without a run,
   which is long enough that banking and walking back never break it and short enough that coming
   back tomorrow starts you clean.
 - **Lifetime** - the same rate and delve count over everything this character has ever done.
@@ -324,7 +324,7 @@ Spec healing                | ▁▂▃▃▄▄▅▅▆▆▇▇  Delve time
                                     Delve
 ```
 
-The upper plot is the counters, a line each, over the delves the run has banked. They share one
+The upper plot is the counters, a line each, over the delves the run has completed. They share one
 scale because none of them clears a few hundred on a single delve, so a barrage heal and a Zaryte
 spec are like sizes and can be read against each other. Which unit a line is counted in is on the
 legend, under the heading it is listed beneath - hitpoints, prayer points or damage, the same five
@@ -395,12 +395,14 @@ rather than the whole file.
 | Pace | Deep pace | Which figure the overlay and chat show |
 | Chat every N delves | 5 | 0 disables the messages |
 | Announce run end | on | Summary on claim, leave or death |
+| Hide plugin name | off | Leaves the Doom Metrics title off the top of the overlay |
 | Display | Panel | The panel of rows, one infobox square, or nothing drawn over the game |
 | Infobox figure | Delve | Which single figure the square holds |
 | Show delve number / run timer / pace | on | Overlay rows |
 | Keep result for | 30 min | How long a finished run stays on screen; 0 hides it at once |
 | Show target delve | off | Adds the target and predicted rows |
 | Target delve | 50 | The delve being aimed for |
+| Prediction | Full run | Which predicted times the target rows show: to go, the full run, or both |
 
 ### Counters
 

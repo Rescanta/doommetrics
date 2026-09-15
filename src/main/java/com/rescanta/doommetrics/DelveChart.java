@@ -400,12 +400,12 @@ class DelveChart extends JPanel
 		else if (detail.isFinished())
 		{
 			// Walked in and straight back out, or died on the first one - a real thing that
-			// happened, and not the same as a run that has not banked its first delve yet.
-			text = "This run banked no delves.";
+			// happened, and not the same as a run that has not completed its first delve yet.
+			text = "This run completed no delves.";
 		}
 		else
 		{
-			text = "No delve banked yet.";
+			text = "No delve completed yet.";
 		}
 
 		FontMetrics metrics = g2.getFontMetrics();

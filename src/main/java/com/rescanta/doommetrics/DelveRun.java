@@ -596,7 +596,7 @@ class DelveRun
 	}
 
 	/**
-	 * How many delves at or past {@link #DEEP_DELVE_LEVEL} this run banked - what a deep delve rate
+	 * How many delves at or past {@link #DEEP_DELVE_LEVEL} this run completed - what a deep delve rate
 	 * counts, whether that rate covers this run alone or a lifetime of them.
 	 */
 	int deepCleared()
@@ -615,10 +615,10 @@ class DelveRun
 	}
 
 	/**
-	 * Deep delves banked per hour of run time, counting the shallow delves against you.
+	 * Deep delves completed per hour of run time, counting the shallow delves against you.
 	 * Delve 8 counts towards the numerator even though it is excluded from {@link #deepPace}.
 	 */
-	Double runPace()
+	Double fullPace()
 	{
 		int deep = deepCleared();
 		double seconds = clearedElapsed().toMillis() / 1000.0;
@@ -684,7 +684,7 @@ class DelveRun
 	 *
 	 * <p>Two things a flat average cannot know are left in deliberately, because every other figure
 	 * here is a flat average and a prediction that quietly corrected for them would be the odd one
-	 * out: delves 1-8 are quicker than the mean, so a target set during the warm-up reads long, and
+	 * out: delves 1-8 are quicker than the mean, so a target set during delves 1-8 reads long, and
 	 * delves get slower the deeper they go, so a distant target reads short.
 	 */
 	Duration untilTarget(int target, Instant now)
@@ -738,7 +738,7 @@ class DelveRun
 	}
 
 	/**
-	 * The pace this run is read by: the one {@code configured} while the run is going, and run pace
+	 * The pace this run is read by: the one {@code configured} while the run is going, and full pace
 	 * once it is over. Deep pace says how fast more deep delves could be added, which a run that has
 	 * ended is not going to do - what is left to say is how fast it went, start to finish.
 	 */
@@ -749,7 +749,7 @@ class DelveRun
 
 	Double pace(PaceMode mode)
 	{
-		return mode == PaceMode.RUN_THROUGHPUT ? runPace() : deepPace();
+		return mode == PaceMode.RUN_THROUGHPUT ? fullPace() : deepPace();
 	}
 
 	List<Split> getSplits()

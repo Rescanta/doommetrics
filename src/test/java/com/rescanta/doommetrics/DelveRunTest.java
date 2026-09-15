@@ -149,10 +149,10 @@ public class DelveRunTest
 	}
 
 	@Test
-	public void runPaceCountsDelveEightAndChargesForTheWarmUp()
+	public void fullPaceCountsDelveEightAndChargesForTheShallowDelves()
 	{
-		// Thirteen deep delves (8 through 20) banked in 28:00.
-		assertEquals(27.86, referenceRun().runPace(), DELTA);
+		// Thirteen deep delves (8 through 20) completed in 28:00.
+		assertEquals(27.86, referenceRun().fullPace(), DELTA);
 	}
 
 	@Test
@@ -163,7 +163,7 @@ public class DelveRunTest
 	}
 
 	@Test
-	public void runPaceClimbsAsTheWarmUpAmortises()
+	public void fullPaceClimbsAsTheShallowDelvesAmortise()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 
@@ -180,15 +180,15 @@ public class DelveRunTest
 
 			if (level == 10)
 			{
-				assertEquals(13.85, run.runPace(), DELTA);
+				assertEquals(13.85, run.fullPace(), DELTA);
 			}
 			else if (level == 15)
 			{
-				assertEquals(23.41, run.runPace(), DELTA);
+				assertEquals(23.41, run.fullPace(), DELTA);
 			}
 		}
 
-		assertEquals(27.86, run.runPace(), DELTA);
+		assertEquals(27.86, run.fullPace(), DELTA);
 
 		// Deep pace is flat throughout because every delve 9+ took the same 1:30.
 		assertEquals(40.0, run.deepPace(), DELTA);
@@ -202,8 +202,8 @@ public class DelveRunTest
 		run.complete(8, at(600), null);
 
 		assertNull(run.deepPace());
-		// Delve 8 still counts towards run pace: one deep delve in 10:00.
-		assertEquals(6.0, run.runPace(), DELTA);
+		// Delve 8 still counts towards full pace: one deep delve in 10:00.
+		assertEquals(6.0, run.fullPace(), DELTA);
 	}
 
 	/**
@@ -358,7 +358,7 @@ public class DelveRunTest
 		assertEquals(Duration.ofMinutes(28), run.clearedElapsed());
 		assertEquals(20, run.lastLevel());
 		assertEquals(21, run.getDiedOnLevel());
-		assertEquals(27.86, run.runPace(), DELTA);
+		assertEquals(27.86, run.fullPace(), DELTA);
 		assertEquals(40.0, run.deepPace(), DELTA);
 	}
 
@@ -383,7 +383,7 @@ public class DelveRunTest
 	}
 
 	@Test
-	public void anEndedRunIsReadByRunPace()
+	public void anEndedRunIsReadByFullPace()
 	{
 		DelveRun run = referenceRun();
 		assertEquals(PaceMode.DEEP_AVERAGE, run.paceMode(PaceMode.DEEP_AVERAGE));
@@ -412,7 +412,7 @@ public class DelveRunTest
 		assertEquals(Duration.ofSeconds(1406), run.clearedElapsed());
 
 		// Eight deep delves (8 through 15) in 23:26, not the single delve the old code counted.
-		assertEquals(20.48, run.runPace(), DELTA);
+		assertEquals(20.48, run.fullPace(), DELTA);
 		assertEquals(33.20, run.deepPace(), DELTA);
 	}
 

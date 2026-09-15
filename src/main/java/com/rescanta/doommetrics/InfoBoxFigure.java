@@ -205,7 +205,7 @@ public enum InfoBoxFigure
 
 				return pace == null
 					? mode + (mode == PaceMode.RUN_THROUGHPUT
-						? "</br>No deep delve banked"
+						? "</br>No deep delve completed"
 						: "</br>Nothing deep enough to average yet")
 					: mode + "</br>" + DoomFormat.pace(pace);
 			}
