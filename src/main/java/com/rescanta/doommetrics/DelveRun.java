@@ -707,6 +707,37 @@ class DelveRun
 	}
 
 	/**
+	 * How long this run takes from its start to clearing {@code target}: the real time once it has,
+	 * and the time so far plus {@link #untilTarget} until then. Null when there is no answer to
+	 * give: no target set, the run over short of it, no delve 9+ cleared yet to average over, or a
+	 * run joined already past the target, whose clear of it nobody saw.
+	 *
+	 * <p>The real time stays put however much deeper the run goes, and survives the run ending.
+	 *
+	 * <p>Built on {@link #untilTarget} rather than beside it, so the two rows can never disagree.
+	 * That also brings its floor along: the figure holds still while a delve runs to the average,
+	 * and counts up for as long as one overruns it, which is the run getting slower.
+	 */
+	Duration runToTarget(int target, Instant now)
+	{
+		if (hasReached(target))
+		{
+			for (Split split : splits)
+			{
+				if (split.level == target)
+				{
+					return Duration.between(startedAt, split.completedAt);
+				}
+			}
+
+			return null;
+		}
+
+		Duration remaining = untilTarget(target, now);
+		return remaining == null ? null : liveElapsed(now).plus(remaining);
+	}
+
+	/**
 	 * The pace this run is read by: the one {@code configured} while the run is going, and run pace
 	 * once it is over. Deep pace says how fast more deep delves could be added, which a run that has
 	 * ended is not going to do - what is left to say is how fast it went, start to finish.

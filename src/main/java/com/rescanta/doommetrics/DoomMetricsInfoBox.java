@@ -66,7 +66,13 @@ class DoomMetricsInfoBox extends InfoBox
 	@Override
 	public boolean render()
 	{
-		return config.displayStyle() == DisplayStyle.INFOBOX && plugin.getDisplayRun() != null;
+		if (config.displayStyle() != DisplayStyle.INFOBOX)
+		{
+			return false;
+		}
+
+		DelveRun run = plugin.getDisplayRun();
+		return run != null && config.infoboxFigure().shown(run, config);
 	}
 
 	@Override

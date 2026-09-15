@@ -100,7 +100,9 @@ public interface DoomMetricsConfig extends Config
 			+ "<br>The counters here are independent of the counter checkboxes below, which choose"
 			+ " what the panel draws."
 			+ "<br>Time to target counts down to the delve set under Target delve, whether or not"
-			+ " Show target delve is switched on.",
+			+ " Show target delve is switched on, and is taken down once you reach it."
+			+ "<br>Predicted run time is the time from delve 1 to that delve, and the real time"
+			+ " once you reach it.",
 		position = 9
 	)
 	default InfoBoxFigure infoboxFigure()
@@ -145,7 +147,7 @@ public interface DoomMetricsConfig extends Config
 		keyName = "showTargetDelve",
 		name = "Show target delve",
 		description = "Show the delve you are aiming for and how long it is predicted to take, in"
-			+ " the overlay and the side panel."
+			+ " the overlay and the side panel. Prediction picks which times are shown."
 			+ "<br>Reaching it is always announced in chat, whatever the chat interval is set to.",
 		position = 14
 	)
@@ -167,6 +169,22 @@ public interface DoomMetricsConfig extends Config
 	default int targetDelve()
 	{
 		return 50;
+	}
+
+	@ConfigItem(
+		keyName = "targetPrediction",
+		name = "Prediction",
+		description = "Which predicted times the target rows show."
+			+ "<br>Remaining is To go, the time from now to the target delve."
+			+ "<br>Full run is Total, the time from delve 1 to the target delve. Once you reach it,"
+			+ " Total shows the time it actually took and keeps it as you go deeper."
+			+ "<br>Both shows the two."
+			+ "<br>Once the target is reached, To go is dropped and the Target row says so.",
+		position = 16
+	)
+	default TargetPrediction targetPrediction()
+	{
+		return TargetPrediction.REMAINING;
 	}
 
 	@ConfigItem(

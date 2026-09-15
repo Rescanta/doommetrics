@@ -44,8 +44,8 @@ class DoomMetricsPanel extends PluginPanel
 	/** The figures mirrored from the overlay, or null when there is no run to show. */
 	static final class Live
 	{
-		/** How many rows a run can fill: delve, time, pace, and the target pair. */
-		static final int ROWS = 5;
+		/** How many rows a run can fill: delve, time, pace, the target, and its two predictions. */
+		static final int ROWS = 6;
 
 		/** Which of those rows are drawn large, at the head of the section. */
 		static final int HERO_ROWS = 2;
@@ -73,9 +73,11 @@ class DoomMetricsPanel extends PluginPanel
 		 * The live rows of a run, formatted for drawing. The overlay draws the same figures itself
 		 * from the run; this is the panel's copy of them.
 		 *
-		 * @param target the delve being aimed for, or 0 when the target rows are switched off
+		 * @param target     the delve being aimed for, or 0 when the target rows are switched off
+		 * @param prediction which predicted times the target rows carry
 		 */
-		static Live of(DelveRun display, PaceMode configured, int target)
+		static Live of(DelveRun display, PaceMode configured, int target,
+			TargetPrediction prediction)
 		{
 			PaceMode mode = display.paceMode(configured);
 			boolean died = display.isFinished() && display.getEndReason() == EndReason.DIED;
@@ -100,6 +102,8 @@ class DoomMetricsPanel extends PluginPanel
 			}
 
 			Instant now = Instant.now();
+			String remainingLabel = target > 0 ? prediction.remainingLabel(display, target) : null;
+			String totalLabel = target > 0 ? prediction.totalLabel(display) : null;
 
 			return new Live(
 				new String[]{
@@ -107,16 +111,18 @@ class DoomMetricsPanel extends PluginPanel
 					// The asterisk marks a run joined part way through, whose start is a guess.
 					display.isPartial() ? "Time*" : "Time",
 					mode.toString(),
-					target > 0 ? "Target" : null,
-					target > 0 ? "Predicted" : null,
+					target > 0 ? TargetPrediction.targetLabel(display, target) : null,
+					remainingLabel,
+					totalLabel,
 				},
 				new String[]{
 					delveValue,
 					DoomFormat.duration(display.displayElapsed(now)),
 					DoomFormat.pace(display.pace(mode)),
 					target > 0 ? Integer.toString(target) : null,
-					target > 0 ? DoomFormat.prediction(display.untilTarget(target, now),
-						display.hasReached(target)) : null,
+					remainingLabel != null
+						? TargetPrediction.remainingValue(display, target, now) : null,
+					totalLabel != null ? TargetPrediction.totalValue(display, target, now) : null,
 				},
 				display.isFinished(),
 				died);

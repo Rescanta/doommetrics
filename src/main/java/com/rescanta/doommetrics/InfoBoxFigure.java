@@ -32,6 +32,7 @@ public enum InfoBoxFigure
 	RUN_TIMER("Run timer"),
 	PACE("Pace"),
 	TIME_TO_TARGET("Time to target"),
+	TARGET_RUN_TIME("Predicted run time"),
 
 	BLOOD_BARRAGE_HEAL("Blood barrage heal", CombatMetric.BLOOD_BARRAGE_HEAL),
 	AGS_HEAL("AGS heal", CombatMetric.AGS_HEAL),
@@ -84,6 +85,16 @@ public enum InfoBoxFigure
 	}
 
 	/**
+	 * Whether the square has anything to hold for this run. Only the time to a target ever has
+	 * nothing: once the target is behind you there is no time left to count down, and a square
+	 * that only says so is one more thing on screen saying nothing.
+	 */
+	boolean shown(DelveRun run, DoomMetricsConfig config)
+	{
+		return this != TIME_TO_TARGET || !run.hasReached(config.targetDelve());
+	}
+
+	/**
 	 * What the square reads, shortened to fit it. Never null and never empty, so a square that is
 	 * on screen always has a figure in it.
 	 */
@@ -102,15 +113,21 @@ public enum InfoBoxFigure
 
 			case TIME_TO_TARGET:
 			{
-				int target = config.targetDelve();
+				Duration remaining = run.untilTarget(config.targetDelve(), now);
+				return remaining == null ? "-" : DoomFormat.compactDuration(remaining);
+			}
 
-				if (run.hasReached(target))
+			case TARGET_RUN_TIME:
+			{
+				int target = config.targetDelve();
+				Duration total = run.runToTarget(target, now);
+
+				if (total != null)
 				{
-					return "Done";
+					return DoomFormat.compactDuration(total);
 				}
 
-				Duration remaining = run.untilTarget(target, now);
-				return remaining == null ? "-" : DoomFormat.compactDuration(remaining);
+				return run.hasReached(target) ? "Done" : "-";
 			}
 
 			default:
@@ -144,8 +161,13 @@ public enum InfoBoxFigure
 					: DoomColors.PLAIN;
 
 			case TIME_TO_TARGET:
+				return run.untilTarget(config.targetDelve(), now) != null
+					? DoomColors.PLAIN
+					: DoomColors.DIMMED;
+
+			case TARGET_RUN_TIME:
 				return run.hasReached(config.targetDelve())
-					|| run.untilTarget(config.targetDelve(), now) != null
+					|| run.runToTarget(config.targetDelve(), now) != null
 					? DoomColors.PLAIN
 					: DoomColors.DIMMED;
 
@@ -173,14 +195,8 @@ public enum InfoBoxFigure
 					: "Cleared delve " + run.lastLevel();
 
 			case RUN_TIMER:
-			{
-				String elapsed = "Run time</br>" + DoomFormat.duration(run.displayElapsed(now));
-
-				// The panel says this with an asterisk it has the width for; here it is said out.
-				return run.isPartial()
-					? elapsed + "</br>Joined part way through, so the run is at least this long"
-					: elapsed;
-			}
+				return partialNote(run,
+					"Run time</br>" + DoomFormat.duration(run.displayElapsed(now)));
 
 			case PACE:
 			{
@@ -197,23 +213,30 @@ public enum InfoBoxFigure
 			case TIME_TO_TARGET:
 			{
 				int target = config.targetDelve();
+				Duration remaining = run.untilTarget(target, now);
+
+				return "Predicted to delve " + target + "</br>" + (remaining != null
+					? DoomFormat.duration(remaining)
+					: nothingToPredict(run));
+			}
+
+			case TARGET_RUN_TIME:
+			{
+				int target = config.targetDelve();
+				Duration total = run.runToTarget(target, now);
 
 				if (run.hasReached(target))
 				{
-					return "Delve " + target + "</br>Reached";
+					return total == null
+						? "Delve " + target + "</br>Reached before the run was joined"
+						: partialNote(run, "Delve " + target + " reached in</br>"
+							+ DoomFormat.duration(total));
 				}
 
-				Duration remaining = run.untilTarget(target, now);
-
-				if (remaining != null)
-				{
-					return "Predicted to delve " + target + "</br>"
-						+ DoomFormat.duration(remaining);
-				}
-
-				return "Predicted to delve " + target + "</br>" + (run.isFinished()
-					? "The run is over"
-					: "No delve " + DelveRun.PACE_AVERAGE_FROM_LEVEL + " cleared to predict from");
+				return total == null
+					? "Predicted run to delve " + target + "</br>" + nothingToPredict(run)
+					: partialNote(run, "Predicted run to delve " + target + "</br>"
+						+ DoomFormat.duration(total));
 			}
 
 			default:
@@ -229,6 +252,26 @@ public enum InfoBoxFigure
 					: tooltip + "</br>Counted from:</br>" + String.join("</br>", sources);
 			}
 		}
+	}
+
+	/**
+	 * A time measured from the start of the run, with a line saying the start is a guess when the
+	 * run was joined part way through. The panel says this with an asterisk it has the width for;
+	 * here it is said out.
+	 */
+	private static String partialNote(DelveRun run, String tooltip)
+	{
+		return run.isPartial()
+			? tooltip + "</br>Joined part way through, so the run is at least this long"
+			: tooltip;
+	}
+
+	/** Why a target has no predicted time, for a target not yet reached. */
+	private static String nothingToPredict(DelveRun run)
+	{
+		return run.isFinished()
+			? "The run is over"
+			: "No delve " + DelveRun.PACE_AVERAGE_FROM_LEVEL + " cleared to predict from";
 	}
 
 	/** The one source this figure counts, or null for a group or a figure that is not a counter. */

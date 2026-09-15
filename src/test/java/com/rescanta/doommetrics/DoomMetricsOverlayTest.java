@@ -75,11 +75,14 @@ public class DoomMetricsOverlayTest
 		assertFits(metrics, PaceMode.DEEP_AVERAGE.toString(), "999.9/hr");
 		assertFits(metrics, PaceMode.RUN_THROUGHPUT.toString(), "999.9/hr");
 
-		// The target rows, at the deepest target that can be set and the longest wait it implies -
-		// "Predicted" is the widest label the overlay has, so it is the one worth measuring.
+		// The target rows, at the deepest target that can be set and the longest wait it implies.
+		String longest = DoomFormat.duration(Duration.ofHours(99));
 		assertFits(metrics, "Target", deepest);
-		assertFits(metrics, "Predicted", DoomFormat.duration(Duration.ofHours(99)));
-		assertFits(metrics, "Predicted", DoomFormat.prediction(null, true));
+		assertFits(metrics, "Target reached", deepest);
+		assertFits(metrics, "To go", longest);
+		assertFits(metrics, "Total", longest);
+		assertFits(metrics, "Total*", longest);
+		assertFits(metrics, "Total*", "Reached");
 	}
 
 	@Test

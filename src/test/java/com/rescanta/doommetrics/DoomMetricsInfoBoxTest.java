@@ -60,13 +60,15 @@ public class DoomMetricsInfoBoxTest
 
 		// The target figure has one reading that is not a clock, and the deepest target anyone can
 		// set is a long way off at the pace the shallow delves are going.
-		ceiling.config.targetDelve = DoomMetricsConfig.MAX_DELVE;
-		assertFits(metrics, InfoBoxFigure.TIME_TO_TARGET,
-			InfoBoxFigure.TIME_TO_TARGET.text(ceiling.run, ceiling.config, now));
+		for (InfoBoxFigure figure : new InfoBoxFigure[]{InfoBoxFigure.TIME_TO_TARGET,
+			InfoBoxFigure.TARGET_RUN_TIME})
+		{
+			ceiling.config.targetDelve = DoomMetricsConfig.MAX_DELVE;
+			assertFits(metrics, figure, figure.text(ceiling.run, ceiling.config, now));
 
-		ceiling.config.targetDelve = 10;
-		assertFits(metrics, InfoBoxFigure.TIME_TO_TARGET,
-			InfoBoxFigure.TIME_TO_TARGET.text(ceiling.run, ceiling.config, now));
+			ceiling.config.targetDelve = 10;
+			assertFits(metrics, figure, figure.text(ceiling.run, ceiling.config, now));
+		}
 	}
 
 	@Test
@@ -164,16 +166,57 @@ public class DoomMetricsInfoBoxTest
 		config.targetDelve = 40;
 		assertNotEquals("a nearer target is a shorter wait", further, box.getText());
 
-		// Delve 23 is behind this run, so there is nothing left to predict.
+		// Delve 23 is behind this run, so there is nothing left to count down and no square.
 		config.targetDelve = 10;
-		assertEquals("Done", box.getText());
-		assertEquals("Delve 10</br>Reached", box.getTooltip());
+		assertFalse("a reached target takes the square down", box.render());
 
 		// A run with no delve 9 behind it has no average, so there is nothing to predict from.
 		plugin.run = PreviewScene.named("shallow").run;
 		config.targetDelve = 50;
+		assertTrue(box.render());
 		assertEquals("-", box.getText());
 		assertEquals("nothing behind the figure yet", DoomColors.DIMMED, box.getTextColor());
+	}
+
+	/**
+	 * The whole run to a target is the run so far and the time to go, and once the target is
+	 * behind you it is the time the run really took - which, unlike the countdown, is worth a
+	 * square.
+	 */
+	@Test
+	public void readsTheWholeRunToTheTargetAndKeepsItOnceThere()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin();
+		DoomMetricsInfoBox box = box(plugin, config);
+		Instant now = Instant.now();
+
+		DelveRun run = new DelveRun(now.minusSeconds(1800), 1, false);
+		run.complete(8, now.minusSeconds(1200), null);
+		run.complete(9, now.minusSeconds(1100), null);
+		run.complete(10, now.minusSeconds(1000), null);
+
+		plugin.run = run;
+		config.displayStyle = DisplayStyle.INFOBOX;
+		config.infoboxFigure = InfoBoxFigure.TARGET_RUN_TIME;
+
+		config.targetDelve = 50;
+		assertTrue(box.render());
+		assertTrue("a target ahead of you reads as a run length: " + box.getText(),
+			box.getText().matches("\\d+h\\d\\d"));
+		assertTrue(box.getTooltip().startsWith("Predicted run to delve 50</br>"));
+
+		// Delve 9 was cleared 11:40 in, and stays that however long ago it was.
+		config.targetDelve = 9;
+		assertTrue("a reached target keeps its square", box.render());
+		assertEquals("11:40", box.getText());
+		assertEquals("Delve 9 reached in</br>11:40", box.getTooltip());
+		assertEquals(DoomColors.PLAIN, box.getTextColor());
+
+		plugin.run = PreviewScene.named("shallow").run;
+		config.targetDelve = 50;
+		assertEquals("-", box.getText());
+		assertEquals(DoomColors.DIMMED, box.getTextColor());
 	}
 
 	/**

@@ -86,7 +86,7 @@ final class PreviewScene
 		return run == null
 			? null
 			: DoomMetricsPanel.Live.of(run, from.paceMode,
-				from.showTargetDelve ? from.targetDelve : 0);
+				from.showTargetDelve ? from.targetDelve : 0, from.targetPrediction);
 	}
 
 	/** The sitting's figures with the run in progress counted in, as the panel is handed them. */
@@ -300,9 +300,12 @@ final class PreviewScene
 		}
 
 		// The same rows the deep scene has, so the two are comparable line for line - which is
-		// what DoomMetricsOverlayTest measures the widest figures against.
+		// what DoomMetricsOverlayTest measures the widest figures against. Aimed at the deepest
+		// target there is, both because it is the longest wait and because a target already behind
+		// the run would drop its countdown row and leave the two a line apart.
 		PreviewConfig config = new PreviewConfig();
 		config.showTargetDelve = true;
+		config.targetDelve = DoomMetricsConfig.MAX_DELVE;
 
 		return new PreviewScene("ceiling", "Every counter and every clock at the widest a run can "
 			+ "make it, which is what the overlay labels and the panel's tiles have to fit beside",

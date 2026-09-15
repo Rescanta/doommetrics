@@ -101,9 +101,22 @@ class DoomMetricsOverlay extends OverlayPanel
 		if (config.showTargetDelve())
 		{
 			int target = config.targetDelve();
-			addLine("Target", Integer.toString(target));
-			addLine("Predicted",
-				DoomFormat.prediction(run.untilTarget(target, now), run.hasReached(target)));
+			TargetPrediction prediction = config.targetPrediction();
+			addLine(TargetPrediction.targetLabel(run, target), Integer.toString(target));
+
+			String remaining = prediction.remainingLabel(run, target);
+
+			if (remaining != null)
+			{
+				addLine(remaining, TargetPrediction.remainingValue(run, target, now));
+			}
+
+			String total = prediction.totalLabel(run);
+
+			if (total != null)
+			{
+				addLine(total, TargetPrediction.totalValue(run, target, now));
+			}
 		}
 
 		addCombatLines(run, now);
