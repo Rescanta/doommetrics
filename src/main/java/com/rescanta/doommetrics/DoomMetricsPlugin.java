@@ -2405,7 +2405,7 @@ public class DoomMetricsPlugin extends Plugin
 	 * <p>The session figures count the run in progress as it goes, rather than waiting for it to
 	 * end. They are built from the same two numbers the run would be banked with, so what the
 	 * panel shows during a run is what banking it will leave behind, and a sitting holding one run
-	 * reads exactly what that run's Run pace does.
+	 * reads exactly what that run's Full pace does.
 	 *
 	 * <p>The lifetime figures cannot move while a run is in progress - a run joins them only once
 	 * it is banked - so what is shown there is always the character as they stood when this sitting
@@ -2456,7 +2456,7 @@ public class DoomMetricsPlugin extends Plugin
 	private static String tooltip(DelveTotals totals)
 	{
 		return totals.isEmpty()
-			? "Nothing banked yet"
+			? "No delves completed yet"
 			: String.format("%d deep %s in %s of run time",
 				totals.deep, totals.deep == 1 ? "delve" : "delves",
 				DoomFormat.tickDuration(totals.ticks));

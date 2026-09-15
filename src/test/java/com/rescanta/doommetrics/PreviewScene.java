@@ -178,7 +178,7 @@ final class PreviewScene
 
 	private static PreviewScene shallow(Instant now)
 	{
-		return new PreviewScene("shallow", "Four delves in: no deep delve banked yet, so the pace "
+		return new PreviewScene("shallow", "Four delves in: no deep delve completed yet, so the pace "
 			+ "has nothing to report and the counters have barely moved",
 			new PreviewConfig(), run(3, now, counters(1)), session(), lifetime(),
 			stats(Duration.ofMinutes(4), 0, 4, 1387), rows());
@@ -214,7 +214,7 @@ final class PreviewScene
 		config.paceMode = PaceMode.RUN_THROUGHPUT;
 
 		return new PreviewScene("combined", "The same run with the counters folded into their "
-			+ "groups, and run pace in place of deep pace",
+			+ "groups, and full pace in place of deep pace",
 			config, run, session(), lifetime(),
 			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
 	}
@@ -270,8 +270,8 @@ final class PreviewScene
 			+ "empty chart, and rates with nothing to average",
 			new PreviewConfig(), run(1, now, NOTHING), new CombatTotals(), new CombatTotals(),
 			new DoomMetricsPanel.Stats(DoomFormat.duration(Duration.ofMinutes(2)),
-				DoomFormat.pace(null), "Nothing banked yet", "0",
-				DoomFormat.pace(null), "Nothing banked yet", null),
+				DoomFormat.pace(null), "No delves completed yet", "0",
+				DoomFormat.pace(null), "No delves completed yet", null),
 			Collections.emptyList());
 	}
 
@@ -569,7 +569,7 @@ final class PreviewScene
 	private static String tooltip(DelveTotals totals)
 	{
 		return totals.isEmpty()
-			? "Nothing banked yet"
+			? "No delves completed yet"
 			: String.format("%d deep %s in %s of run time",
 				totals.deep, totals.deep == 1 ? "delve" : "delves",
 				DoomFormat.tickDuration(totals.ticks));
