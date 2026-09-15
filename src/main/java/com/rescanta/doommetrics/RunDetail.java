@@ -79,7 +79,23 @@ final class RunDetail
 			this.quantity = quantity;
 			this.kept = kept;
 		}
+
+		/**
+		 * Whether the game only signalled a unique here without saying which - see
+		 * {@link DelveRun#uniqueSignalled}. Drawn as a question mark rather than an item.
+		 */
+		boolean isUnknown()
+		{
+			return itemId == DelveRun.UNKNOWN_UNIQUE;
+		}
 	}
+
+	/**
+	 * What an unknown unique could have been, for the line under one: the three tradeable uniques,
+	 * which always make the hole glow, and the pet, which only does the first time.
+	 */
+	static final String UNKNOWN_UNIQUE_CANDIDATES =
+		"Avernic treads, Mokhaiotl cloth or Eye of ayak - or Dom, if it was your first";
 
 	private static final RunDetail EMPTY = new RunDetail(Collections.emptyList(),
 		Collections.emptyList(), new CombatTotals(), false, false, 0);
@@ -163,6 +179,10 @@ final class RunDetail
 	 * yet - and afterwards only if the claim reached it. The second eye of a run is kept by a claim
 	 * of two and not by a claim of one, which is why each drop carries the count it brought the
 	 * pile to rather than a flag for its item.
+	 *
+	 * <p>An unknown unique is kept the same way, and so is only ever kept while the run is going:
+	 * nothing is claimed under its made-up item id, and every way of walking out with it would have
+	 * named it and put the real item in its place.
 	 */
 	private static List<Drop> dropsOf(DelveRun run)
 	{

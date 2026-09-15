@@ -296,6 +296,22 @@ public class RunDetailTest
 		assertTrue(RunDetail.of(run).drops().get(0).kept);
 	}
 
+	/** An unknown unique is in the pile while the run goes, and lost once it is over unnamed. */
+	@Test
+	public void anUnknownUniqueIsLostWhenTheRunEndsWithoutNamingIt()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.uniqueSignalled();
+
+		RunDetail.Drop going = RunDetail.of(run).drops().get(0);
+		assertTrue(going.isUnknown());
+		assertTrue(going.kept);
+
+		run.end(EndReason.DIED, at(90), 2);
+		assertFalse(RunDetail.of(run).drops().get(0).kept);
+	}
+
 	/** A claim keeps the drops it reached: a claim of one eye keeps the first eye and not the second. */
 	@Test
 	public void aClaimKeepsTheDropsItReached()

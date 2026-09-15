@@ -12,6 +12,33 @@ import org.junit.Test;
 
 public class IconArtTest
 {
+	/** Drawn at the size it is asked for, with a transparent margin and the gold mark in the middle. */
+	@Test
+	public void theUnknownUniqueIsAGoldMarkOnABadge()
+	{
+		for (int size : new int[]{IconArt.SMALL, 32})
+		{
+			BufferedImage image = IconArt.unknownUnique(size, size);
+			assertEquals(size, image.getWidth());
+			assertEquals(size, image.getHeight());
+			assertEquals("the corner is outside the badge", 0, image.getRGB(0, 0) >>> 24);
+
+			boolean gold = false;
+
+			for (int y = 0; y < size; y++)
+			{
+				for (int x = 0; x < size; x++)
+				{
+					Color pixel = new Color(image.getRGB(x, y), true);
+					gold |= pixel.getAlpha() == 255 && pixel.getRed() > 200 && pixel.getGreen() > 150
+						&& pixel.getBlue() < 120;
+				}
+			}
+
+			assertTrue("a " + size + "px badge should carry the gold mark", gold);
+		}
+	}
+
 	@Test
 	public void everyCounterDrawnIsPicturedByAnItemOrASpriteButNeverBoth()
 	{

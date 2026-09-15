@@ -186,6 +186,9 @@ class DelveChart extends JPanel
 	/** The game's own colour for a stack's count. */
 	private static final Color STACK_COLOR = new Color(0xFF, 0xFF, 0x00);
 
+	/** What an unknown unique is drawn as, in a drop's slot. */
+	private static final BufferedImage UNKNOWN_ICON = IconArt.unknownUnique(ICON_WIDTH, ICON_HEIGHT);
+
 	private RunDetail detail = RunDetail.empty();
 
 	/** Counters the reader has switched off. Never repainted for the ones left on - see below. */
@@ -1053,7 +1056,7 @@ class DelveChart extends JPanel
 			g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, LOST_ALPHA));
 		}
 
-		BufferedImage image = itemIcons.apply(drop.itemId);
+		BufferedImage image = drop.isUnknown() ? UNKNOWN_ICON : itemIcons.apply(drop.itemId);
 
 		if (image != null && image.getWidth() > 0 && image.getHeight() > 0)
 		{
@@ -1126,10 +1129,26 @@ class DelveChart extends JPanel
 			return null;
 		}
 
+		if (drop.isUnknown())
+		{
+			return "<html>" + drop.name + " - delve " + drop.level + "<br>"
+				+ RunDetail.UNKNOWN_UNIQUE_CANDIDATES
+				+ (drop.kept ? "" : "<br>" + lostHow(detail)) + "</html>";
+		}
+
 		String name = drop.quantity > 1 ? drop.quantity + " x " + drop.name : drop.name;
 		return drop.kept
 			? name + " - delve " + drop.level
 			: name + " - delve " + drop.level + ", lost when the run ended unclaimed";
+	}
+
+	/**
+	 * How a drop that never left with the run was lost, for the line under an unknown unique - the
+	 * one drop where how it went is most of what there is to say.
+	 */
+	static String lostHow(RunDetail detail)
+	{
+		return detail.diedOn() > 0 ? "Lost when you died" : "Lost when the run ended unclaimed";
 	}
 
 	/** The delve nearest the pointer, or 0 when the pointer is outside either plot. */
