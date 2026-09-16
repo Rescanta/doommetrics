@@ -364,8 +364,18 @@ public class DoomMetricsPlugin extends Plugin
 
 	private DelveRun run;
 
-	/** The last run that ended for a reason worth showing, kept for the linger window. */
+	/**
+	 * The last run that ended for a reason worth showing: kept for the linger window, and drawn by
+	 * the run detail window until the next run starts.
+	 */
 	private DelveRun lastRun;
+
+	/**
+	 * Whether Clear has taken {@link #lastRun} off the game screen. The detail window goes on
+	 * drawing it: Clear is for what sits over the game, and the window is only up because it was
+	 * opened.
+	 */
+	private boolean lastRunCleared;
 
 	/**
 	 * Set while {@link #run} is being held open across a lost connection, and null the rest of the
@@ -522,6 +532,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		run = null;
 		lastRun = null;
+		lastRunCleared = false;
 		resumeCheck = null;
 		runProfile = null;
 		loginAt = null;
@@ -554,7 +565,7 @@ public class DoomMetricsPlugin extends Plugin
 			return run;
 		}
 
-		if (lastRun == null || lastRun.getEndedAt() == null)
+		if (lastRun == null || lastRunCleared || lastRun.getEndedAt() == null)
 		{
 			return null;
 		}
@@ -2061,7 +2072,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		if (event.getOverlay() == overlay && CLEAR_OPTION.equals(event.getEntry().getOption()))
 		{
-			lastRun = null;
+			lastRunCleared = true;
 		}
 	}
 
@@ -2078,7 +2089,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		if (event.getInfoBox() == infoBox && CLEAR_OPTION.equals(event.getEntry().getOption()))
 		{
-			lastRun = null;
+			lastRunCleared = true;
 		}
 	}
 
@@ -2108,6 +2119,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		run = new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null);
 		lastRun = null;
+		lastRunCleared = false;
 		resumeCheck = null;
 		runProfile = runHistoryStore.currentProfile();
 		// Give the boss the full grace period to appear, whatever the counter was doing before.
@@ -2296,6 +2308,7 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		lastRun = ended;
+		lastRunCleared = false;
 
 		recordRun(ended, diedOnLevel);
 
@@ -2541,8 +2554,8 @@ public class DoomMetricsPlugin extends Plugin
 	/**
 	 * The run the detail window is about: the one in progress, or the last one that ended.
 	 *
-	 * <p>Unlike {@link #getDisplayRun} this ignores the linger setting. That setting is there so an
-	 * overlay nobody asked for does not sit over the game world for the rest of the evening; a
+	 * <p>Unlike {@link #getDisplayRun} this ignores the linger setting and Clear. Both are there so
+	 * an overlay nobody asked for does not sit over the game world for the rest of the evening; a
 	 * window is only on screen because it was opened, and a reader who opens it half an hour after
 	 * a run wants the run rather than an empty frame.
 	 */

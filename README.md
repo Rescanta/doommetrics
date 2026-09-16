@@ -80,7 +80,8 @@ Deep pace          -
 
 The time shown for a finished run is the time through the last delve you cleared, so it always
 matches the pace beside it. Right click the overlay and pick **Clear** to dismiss it early, or set
-the linger to 0 to hide it straight away. Each row can be turned off.
+the linger to 0 to hide it straight away - either way the run detail window, if you have it open,
+goes on showing the run. Each row can be turned off.
 
 A run the plugin joined part way through - by being enabled mid trip - labels its timer `Time*`,
 because its start time is a guess.
