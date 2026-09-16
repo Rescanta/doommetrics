@@ -207,6 +207,12 @@ class DelveChart extends JPanel
 
 	private int deepest;
 
+	/**
+	 * The delve at the left edge: 1 for a run watched from the start, and the first delve seen for
+	 * one joined part way through, whose earlier delves have no columns to leave room for.
+	 */
+	private int shallowest = 1;
+
 	/** Hands back an item's icon, or null while there is none to be had. */
 	private IntFunction<BufferedImage> itemIcons = itemId -> null;
 
@@ -273,6 +279,7 @@ class DelveChart extends JPanel
 	{
 		this.detail = detail;
 		this.deepest = detail.deepest();
+		this.shallowest = detail.shallowest();
 		this.window = windowFor(detail.delves().size());
 		this.hovered = 0;
 		rescale();
@@ -454,13 +461,13 @@ class DelveChart extends JPanel
 	/** Where a delve sits along the shared axis. */
 	private int xFor(int level)
 	{
-		if (deepest <= 1)
+		if (deepest <= shallowest)
 		{
 			return (left() + right()) / 2;
 		}
 
 		return left() + (int) Math.round(
-			(double) (level - 1) / (deepest - 1) * (right() - left()));
+			(double) (level - shallowest) / (deepest - shallowest) * (right() - left()));
 	}
 
 	private int yForCount(long amount)
@@ -614,9 +621,9 @@ class DelveChart extends JPanel
 		g2.drawLine(left(), bottom, right(), bottom);
 		g2.drawLine(left(), countBottom(), right(), countBottom());
 
-		int step = niceStep(deepest, DELVE_TICKS);
+		int step = niceStep(deepest - shallowest + 1, DELVE_TICKS);
 
-		for (int level = step; level <= deepest; level += step)
+		for (int level = ceilTo(shallowest, step); level <= deepest; level += step)
 		{
 			int x = xFor(level);
 			String text = Integer.toString(level);
@@ -831,7 +838,8 @@ class DelveChart extends JPanel
 	/** Whether the delves are far enough apart that a marker on each is a mark and not a smear. */
 	private boolean markersFit()
 	{
-		return deepest <= 1 || (right() - left()) / (deepest - 1) >= MARKER_SPACING;
+		return deepest <= shallowest
+			|| (right() - left()) / (deepest - shallowest) >= MARKER_SPACING;
 	}
 
 	private static Color dim(Color color)
@@ -1162,14 +1170,14 @@ class DelveChart extends JPanel
 			return 0;
 		}
 
-		if (deepest <= 1)
+		if (deepest <= shallowest)
 		{
 			return deepest;
 		}
 
 		double fraction = (double) (px - left()) / Math.max(1, right() - left());
-		int level = 1 + (int) Math.round(fraction * (deepest - 1));
-		return Math.max(1, Math.min(deepest, level));
+		int level = shallowest + (int) Math.round(fraction * (deepest - shallowest));
+		return Math.max(shallowest, Math.min(deepest, level));
 	}
 
 	// -- axis arithmetic --------------------------------------------------------------------
