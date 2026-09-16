@@ -19,6 +19,9 @@ final class SessionClock
 	/** When the client last went to the login screen, or null while logged in. */
 	private Instant pausedAt;
 
+	/** When the connection dropped, while the client is still trying to get it back, or null. */
+	private Instant droppedAt;
+
 	/** The logged out stretches already over, summed. */
 	private Duration paused = Duration.ZERO;
 
@@ -36,18 +39,43 @@ final class SessionClock
 		}
 	}
 
-	/** Stops the clock at a logout. Does nothing before the session has a run in it. */
-	void pause(Instant at)
+	/**
+	 * Notes a dropped connection, without stopping the clock. Most drops reconnect with the
+	 * character still in the world, and the wait is the session's as much as the run's. A drop that
+	 * ends at the login screen instead was a logout from the moment the connection went - see
+	 * {@link #pause}.
+	 */
+	void connectionLost(Instant at)
 	{
-		if (startedAt != null && pausedAt == null)
+		if (droppedAt == null)
 		{
-			pausedAt = at;
+			droppedAt = at;
 		}
 	}
 
-	/** Carries the clock on at a login, leaving out the time spent logged out. */
+	/**
+	 * Stops the clock at a logout, or back at the dropped connection that ended in one. Does
+	 * nothing before the session has a run in it.
+	 */
+	void pause(Instant at)
+	{
+		Instant from = droppedAt != null ? droppedAt : at;
+		droppedAt = null;
+
+		if (startedAt != null && pausedAt == null)
+		{
+			pausedAt = from;
+		}
+	}
+
+	/**
+	 * Carries the clock on at a login, leaving out the time spent logged out. A drop still pending
+	 * was a reconnect, and its wait stays on the clock.
+	 */
 	void resume(Instant at)
 	{
+		droppedAt = null;
+
 		if (pausedAt == null)
 		{
 			return;
@@ -78,6 +106,7 @@ final class SessionClock
 	{
 		startedAt = null;
 		pausedAt = null;
+		droppedAt = null;
 		paused = Duration.ZERO;
 	}
 }

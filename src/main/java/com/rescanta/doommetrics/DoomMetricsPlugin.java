@@ -309,7 +309,7 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private DelveTotals session = new DelveTotals();
 
-	/** This character's lifetime healing, prayer and spec damage, banked run by run. */
+	/** This character's lifetime healing, prayer and spec damage, banked clear by clear. */
 	private CombatTotals lifetimeCombat = new CombatTotals();
 
 	/** The same figures for the current sitting, thrown away when the sitting is. */
@@ -1040,12 +1040,13 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		if (level <= 1 || run == null)
 		{
-			startRun(Instant.now(), level, level > 1);
+			Instant now = Instant.now();
+			startRun(now, level, level > 1);
 
 			if (level > 1)
 			{
 				// Joined, but at the delve's own start, so its first clear is timed like the rest.
-				run.watchedFromDelveStart(Instant.now());
+				run.watchedFromDelveStart(now);
 			}
 		}
 		else
@@ -2191,6 +2192,11 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			sessionClock.pause(Instant.now());
 		}
+		else if (state == GameState.CONNECTION_LOST)
+		{
+			// Only noted: whether the wait counts depends on where the drop ends - see the clock.
+			sessionClock.connectionLost(Instant.now());
+		}
 		else if (state == GameState.LOGGED_IN)
 		{
 			// Every login, not just the first: a hop never pauses the clock, so this is a no-op.
@@ -2380,7 +2386,9 @@ public class DoomMetricsPlugin extends Plugin
 	 * on. The one exception is the first clear of a run we joined part way into a delve: its segment
 	 * starts wherever we happened to pick the run up, which is a guess, so that delve is left out
 	 * of the rates rather than charged a time nobody measured. A run joined between delves, or on
-	 * a delve's chat line, saw that delve start, and is charged like any other.
+	 * a delve's chat line, saw that delve start, and is charged like any other. The run's own pace
+	 * leaves out the same delve - see {@link DelveRun#fullPace} - so what the overlay and the chat
+	 * say of a joined run is what it adds here.
 	 */
 	private void bankClear(DelveRun.Split split)
 	{
@@ -2422,8 +2430,9 @@ public class DoomMetricsPlugin extends Plugin
 	 *
 	 * <p>They reach the session and the in-memory buffer as they are counted - see {@link
 	 * #recordCombat} - but a heal is far too frequent a thing to write config on, so the buffer is
-	 * written out on each clear, when the run ends, and on a reset. Heals since the last clear are
-	 * lost if the client closes mid-delve, the same way the delve itself is.
+	 * written out on each clear, when the run ends, on a reset, and when the plugin is turned off.
+	 * Closing the client does not turn plugins off, so heals since the last clear are lost if the
+	 * client closes mid-delve, the same way the delve itself is.
 	 *
 	 * <p>Guarded the same way the delve rate is: a run held open across a dropped connection can
 	 * outlive the login that made it, and filing one character's healing against another's
@@ -2627,7 +2636,7 @@ public class DoomMetricsPlugin extends Plugin
 	 * The sitting's figures and the character's, as strings for the panel to draw.
 	 *
 	 * <p>Both move clear by clear as a run goes - see {@link #bankClear} - so a sitting holding one
-	 * run reads what that run's Full pace does, and what is shown mid-run is already on disk.
+	 * run reads what that run's Full pace does, and what is shown mid-run is already saved.
 	 */
 	private DoomMetricsPanel.Stats statsSnapshot()
 	{

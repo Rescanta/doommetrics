@@ -727,14 +727,14 @@ class DelveRun
 	}
 
 	/**
-	 * How many delves at or past {@link #DEEP_DELVE_LEVEL} this run completed - what a deep delve rate
+	 * How many of {@code cleared} are at or past {@link #DEEP_DELVE_LEVEL} - what a deep delve rate
 	 * counts, whether that rate covers this run alone or a lifetime of them.
 	 */
-	int deepCleared()
+	private static int deepIn(List<Split> cleared)
 	{
 		int deep = 0;
 
-		for (Split split : splits)
+		for (Split split : cleared)
 		{
 			if (split.level >= DEEP_DELVE_LEVEL)
 			{
@@ -746,13 +746,30 @@ class DelveRun
 	}
 
 	/**
+	 * The clears a pace is built on: every one, less the first clear of a run joined part way into
+	 * a delve - see {@link #lastClearTimed}. That segment starts wherever we happened to pick the
+	 * run up, so it can be a few seconds long, and a delve credited to a few seconds reads as a
+	 * pace nobody could keep. These are the clears the session and lifetime rates take in too, so
+	 * a session holding one run reads what that run's own pace does, joined or not.
+	 */
+	private List<Split> timedSplits()
+	{
+		return firstClearTimed || splits.isEmpty() ? splits : splits.subList(1, splits.size());
+	}
+
+	/**
 	 * Deep delves completed per hour of run time, counting the shallow delves against you.
 	 * Delve 8 counts towards the numerator even though it is excluded from {@link #deepPace}.
+	 *
+	 * <p>A run joined part way into a delve is measured from that delve's clear, and leaves the
+	 * delve out - see {@link #timedSplits}. Until it clears another there is no pace to give.
 	 */
 	Double fullPace()
 	{
-		int deep = deepCleared();
-		double seconds = clearedElapsed().toMillis() / 1000.0;
+		List<Split> timed = timedSplits();
+		int deep = deepIn(timed);
+		Instant from = timed.size() == splits.size() ? startedAt : splits.get(0).completedAt;
+		double seconds = Duration.between(from, lastClearedAt).toMillis() / 1000.0;
 
 		if (deep == 0 || seconds <= 0)
 		{
@@ -770,13 +787,16 @@ class DelveRun
 	 * <p>Both {@link #deepPace} and {@link #untilTarget} are built on this rather than working the
 	 * average out for themselves, so the time predicted to a target and the pace shown beside it
 	 * can never disagree about how long a delve is taking.
+	 *
+	 * <p>The first clear of a run joined part way into a delve is left out, for the reason {@link
+	 * #fullPace} leaves it out.
 	 */
 	Duration meanDeepSegment()
 	{
 		long count = 0;
 		long millis = 0;
 
-		for (Split split : splits)
+		for (Split split : timedSplits())
 		{
 			if (split.level >= PACE_AVERAGE_FROM_LEVEL)
 			{
