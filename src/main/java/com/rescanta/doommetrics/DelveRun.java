@@ -4,9 +4,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.runelite.api.gameval.ItemID;
 
 /**
  * One trip into the Doom of Mokhaiotl, from entering the cave until the player leaves or dies.
@@ -20,6 +22,10 @@ import java.util.Map;
  * kept alongside the segment as {@link Split#fight} for display, but it deliberately does not feed
  * the pace maths - the downtime between delves is real time spent, and a delves-per-hour figure
  * that ignored it would flatter you.
+ *
+ * <p>The run detail window divides a run between its delves at a different point, for reading a
+ * delve as it was played rather than for pacing it - see {@link #fullTime}. Nothing that reports a
+ * pace does.
  *
  * <p>All timing is wall clock and never pauses.
  */
@@ -37,6 +43,35 @@ class DelveRun
 	 * so averaging it in reads as a pace nobody is actually sustaining.
 	 */
 	static final int PACE_AVERAGE_FROM_LEVEL = 9;
+
+	/**
+	 * Handed back for a delve that earned nothing. Shared and never written to - every caller of
+	 * {@link #combatOn} only reads.
+	 */
+	private static final CombatTotals EMPTY_COMBAT = new CombatTotals();
+
+	/**
+	 * The item id a drop is placed under when the game said a unique dropped without saying which:
+	 * the hole glowing and the unique sound playing. Not a real item, so nothing is ever claimed
+	 * under it - see {@link #uniqueSignalled}.
+	 */
+	static final int UNKNOWN_UNIQUE = -1;
+
+	/** What an unknown unique is called where a name has to be written down. */
+	static final String UNKNOWN_UNIQUE_NAME = "Unknown unique";
+
+	/**
+	 * The id a notable drop is counted under.
+	 *
+	 * <p>The eye has two forms, and the warning, the pile and the claim each name it from a
+	 * different place. Should two of them name different forms they still mean the same eye, so
+	 * both forms count as the uncharged one - otherwise a warning would place one eye, the pile a
+	 * second, and the claim would keep neither.
+	 */
+	static int dropKey(int itemId)
+	{
+		return itemId == ItemID.EYE_OF_AYAK ? ItemID.EYE_OF_AYAK_UNCHARGED : itemId;
+	}
 
 	static final class Split
 	{
@@ -61,9 +96,9 @@ class DelveRun
 	private final List<Split> splits = new ArrayList<>();
 
 	/**
-	 * How many of each notable drop this trip earned, keyed by item id and in the order each was
-	 * first seen. A deep run really can roll the same unique twice, so these are counts rather
-	 * than a set.
+	 * How many of each notable drop this trip earned, keyed by {@link #dropKey} and in the order
+	 * each was first seen. A deep run really can roll the same unique twice, so these are counts
+	 * rather than a set.
 	 *
 	 * <p>Each count is the most the loot pile has been seen holding, not a running total of what
 	 * has been added to it. That is what makes the sources safe to overlap: the pile is read both
@@ -87,10 +122,121 @@ class DelveRun
 	}
 
 	/**
+	 * A notable drop as it landed in the loot pile, placed on the delve it came off.
+	 *
+	 * <p>Kept apart from {@link #loot}, which is what was claimed: this is where each drop turned
+	 * up, whether or not the run went on to walk out with it.
+	 */
+	static final class Landed
+	{
+		/** The delve it came off. */
+		final int level;
+
+		final int itemId;
+		final String name;
+
+		/** How many landed on this delve at once - almost always one. */
+		final int quantity;
+
+		/**
+		 * How many of this item the pile held once these landed, so the second eye out of a run
+		 * reads 2 - which is what a claim has to reach for this one to have been walked out with.
+		 */
+		final int heldAfter;
+
+		Landed(int level, int itemId, String name, int quantity, int heldAfter)
+		{
+			this.level = level;
+			this.itemId = itemId;
+			this.name = name;
+			this.quantity = quantity;
+			this.heldAfter = heldAfter;
+		}
+	}
+
+	/** Every notable drop this trip has seen land, in the order they landed. */
+	private final List<Landed> landed = new ArrayList<>();
+
+	/**
+	 * How many of each notable drop the pile is known to hold, keyed by {@link #dropKey} - the
+	 * figure a new reading of the pile is measured against, so a pile that has not grown places
+	 * nothing.
+	 *
+	 * <p>The game puts up a warning about a unique every time you try to descend with it still in
+	 * the pile, and the pile itself is sent over again and again. Only a count going up is a drop.
+	 */
+	private final Map<Integer, Integer> held = new HashMap<>();
+
+	/**
+	 * How many "Your loot contains" warnings each item has had since the last descend was tried,
+	 * keyed by {@link #dropKey}.
+	 *
+	 * <p>The game puts up one warning per copy of a unique in the pile, one after another, each time
+	 * you try to go deeper. So the number of warnings one try brings up for an item is how many of
+	 * it the pile holds. Started over on every try, because backing out and trying again brings the
+	 * whole row of warnings up again from the first.
+	 */
+	private final Map<Integer, Integer> warned = new HashMap<>();
+
+	/**
+	 * Whether a warning can be trusted to be about a drop this run saw land. Not until a run joined
+	 * part way through has gone down a delve under our eyes: the first warnings it gets are about
+	 * whatever was already in the pile, from delves nobody watched.
+	 */
+	private boolean trustWarnings;
+
+	/**
+	 * Bumped whenever a drop lands or a claim is read, so the detail window can tell that something
+	 * about the drops has changed without comparing them - see {@link RunDetail#keyFor}.
+	 */
+	private int lootChanges;
+
+	/**
+	 * True from a clear until the game announces the next delve, which is what decides whether a
+	 * drop seen now came off the delve just cleared or the one still being fought - see
+	 * {@link #dropLevel}.
+	 */
+	private boolean betweenDelves;
+
+	/**
+	 * When each delve after the run's first began - the moment the game announced it - keyed by
+	 * delve number. Where the run detail window divides one delve from the next: see
+	 * {@link #fullTime}.
+	 */
+	private final Map<Integer, Instant> delveStarts = new HashMap<>();
+
+	/**
+	 * Bumped whenever something is counted in the wait after a kill, onto the delve just killed -
+	 * which the detail window already has a column for, and would otherwise not know has moved.
+	 * See {@link RunDetail#keyFor}.
+	 */
+	private int bankedCombatChanges;
+
+	/**
 	 * What this trip's gear and spellbook gave back: healing, prayer and spec damage, by source.
 	 * See {@link CombatTracker} for what does and does not get counted.
 	 */
 	private final CombatTotals combat = new CombatTotals();
+
+	/**
+	 * The same tally split by the delve it was earned on, keyed by delve number.
+	 *
+	 * <p>What decides which delve an amount belongs to is {@link #dropLevel} at the moment it is
+	 * credited: the delve being fought, or - from a kill until the game announces the next delve -
+	 * the delve just killed. So a delve's tally is its kill and everything counted in the wait after
+	 * it: the punish hits settled on the killing tick, a restore still on its way, and the specs
+	 * fired at whatever is left standing before going down again. That is the same division the run
+	 * detail window draws a delve's time with - see {@link #fullTime}.
+	 *
+	 * <p>A delve that earned nothing has no entry rather than an entry of zeroes, so a run that
+	 * never fires a spec costs this nothing at all. The sum of these is {@link #combat} by
+	 * construction - both are written by the same call - so the chart and the counters can never
+	 * disagree about what a run earned.
+	 */
+	private final Map<Integer, CombatTotals> combatByDelve = new LinkedHashMap<>();
+
+	/** What each counter gained in the last few seconds, for the figures that show a hit landing. */
+	private final RecentGains recent = new RecentGains();
 
 	private Instant startedAt;
 
@@ -121,12 +267,22 @@ class DelveRun
 		this.currentLevel = currentLevel;
 		this.partial = partial;
 		this.pbAnchor = pbAnchor;
+		this.trustWarnings = !partial;
 	}
 
-	/** The game announced the delve we have just dropped into. */
-	void enterLevel(int level)
+	/**
+	 * The game announced the delve we have just dropped into.
+	 *
+	 * @param at when it was announced, which is when the delve before it stops taking in its wait
+	 */
+	void enterLevel(int level, Instant at)
 	{
 		currentLevel = level;
+		betweenDelves = false;
+		warned.clear();
+		trustWarnings = true;
+		// The first announcement is when the delve began; one sent again is not a new start.
+		delveStarts.putIfAbsent(level, at);
 	}
 
 	/**
@@ -155,6 +311,8 @@ class DelveRun
 		splits.add(split);
 		lastClearedAt = at;
 		currentLevel = level + 1;
+		betweenDelves = true;
+		warned.clear();
 		return split;
 	}
 
@@ -172,16 +330,170 @@ class DelveRun
 			return;
 		}
 
-		Drop drop = loot.get(itemId);
+		int key = dropKey(itemId);
+		Drop drop = loot.get(key);
 
 		if (drop == null)
 		{
-			loot.put(itemId, new Drop(name, quantity));
+			loot.put(key, new Drop(name, quantity));
+			lootChanges++;
 		}
 		else if (quantity > drop.quantity)
 		{
 			drop.quantity = quantity;
+			lootChanges++;
 		}
+	}
+
+	/** How many of a notable drop this trip has claimed, or 0 for none. */
+	int claimed(int itemId)
+	{
+		Drop drop = loot.get(dropKey(itemId));
+		return drop == null ? 0 : drop.quantity;
+	}
+
+	/**
+	 * Notes that the loot pile has been seen holding {@code quantity} of a notable drop while the run
+	 * is going, and places however many that is more than before on the delve they came off.
+	 *
+	 * <p>A reading that holds no more than the last one places nothing, which is what makes it safe
+	 * to feed every copy of the pile the game sends, and to feed two copies of it: the first to show
+	 * a new drop places it, and the other finds nothing left to place. A reading holding fewer is a
+	 * pile being emptied, and changes nothing either - a drop that landed stays where it landed.
+	 *
+	 * @return true if this placed a drop
+	 */
+	boolean sawInPile(int itemId, String name, int quantity)
+	{
+		int key = dropKey(itemId);
+		int before = held.getOrDefault(key, 0);
+
+		if (name == null || quantity <= before)
+		{
+			return false;
+		}
+
+		held.put(key, quantity);
+		int level = dropLevel();
+		// A unique the game only signalled is this one, now that it has a name.
+		landed.removeIf(drop -> drop.itemId == UNKNOWN_UNIQUE && drop.level == level);
+		landed.add(new Landed(level, key, name, quantity - before, quantity));
+		lootChanges++;
+		return true;
+	}
+
+	/**
+	 * A descend was tried: the hole clicked, or the button on the loot screen. Whatever warnings it
+	 * brings up are counted from nothing - see {@link #warned}.
+	 */
+	void descending()
+	{
+		warned.clear();
+	}
+
+	/**
+	 * The game warned that the pile holds this item as you tried to go deeper. One warning is one
+	 * copy, so this try's count for the item is how many the pile holds, and anything over what the
+	 * run already knew about came off the delve just cleared.
+	 *
+	 * @return true if this placed a drop
+	 */
+	boolean warnedOf(int itemId, String name)
+	{
+		int count = warned.merge(dropKey(itemId), 1, Integer::sum);
+
+		if (!trustWarnings)
+		{
+			pileAlreadyHeld(itemId, count);
+			return false;
+		}
+
+		return sawInPile(itemId, name, count);
+	}
+
+	/**
+	 * The game signalled a unique without naming it - the hole glowing and the unique sound - so
+	 * something is in the pile off this delve and nothing yet says what.
+	 *
+	 * <p>Placed as an unknown unique, which turns into the real drop if a warning, the loot screen or
+	 * the claim names it later - see {@link #sawInPile}. One that is never named was lost with the
+	 * run, because every way of keeping it would have named it. A second signal for the same delve
+	 * places nothing more: the glow says a unique dropped, not how many.
+	 *
+	 * <p>Nothing calls this yet. No event the game sends has been tied to the glow - the logs so far
+	 * hold no delve that glowed to tie one to - so it waits on a log from {@link LootDiagnostics}
+	 * that catches one. Until then an unknown unique is only ever drawn by the tests and the
+	 * preview harness.
+	 *
+	 * @return true if this placed a drop
+	 */
+	boolean uniqueSignalled()
+	{
+		int level = dropLevel();
+
+		for (Landed drop : landed)
+		{
+			if (drop.itemId == UNKNOWN_UNIQUE && drop.level == level)
+			{
+				return false;
+			}
+		}
+
+		landed.add(new Landed(level, UNKNOWN_UNIQUE, UNKNOWN_UNIQUE_NAME, 1, 1));
+		lootChanges++;
+		return true;
+	}
+
+	/** How many of a notable drop the pile is known to hold, or 0 for none. */
+	int held(int itemId)
+	{
+		return held.getOrDefault(dropKey(itemId), 0);
+	}
+
+	/**
+	 * Takes what the pile already holds as having been there before we were watching, so a run
+	 * joined part way through does not place every drop already in it on the first delve we see.
+	 */
+	void pileAlreadyHeld(int itemId, int quantity)
+	{
+		held.merge(dropKey(itemId), quantity, Math::max);
+	}
+
+	/**
+	 * The delve a drop seen now came off.
+	 *
+	 * <p>Loot only lands in the pile when a delve is cleared, so that is always the delve just
+	 * cleared - but the pile and the chat line clearing the delve can arrive either way round. Seen
+	 * after the clear, it is the delve before the one we are waiting to drop into; seen before, it
+	 * is the delve still being fought, whose clear is on its way.
+	 */
+	int dropLevel()
+	{
+		return betweenDelves ? lastLevel() : currentLevel;
+	}
+
+	/** Whether a delve has been cleared and the game has not yet announced the next. */
+	boolean isBetweenDelves()
+	{
+		return betweenDelves;
+	}
+
+	/** Every notable drop this trip has seen land, in the order they landed. */
+	List<Landed> getLanded()
+	{
+		return Collections.unmodifiableList(landed);
+	}
+
+	/** Moves whenever a drop lands or a claim is read - see {@link #lootChanges}. */
+	int lootChanges()
+	{
+		return lootChanges;
+	}
+
+	/** Moves whenever something is counted onto a delve already killed - see the field. */
+	int bankedCombatChanges()
+	{
+		return bankedCombatChanges;
 	}
 
 	/**
@@ -203,10 +515,34 @@ class DelveRun
 		return names;
 	}
 
-	/** Credits an attributed heal, prayer restore or spec hit to this trip. */
-	void recordCombat(CombatMetric metric, long amount)
+	/**
+	 * Credits an attributed heal, prayer restore or hit to this trip, and to the delve.
+	 *
+	 * @param at when it was credited, which is what decides how long it shows as a gain
+	 */
+	void recordCombat(CombatMetric metric, long amount, Instant at)
 	{
+		if (amount <= 0)
+		{
+			// Tested here as well as in CombatTotals so nothing that would be discarded can leave
+			// an empty tally behind on a delve that earned nothing.
+			return;
+		}
+
 		combat.add(metric, amount);
+		combatByDelve.computeIfAbsent(dropLevel(), level -> new CombatTotals()).add(metric, amount);
+		recent.add(metric, amount, at);
+
+		if (betweenDelves)
+		{
+			bankedCombatChanges++;
+		}
+	}
+
+	/** What {@code metric} has gained in the last few seconds, or 0 - see {@link RecentGains}. */
+	long recentGain(CombatMetric metric, Instant now)
+	{
+		return recent.get(metric, now);
 	}
 
 	/**
@@ -216,6 +552,17 @@ class DelveRun
 	CombatTotals getCombat()
 	{
 		return combat;
+	}
+
+	/**
+	 * What was earned on one delve - its kill and the wait after it, see {@link #combatByDelve} - or
+	 * an empty tally for a delve that earned nothing. Never null, so a caller walking every delve of
+	 * a run does not have to tell "no entry" from "no figures".
+	 */
+	CombatTotals combatOn(int level)
+	{
+		CombatTotals totals = combatByDelve.get(level);
+		return totals == null ? EMPTY_COMBAT : totals;
 	}
 
 	void end(EndReason reason, Instant at, int diedOnLevel)
@@ -304,7 +651,7 @@ class DelveRun
 	}
 
 	/**
-	 * How many delves at or past {@link #DEEP_DELVE_LEVEL} this run banked - what a deep delve rate
+	 * How many delves at or past {@link #DEEP_DELVE_LEVEL} this run completed - what a deep delve rate
 	 * counts, whether that rate covers this run alone or a lifetime of them.
 	 */
 	int deepCleared()
@@ -323,10 +670,10 @@ class DelveRun
 	}
 
 	/**
-	 * Deep delves banked per hour of run time, counting the shallow delves against you.
+	 * Deep delves completed per hour of run time, counting the shallow delves against you.
 	 * Delve 8 counts towards the numerator even though it is excluded from {@link #deepPace}.
 	 */
-	Double runPace()
+	Double fullPace()
 	{
 		int deep = deepCleared();
 		double seconds = clearedElapsed().toMillis() / 1000.0;
@@ -392,7 +739,7 @@ class DelveRun
 	 *
 	 * <p>Two things a flat average cannot know are left in deliberately, because every other figure
 	 * here is a flat average and a prediction that quietly corrected for them would be the odd one
-	 * out: delves 1-8 are quicker than the mean, so a target set during the warm-up reads long, and
+	 * out: delves 1-8 are quicker than the mean, so a target set during delves 1-8 reads long, and
 	 * delves get slower the deeper they go, so a distant target reads short.
 	 */
 	Duration untilTarget(int target, Instant now)
@@ -414,13 +761,85 @@ class DelveRun
 		return Duration.ofMillis(Math.max(millis, (remaining - 1) * mean.toMillis()));
 	}
 
+	/**
+	 * How long this run takes from its start to clearing {@code target}: the real time once it has,
+	 * and the time so far plus {@link #untilTarget} until then. Null when there is no answer to
+	 * give: no target set, the run over short of it, no delve 9+ cleared yet to average over, or a
+	 * run joined already past the target, whose clear of it nobody saw.
+	 *
+	 * <p>The real time stays put however much deeper the run goes, and survives the run ending.
+	 *
+	 * <p>Built on {@link #untilTarget} rather than beside it, so the two rows can never disagree.
+	 * That also brings its floor along: the figure holds still while a delve runs to the average,
+	 * and counts up for as long as one overruns it, which is the run getting slower.
+	 */
+	Duration runToTarget(int target, Instant now)
+	{
+		if (hasReached(target))
+		{
+			for (Split split : splits)
+			{
+				if (split.level == target)
+				{
+					return Duration.between(startedAt, split.completedAt);
+				}
+			}
+
+			return null;
+		}
+
+		Duration remaining = untilTarget(target, now);
+		return remaining == null ? null : liveElapsed(now).plus(remaining);
+	}
+
+	/**
+	 * The pace this run is read by: the one {@code configured} while the run is going, and full pace
+	 * once it is over. Deep pace says how fast more deep delves could be added, which a run that has
+	 * ended is not going to do - what is left to say is how fast it went, start to finish.
+	 */
+	PaceMode paceMode(PaceMode configured)
+	{
+		return isFinished() ? PaceMode.RUN_THROUGHPUT : configured;
+	}
+
 	Double pace(PaceMode mode)
 	{
-		return mode == PaceMode.RUN_THROUGHPUT ? runPace() : deepPace();
+		return mode == PaceMode.RUN_THROUGHPUT ? fullPace() : deepPace();
 	}
 
 	List<Split> getSplits()
 	{
 		return Collections.unmodifiableList(splits);
+	}
+
+	/**
+	 * How long the {@code index}th cleared delve took as the run detail window draws it: from the
+	 * delve starting to the next one starting, so its kill and the wait after it - the restock, and
+	 * the specs fired at whatever is left before going down again.
+	 *
+	 * <p>That is not how {@link Split#segment}, and every pace figure built on it, divides a run:
+	 * those charge a wait to the delve it comes before. Over a run the two come to the same time,
+	 * split at a different point. The window shows a delve as the player plays it, a kill and then
+	 * the getting ready for the next; the pace figures have to be final at the kill, which is when a
+	 * pace is announced and when the wait after it has not happened yet.
+	 *
+	 * <p>A delve still in its wait runs to its kill for now, and takes the wait in once the next
+	 * delve starts, or once the run ends there. One whose next delve went on without its start being
+	 * seen stops at its kill.
+	 */
+	Duration fullTime(int index)
+	{
+		Split split = splits.get(index);
+		Instant from = index == 0
+			? startedAt
+			: delveStarts.getOrDefault(split.level, splits.get(index - 1).completedAt);
+		Instant to = delveStarts.get(split.level + 1);
+
+		if (to == null)
+		{
+			to = isFinished() && index == splits.size() - 1 ? endedAt : split.completedAt;
+		}
+
+		return Duration.between(from, to);
 	}
 }

@@ -11,3 +11,4 @@ nbproject/
 !src/test/resources/logs/*.log
 screenshots/
 NOTES.md
+logs/

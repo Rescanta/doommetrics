@@ -1,11 +1,11 @@
 package com.rescanta.doommetrics;
 
 /**
- * Deep delves banked, and the run time they were banked in, summed over any number of runs.
+ * Deep delves completed, and the run time they were completed in, summed over any number of runs.
  *
  * <p>Used twice over: once in memory for the session, and once on the RuneScape profile for the
  * character's lifetime. Both are the same sum of the same two numbers, so both answer with the
- * same figure - a session holding a single run reads exactly what that run's Run pace does.
+ * same figure - a session holding a single run reads exactly what that run's Full pace does.
  *
  * <p>The lifetime copy is written to config, so the field names here are the stored format:
  * renaming one silently drops that number out of every character's saved total. {@link #v} exists
@@ -18,14 +18,14 @@ class DelveTotals
 
 	int v = VERSION;
 
-	/** Delves banked at or past the deep level - the numerator of the rate. */
+	/** Delves completed at or past the deep level - the numerator of the rate. */
 	int deep;
 
 	/**
 	 * The run time those delves were banked in, in game ticks.
 	 *
 	 * <p>Each run contributes the span from its start through to its last clear, which is the same
-	 * span every other figure in this plugin is built on. That charges the shallow warm-up and the
+	 * span every other figure in this plugin is built on. That charges the shallow delves and the
 	 * restocking between delves against the rate, because both are real time spent and a rate that
 	 * ignored them would flatter you.
 	 *
@@ -50,10 +50,10 @@ class DelveTotals
 	}
 
 	/**
-	 * Deep delves per hour, or null when nothing has been banked yet.
+	 * Deep delves per hour, or null when no deep delve has been completed yet.
 	 *
 	 * <p>Time with no deep delve in it is not an answer of zero, it is no answer - the same way
-	 * {@link DelveRun#runPace} declines to report on a run that has not banked one. The time is
+	 * {@link DelveRun#fullPace} declines to report on a run that has not completed one. The time is
 	 * still kept, and starts counting against the rate as soon as a later run banks something.
 	 */
 	Double kph()

@@ -14,7 +14,7 @@ import java.util.Map;
  * <p>Both the config value and the history file are written from this, so the shape here is the
  * stored format. Metrics are held in a map keyed by {@link CombatMetric#key()} rather than in
  * fields, which buys two things: a metric that has never fired takes no space at all - most runs
- * touch three or four of the eight - and a value written by a version that knows a metric this one
+ * touch a handful of the twelve - and a value written by a version that knows a metric this one
  * does not is carried through a read and a write untouched instead of being silently dropped.
  *
  * <p>{@link #v} exists so a later change can tell old values from new ones without guessing.
