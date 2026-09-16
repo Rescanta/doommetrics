@@ -393,6 +393,11 @@ class DelveRun
 	 * run, because every way of keeping it would have named it. A second signal for the same delve
 	 * places nothing more: the glow says a unique dropped, not how many.
 	 *
+	 * <p>Nothing calls this yet. No event the game sends has been tied to the glow - the logs so far
+	 * hold no delve that glowed to tie one to - so it waits on a log from {@link LootDiagnostics}
+	 * that catches one. Until then an unknown unique is only ever drawn by the tests and the
+	 * preview harness.
+	 *
 	 * @return true if this placed a drop
 	 */
 	boolean uniqueSignalled()
