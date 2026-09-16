@@ -13,10 +13,13 @@ import java.util.List;
  * so neither of them ever reads a {@link DelveRun} the client thread is still writing to. Built on
  * the client thread from a run, immutable once built, then handed to Swing.
  *
- * <p>Only cleared delves are in here. The delve being fought has no length yet - its segment does
- * not close until it is cleared - and half a delve's counters plotted against whole ones would
- * read as a collapse at the end of every run. So a run's newest column appears when the delve
- * behind it is banked, which is also the only moment anything already drawn can change.
+ * <p>A delve here is its kill and the wait after it: the time from the delve starting to the next
+ * one starting, and everything counted in that time, the specs fired before going down again
+ * included - see {@link DelveRun#fullTime}. Only delves already killed are in here. The delve being
+ * fought has no kill yet, and half a delve's counters plotted against whole ones would read as a
+ * collapse at the end of every run; nor does a delve died on ever get one, so what it counted is
+ * in the run's own tally and not in these. A killed delve's column is final once the next delve
+ * starts or the run ends - until then its wait is still going.
  *
  * <p>Nothing here is written to disk. The window shows the run you are on or the one you just
  * finished, and both of those are in memory already - see the note in {@link RunHistoryStore} for
@@ -31,25 +34,25 @@ final class RunDetail
 		final int level;
 
 		/**
-		 * Wall clock from the previous clear to this one, which is what the pace figures are built
-		 * on - so the restocking and the drop down the hole are in here, charged to the delve they
-		 * precede.
+		 * Wall clock from this delve starting to the next one starting: the kill and the wait after
+		 * it - see {@link DelveRun#fullTime}. Not the split the pace figures are built on, which
+		 * charges a wait to the delve it precedes.
 		 */
-		final Duration segment;
+		final Duration fullTime;
 
 		/**
-		 * The fight length the game reported, or null if we never saw it. Always at or under
-		 * {@link #segment}, and the difference between the two is the time spent not fighting.
+		 * The fight length the game reported, or null if we never saw it. At or under
+		 * {@link #fullTime}, and the difference between the two is the time spent not fighting.
 		 */
 		final Duration fight;
 
 		/** What this delve alone earned. Never null; empty for a delve that earned nothing. */
 		final CombatTotals combat;
 
-		Delve(int level, Duration segment, Duration fight, CombatTotals combat)
+		Delve(int level, Duration fullTime, Duration fight, CombatTotals combat)
 		{
 			this.level = level;
-			this.segment = segment;
+			this.fullTime = fullTime;
 			this.fight = fight;
 			this.combat = combat;
 		}
@@ -156,11 +159,12 @@ final class RunDetail
 		// legend and the chart disagreeing for the length of every delve.
 		CombatTotals totals = new CombatTotals();
 
-		for (DelveRun.Split split : splits)
+		for (int i = 0; i < splits.size(); i++)
 		{
+			DelveRun.Split split = splits.get(i);
 			CombatTotals earned = run.combatOn(split.level).copy();
 			totals.addAll(earned);
-			delves.add(new Delve(split.level, split.segment, split.fight, earned));
+			delves.add(new Delve(split.level, run.fullTime(i), split.fight, earned));
 		}
 
 		boolean died = run.isFinished() && run.getEndReason() == EndReason.DIED;
@@ -275,17 +279,18 @@ final class RunDetail
 	 * since the last look is not rebuilt and pushed across again.
 	 *
 	 * <p>Built out of the run rather than out of a detail, because the point is to decide whether
-	 * taking a snapshot is worth it. The deepest delve cleared is enough to cover the figures as
-	 * well as the columns: a snapshot holds only cleared delves, and a cleared delve's tally can
-	 * never move again, because every source counted is cleared when the delve is.
+	 * taking a snapshot is worth it. A snapshot holds only killed delves, and one of those moves in
+	 * three ways: the kill that adds it, something counted in the wait after it, and the wait ending
+	 * - the next delve starting, or the run ending - which settles its time. The deepest delve
+	 * cleared, the count of what landed in a wait, and whether a wait is going cover all three.
 	 *
-	 * <p>Which is what makes this cheap on the tick. A run four hundred delves deep is taken apart
-	 * once per clear rather than once per heal, and never at all on the ticks where nothing was
-	 * banked - which is almost all of them.
+	 * <p>Which is what makes this cheap on the tick. A run four hundred delves deep is taken apart a
+	 * few times a delve rather than once per heal, and never at all on the ticks where nothing
+	 * moved - which is almost all of them.
 	 *
-	 * <p>The drops are the one thing that can move between clears: the pile a delve's drop lands
-	 * in can arrive after the clear that banked the delve, and a claim decides which drops were
-	 * kept. Both are rare enough that counting them into the key costs nothing.
+	 * <p>The drops can move between clears as well: the pile a delve's drop lands in can arrive
+	 * after the clear that banked the delve, and a claim decides which drops were kept. Both are
+	 * rare enough that counting them into the key costs nothing.
 	 *
 	 * <p>The run's identity leads, because none of the rest says which run it is: a run that ends
 	 * unseen and is replaced by a new one at the same depth, with nothing banked and no drops,
@@ -298,7 +303,8 @@ final class RunDetail
 			return "";
 		}
 
-		return System.identityHashCode(run) + "|" + run.lastLevel() + "|" + run.isFinished() + "|"
-			+ run.getDiedOnLevel() + "|" + run.lootChanges();
+		return System.identityHashCode(run) + "|" + run.lastLevel() + "|" + run.isBetweenDelves()
+			+ "|" + run.bankedCombatChanges() + "|" + run.isFinished() + "|" + run.getDiedOnLevel()
+			+ "|" + run.lootChanges();
 	}
 }

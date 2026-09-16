@@ -35,6 +35,7 @@ public class RunDetailTest
 
 		run.recordCombat(CombatMetric.ZCB_DAMAGE, 120, Instant.EPOCH);
 		run.complete(1, at(60), null);
+		run.enterLevel(2, at(60));
 
 		run.recordCombat(CombatMetric.ZCB_DAMAGE, 80, Instant.EPOCH);
 		run.recordCombat(CombatMetric.BLOOD_BARRAGE_HEAL, 44, Instant.EPOCH);
@@ -56,8 +57,14 @@ public class RunDetailTest
 
 		for (int level = 1; level <= 5; level++)
 		{
+			if (level > 1)
+			{
+				run.enterLevel(level, at((level - 1) * 60));
+			}
+
 			run.recordCombat(CombatMetric.ELDRITCH_PRAYER, level * 10, Instant.EPOCH);
 			run.complete(level, at(level * 60), null);
+			assertEquals(level * 10, run.combatOn(level).get(CombatMetric.ELDRITCH_PRAYER));
 		}
 
 		assertEquals(150, run.getCombat().get(CombatMetric.ELDRITCH_PRAYER));
@@ -103,17 +110,148 @@ public class RunDetailTest
 
 		RunDetail.Delve first = detail.delves().get(0);
 		assertEquals(1, first.level);
-		assertEquals(Duration.ofSeconds(90), first.segment);
+		assertEquals(Duration.ofSeconds(90), first.fullTime);
 		assertEquals(Duration.ofSeconds(72), first.fight);
 		assertEquals(60, first.combat.get(CombatMetric.AGS_HEAL));
 
-		// The restocking, the walk in and the drop down the hole - everything the segment holds
-		// that the fight does not, which is the band the time strip fills.
-		assertEquals(Duration.ofSeconds(18), first.segment.minus(first.fight));
+		// Everything the full time holds that the fight does not, which is the band the time strip
+		// fills. With no start seen for delve 2, a column runs kill to kill.
+		assertEquals(Duration.ofSeconds(18), first.fullTime.minus(first.fight));
 
 		RunDetail.Delve second = detail.delves().get(1);
-		assertEquals(Duration.ofSeconds(110), second.segment);
-		assertEquals(Duration.ofSeconds(15), second.segment.minus(second.fight));
+		assertEquals(Duration.ofSeconds(110), second.fullTime);
+		assertEquals(Duration.ofSeconds(15), second.fullTime.minus(second.fight));
+	}
+
+	/**
+	 * A delve is its kill and the wait after it. Delve 10 killed in 1:30 and gone down from 10
+	 * seconds later took 1:40. Delve 11, killed in 1:25 with 35 seconds of restocking and an
+	 * eldritch spec before going down, took 2:00 and has the spec. Delve 12, killed in 1:30 and
+	 * claimed 15 seconds later, took 1:45 and has nothing.
+	 */
+	@Test
+	public void aDelveIsItsKillAndTheWaitAfterIt()
+	{
+		DelveRun run = new DelveRun(START, 10, true);
+		run.complete(10, at(90), Duration.ofSeconds(90));
+		run.enterLevel(11, at(100));
+		run.complete(11, at(185), Duration.ofSeconds(85));
+		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 25, at(200));
+		run.enterLevel(12, at(220));
+		run.complete(12, at(310), Duration.ofSeconds(90));
+		run.end(EndReason.FINISHED, at(325), -1);
+
+		RunDetail detail = RunDetail.of(run);
+		assertEquals(Duration.ofSeconds(100), detail.at(10).fullTime);
+		assertEquals(Duration.ofSeconds(120), detail.at(11).fullTime);
+		assertEquals(Duration.ofSeconds(105), detail.at(12).fullTime);
+
+		assertEquals(25, detail.at(11).combat.get(CombatMetric.ELDRITCH_PRAYER));
+		assertEquals(0, detail.at(12).combat.get(CombatMetric.ELDRITCH_PRAYER));
+
+		// The pace figures still charge each wait to the delve after it.
+		assertEquals(Duration.ofSeconds(95), run.getSplits().get(1).segment);
+	}
+
+	/**
+	 * A delve killed and still in its wait runs to its kill for now. The next delve starting ends
+	 * the wait, and the snapshot has to be taken again to show it.
+	 */
+	@Test
+	public void theWaitJoinsItsDelveWhenTheNextOneStarts()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		String waiting = RunDetail.keyFor(run);
+		assertEquals(Duration.ofSeconds(60), RunDetail.of(run).at(1).fullTime);
+
+		run.enterLevel(2, at(90));
+
+		assertNotEquals(waiting, RunDetail.keyFor(run));
+		assertEquals(Duration.ofSeconds(90), RunDetail.of(run).at(1).fullTime);
+	}
+
+	/** An announcement sent again is not the delve starting again. */
+	@Test
+	public void aDelveAnnouncedAgainKeepsTheStartItHad()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2, at(70));
+		run.enterLevel(2, at(200));
+		run.complete(2, at(250), null);
+
+		RunDetail detail = RunDetail.of(run);
+		assertEquals(Duration.ofSeconds(70), detail.at(1).fullTime);
+		assertEquals(Duration.ofSeconds(180), detail.at(2).fullTime);
+	}
+
+	/**
+	 * What is counted in the wait after a kill - a restore still on its way, a spec fired at what is
+	 * left before going down - is the killed delve's, and moves a column already drawn.
+	 */
+	@Test
+	public void whatIsCountedInTheWaitBelongsToTheDelveJustKilled()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 12, at(50));
+		run.complete(1, at(60), null);
+		String killed = RunDetail.keyFor(run);
+
+		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 25, at(70));
+
+		assertNotEquals("the killed delve's column has moved", killed, RunDetail.keyFor(run));
+		assertEquals(37, run.combatOn(1).get(CombatMetric.ELDRITCH_PRAYER));
+		assertEquals(0, run.combatOn(2).get(CombatMetric.ELDRITCH_PRAYER));
+
+		run.enterLevel(2, at(80));
+		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 25, at(100));
+
+		assertEquals(37, run.combatOn(1).get(CombatMetric.ELDRITCH_PRAYER));
+		assertEquals(25, run.combatOn(2).get(CombatMetric.ELDRITCH_PRAYER));
+	}
+
+	/**
+	 * A run claimed in the wait after its last kill ends that wait with it, so everything the run
+	 * counted is on the chart, and the window's totals are the run's own.
+	 */
+	@Test
+	public void aRunEndedInTheWaitAddsUpToWhatItCounted()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 100, at(30));
+		run.complete(1, at(60), null);
+		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 25, at(70));
+		run.end(EndReason.FINISHED, at(95), -1);
+
+		RunDetail detail = RunDetail.of(run);
+		assertEquals(Duration.ofSeconds(95), detail.at(1).fullTime);
+
+		for (CombatMetric metric : CombatMetric.values())
+		{
+			assertEquals(metric.key(), run.getCombat().get(metric), detail.totals().get(metric));
+		}
+	}
+
+	/**
+	 * The delve died on has no kill, so no column: the delve before it ends where the one died on
+	 * started, and what the delve died on counted is in the run's tally alone.
+	 */
+	@Test
+	public void theDelveDiedOnIsNotCharted()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.enterLevel(2, at(80));
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 40, at(100));
+		run.end(EndReason.DIED, at(120), 2);
+
+		RunDetail detail = RunDetail.of(run);
+		assertEquals(1, detail.delves().size());
+		assertEquals(Duration.ofSeconds(80), detail.at(1).fullTime);
+		assertEquals(0, detail.totals().get(CombatMetric.ZCB_DAMAGE));
+		assertEquals(40, run.getCombat().get(CombatMetric.ZCB_DAMAGE));
 	}
 
 	/**
@@ -126,6 +264,7 @@ public class RunDetailTest
 		DelveRun run = new DelveRun(START, 1, false);
 		run.recordCombat(CombatMetric.ZCB_DAMAGE, 100, Instant.EPOCH);
 		run.complete(1, at(60), null);
+		run.enterLevel(2, at(70));
 		run.recordCombat(CombatMetric.ZCB_DAMAGE, 30, Instant.EPOCH);
 
 		RunDetail detail = RunDetail.of(run);
@@ -147,8 +286,9 @@ public class RunDetailTest
 
 		RunDetail detail = RunDetail.of(run);
 
-		run.enterLevel(1);
+		// Counted in the wait, so onto the very delve the snapshot holds.
 		run.recordCombat(CombatMetric.BLOWPIPE_HEAL, 500, Instant.EPOCH);
+		assertEquals(520, run.combatOn(1).get(CombatMetric.BLOWPIPE_HEAL));
 
 		assertEquals(20, detail.delves().get(0).combat.get(CombatMetric.BLOWPIPE_HEAL));
 		assertEquals(20, detail.totals().get(CombatMetric.BLOWPIPE_HEAL));
@@ -160,7 +300,7 @@ public class RunDetailTest
 	{
 		DelveRun run = new DelveRun(START, 30, true);
 		run.complete(30, at(60), null);
-		run.enterLevel(31);
+		run.enterLevel(31, at(60));
 		run.complete(31, at(120), null);
 
 		RunDetail detail = RunDetail.of(run);
@@ -270,7 +410,7 @@ public class RunDetailTest
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
-		run.enterLevel(2);
+		run.enterLevel(2, at(60));
 		run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
 
 		assertTrue(RunDetail.of(run).drops().isEmpty());

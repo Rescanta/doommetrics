@@ -23,6 +23,10 @@ import net.runelite.api.gameval.ItemID;
  * the pace maths - the downtime between delves is real time spent, and a delves-per-hour figure
  * that ignored it would flatter you.
  *
+ * <p>The run detail window divides a run between its delves at a different point, for reading a
+ * delve as it was played rather than for pacing it - see {@link #fullTime}. Nothing that reports a
+ * pace does.
+ *
  * <p>All timing is wall clock and never pauses.
  */
 class DelveRun
@@ -195,6 +199,20 @@ class DelveRun
 	private boolean betweenDelves;
 
 	/**
+	 * When each delve after the run's first began - the moment the game announced it - keyed by
+	 * delve number. Where the run detail window divides one delve from the next: see
+	 * {@link #fullTime}.
+	 */
+	private final Map<Integer, Instant> delveStarts = new HashMap<>();
+
+	/**
+	 * Bumped whenever something is counted in the wait after a kill, onto the delve just killed -
+	 * which the detail window already has a column for, and would otherwise not know has moved.
+	 * See {@link RunDetail#keyFor}.
+	 */
+	private int bankedCombatChanges;
+
+	/**
 	 * What this trip's gear and spellbook gave back: healing, prayer and spec damage, by source.
 	 * See {@link CombatTracker} for what does and does not get counted.
 	 */
@@ -203,9 +221,12 @@ class DelveRun
 	/**
 	 * The same tally split by the delve it was earned on, keyed by delve number.
 	 *
-	 * <p>What decides which delve an amount belongs to is {@link #currentLevel} at the moment the
-	 * tracker credits it, which is exact rather than a convention: every source counted here is
-	 * cleared when a delve completes, so no effect fired on one delve can pay out on the next.
+	 * <p>What decides which delve an amount belongs to is {@link #dropLevel} at the moment it is
+	 * credited: the delve being fought, or - from a kill until the game announces the next delve -
+	 * the delve just killed. So a delve's tally is its kill and everything counted in the wait after
+	 * it: the punish hits settled on the killing tick, a restore still on its way, and the specs
+	 * fired at whatever is left standing before going down again. That is the same division the run
+	 * detail window draws a delve's time with - see {@link #fullTime}.
 	 *
 	 * <p>A delve that earned nothing has no entry rather than an entry of zeroes, so a run that
 	 * never fires a spec costs this nothing at all. The sum of these is {@link #combat} by
@@ -249,13 +270,19 @@ class DelveRun
 		this.trustWarnings = !partial;
 	}
 
-	/** The game announced the delve we have just dropped into. */
-	void enterLevel(int level)
+	/**
+	 * The game announced the delve we have just dropped into.
+	 *
+	 * @param at when it was announced, which is when the delve before it stops taking in its wait
+	 */
+	void enterLevel(int level, Instant at)
 	{
 		currentLevel = level;
 		betweenDelves = false;
 		warned.clear();
 		trustWarnings = true;
+		// The first announcement is when the delve began; one sent again is not a new start.
+		delveStarts.putIfAbsent(level, at);
 	}
 
 	/**
@@ -463,6 +490,12 @@ class DelveRun
 		return lootChanges;
 	}
 
+	/** Moves whenever something is counted onto a delve already killed - see the field. */
+	int bankedCombatChanges()
+	{
+		return bankedCombatChanges;
+	}
+
 	/**
 	 * The notable drops from this trip, by name, in the order each was first seen. A drop earned
 	 * twice is listed twice - the names are the record, so the count has to live in them.
@@ -497,8 +530,13 @@ class DelveRun
 		}
 
 		combat.add(metric, amount);
-		combatByDelve.computeIfAbsent(currentLevel, level -> new CombatTotals()).add(metric, amount);
+		combatByDelve.computeIfAbsent(dropLevel(), level -> new CombatTotals()).add(metric, amount);
 		recent.add(metric, amount, at);
+
+		if (betweenDelves)
+		{
+			bankedCombatChanges++;
+		}
 	}
 
 	/** What {@code metric} has gained in the last few seconds, or 0 - see {@link RecentGains}. */
@@ -517,8 +555,9 @@ class DelveRun
 	}
 
 	/**
-	 * What was earned on one delve, or an empty tally for a delve that earned nothing. Never null,
-	 * so a caller walking every delve of a run does not have to tell "no entry" from "no figures".
+	 * What was earned on one delve - its kill and the wait after it, see {@link #combatByDelve} - or
+	 * an empty tally for a delve that earned nothing. Never null, so a caller walking every delve of
+	 * a run does not have to tell "no entry" from "no figures".
 	 */
 	CombatTotals combatOn(int level)
 	{
@@ -771,5 +810,36 @@ class DelveRun
 	List<Split> getSplits()
 	{
 		return Collections.unmodifiableList(splits);
+	}
+
+	/**
+	 * How long the {@code index}th cleared delve took as the run detail window draws it: from the
+	 * delve starting to the next one starting, so its kill and the wait after it - the restock, and
+	 * the specs fired at whatever is left before going down again.
+	 *
+	 * <p>That is not how {@link Split#segment}, and every pace figure built on it, divides a run:
+	 * those charge a wait to the delve it comes before. Over a run the two come to the same time,
+	 * split at a different point. The window shows a delve as the player plays it, a kill and then
+	 * the getting ready for the next; the pace figures have to be final at the kill, which is when a
+	 * pace is announced and when the wait after it has not happened yet.
+	 *
+	 * <p>A delve still in its wait runs to its kill for now, and takes the wait in once the next
+	 * delve starts, or once the run ends there. One whose next delve went on without its start being
+	 * seen stops at its kill.
+	 */
+	Duration fullTime(int index)
+	{
+		Split split = splits.get(index);
+		Instant from = index == 0
+			? startedAt
+			: delveStarts.getOrDefault(split.level, splits.get(index - 1).completedAt);
+		Instant to = delveStarts.get(split.level + 1);
+
+		if (to == null)
+		{
+			to = isFinished() && index == splits.size() - 1 ? endedAt : split.completedAt;
+		}
+
+		return Duration.between(from, to);
 	}
 }
