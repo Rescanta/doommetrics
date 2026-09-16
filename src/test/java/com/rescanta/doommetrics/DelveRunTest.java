@@ -81,6 +81,70 @@ public class DelveRunTest
 	 * clock started at 22:06:39, and it reported 0:47.4. Anchoring on the chat line charged the
 	 * two second walk-in to the delve and read 0:49 instead.
 	 */
+	/** Every clear of a run watched from the start has a measured segment to charge to a rate. */
+	@Test
+	public void everyClearOfAWatchedRunIsTimed()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		assertFalse(run.lastClearTimed());
+
+		run.complete(1, at(60), Duration.ofSeconds(58));
+		assertTrue(run.lastClearTimed());
+
+		run.complete(2, at(120), Duration.ofSeconds(55));
+		assertTrue(run.lastClearTimed());
+	}
+
+	/** A joined run's first segment starts wherever we picked it up, so only later ones count. */
+	@Test
+	public void theFirstClearOfAJoinedRunIsNotTimed()
+	{
+		DelveRun run = new DelveRun(START, 12, true);
+
+		run.complete(12, at(90), Duration.ofMillis(88_200));
+		assertFalse(run.lastClearTimed());
+
+		run.complete(13, at(180), Duration.ofMillis(86_000));
+		assertTrue(run.lastClearTimed());
+	}
+
+	/** Picked up in the wait after delve 3, the run sees delve 4 start and times it from there. */
+	@Test
+	public void aRunJoinedBetweenDelvesTimesTheNextOne()
+	{
+		DelveRun run = new DelveRun(START, 3, true);
+
+		run.enterLevel(4, at(10));
+		run.complete(4, at(100), Duration.ofSeconds(88));
+
+		assertTrue(run.lastClearTimed());
+		assertEquals(DoomFormat.toTicks(Duration.ofSeconds(90)), run.lastClearTicks());
+	}
+
+	/** The delve it was picked up in announced again is not a start it saw. */
+	@Test
+	public void aRepeatOfTheJoinedDelveIsNotAStart()
+	{
+		DelveRun run = new DelveRun(START, 12, true);
+
+		run.enterLevel(12, at(10));
+		run.complete(12, at(90), Duration.ofMillis(88_200));
+
+		assertFalse(run.lastClearTimed());
+	}
+
+	/** Joined on a delve's own chat line, the run has watched that delve from its start. */
+	@Test
+	public void aRunJoinedAtADelveStartTimesItsFirstClear()
+	{
+		DelveRun run = new DelveRun(START, 12, true);
+		run.watchedFromDelveStart(START);
+
+		run.complete(12, at(90), Duration.ofMillis(88_200));
+
+		assertTrue(run.lastClearTimed());
+	}
+
 	@Test
 	public void reanchoringMakesTheFirstSegmentMatchTheGame()
 	{
@@ -122,6 +186,16 @@ public class DelveRunTest
 
 		assertEquals(Duration.ofSeconds(100), run.clearedElapsed());
 		assertEquals(Duration.ofSeconds(700), run.pbElapsed());
+	}
+
+	/** A joined run with nothing to bound its start cannot be timed, rather than timed too short. */
+	@Test
+	public void aPartialRunWithNoAnchorHasNoPersonalBestTime()
+	{
+		DelveRun run = new DelveRun(at(600), 12, true, null);
+		run.complete(12, at(700), null);
+
+		assertNull(run.pbElapsed());
 	}
 
 	/** With nothing to correct, a personal best spans exactly what every other figure does. */

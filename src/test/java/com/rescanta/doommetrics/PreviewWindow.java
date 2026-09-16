@@ -68,7 +68,9 @@ public class PreviewWindow
 
 	private final PreviewPlugin plugin = new PreviewPlugin();
 	private final DoomMetricsOverlay overlay = new DoomMetricsOverlay(plugin, config);
-	private final DoomMetricsPanel panel = new DoomMetricsPanel(this::openDetail);
+	private final DoomMetricsPanel panel = new DoomMetricsPanel(this::openDetail, () ->
+	{
+	});
 
 	/** The same square the plugin puts up, reading the same config the overlay beside it does. */
 	private final DoomMetricsInfoBox infoBox =

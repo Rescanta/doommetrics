@@ -65,20 +65,6 @@ public class DelveTotalsTest
 		assertEquals(6.0, totals.kph(), DELTA);
 	}
 
-	@Test
-	public void plusLeavesTheOriginalAlone()
-	{
-		DelveTotals banked = new DelveTotals();
-		banked.add(6, 3000);
-
-		DelveTotals withRun = banked.plus(6, 3000);
-
-		assertEquals(6, banked.deep);
-		assertEquals(3000, banked.ticks);
-		assertEquals(12, withRun.deep);
-		assertEquals(6000, withRun.ticks);
-	}
-
 	/**
 	 * The whole point of the session figure: one run on its own has to read what that run's own
 	 * Full pace reads, so a player who does a single run sees one number, not two that disagree.
@@ -99,8 +85,17 @@ public class DelveTotalsTest
 			run.complete(level, Instant.EPOCH.plusSeconds(480 + (level - 7) * 90L), null);
 		}
 
+		// Banked the way the plugin banks it: a clear at a time, each charged its segment.
+		DelveRun banking = new DelveRun(Instant.EPOCH, 1, false);
 		DelveTotals session = new DelveTotals();
-		session.add(run.deepCleared(), DoomFormat.toTicks(run.pbElapsed()));
+
+		for (DelveRun.Split split : run.getSplits())
+		{
+			banking.complete(split.level, split.completedAt, null);
+			session.add(split.level >= DelveRun.DEEP_DELVE_LEVEL ? 1 : 0, banking.lastClearTicks());
+		}
+
+		assertEquals(DoomFormat.toTicks(run.clearedElapsed()), session.ticks);
 
 		assertEquals(12, session.deep);
 		assertEquals(run.fullPace(), session.kph(), DELTA);
