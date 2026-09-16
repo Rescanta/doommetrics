@@ -241,6 +241,15 @@ final class RunDetail
 		return diedOn;
 	}
 
+	/**
+	 * The first delve cleared: 1 for a run watched from the start, later for one joined part way
+	 * through, and 1 for a run that has cleared none.
+	 */
+	int shallowest()
+	{
+		return delves.isEmpty() ? 1 : delves.get(0).level;
+	}
+
 	/** The deepest delve cleared, or 0 for a run that has cleared none. */
 	int deepest()
 	{

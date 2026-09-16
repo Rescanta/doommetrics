@@ -154,6 +154,23 @@ public class RunDetailTest
 		assertEquals(20, detail.totals().get(CombatMetric.BLOWPIPE_HEAL));
 	}
 
+	/** A run joined part way through starts its chart at the first delve it saw, not at delve 1. */
+	@Test
+	public void aJoinedRunStartsAtTheFirstDelveItCleared()
+	{
+		DelveRun run = new DelveRun(START, 30, true);
+		run.complete(30, at(60), null);
+		run.enterLevel(31);
+		run.complete(31, at(120), null);
+
+		RunDetail detail = RunDetail.of(run);
+		assertEquals(30, detail.shallowest());
+		assertEquals(31, detail.deepest());
+
+		assertEquals(1, RunDetail.of(new DelveRun(START, 1, false)).shallowest());
+		assertEquals(1, RunDetail.empty().shallowest());
+	}
+
 	@Test
 	public void aRunThatBankedNothingIsStillARun()
 	{
