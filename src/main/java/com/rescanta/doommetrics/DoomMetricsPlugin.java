@@ -260,6 +260,13 @@ public class DoomMetricsPlugin extends Plugin
 	/** Logs what the game shows around a delve's end, under the debug setting. See the class. */
 	private LootDiagnostics lootDiagnostics;
 
+	/**
+	 * Whether {@link #lootDiagnostics} is on the event bus, which it only is while debug logging is
+	 * on. It listens to scripts, varbits, sounds and object spawns, which fire far too often to hand
+	 * to a listener with nothing to do - see {@link #updateDiagnostics}.
+	 */
+	private boolean diagnosticsRegistered;
+
 	private DoomMetricsPanel panel;
 	private NavigationButton navButton;
 
@@ -445,7 +452,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		lootDiagnostics = new LootDiagnostics(client, config, () -> run != null,
 			() -> run != null && run.isBetweenDelves());
-		eventBus.register(lootDiagnostics);
+		updateDiagnostics();
 
 		reset();
 		loadMilestones();
@@ -455,7 +462,12 @@ public class DoomMetricsPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
-		eventBus.unregister(lootDiagnostics);
+		if (diagnosticsRegistered)
+		{
+			eventBus.unregister(lootDiagnostics);
+			diagnosticsRegistered = false;
+		}
+
 		lootDiagnostics = null;
 
 		overlayManager.remove(overlay);
@@ -580,11 +592,43 @@ public class DoomMetricsPlugin extends Plugin
 		return lastRun;
 	}
 
+	/** Puts the diagnostics on the event bus while debug logging is on, and takes them off after. */
+	private void updateDiagnostics()
+	{
+		boolean wanted = config.debugLogging();
+
+		if (lootDiagnostics == null || wanted == diagnosticsRegistered)
+		{
+			return;
+		}
+
+		if (wanted)
+		{
+			eventBus.register(lootDiagnostics);
+		}
+		else
+		{
+			eventBus.unregister(lootDiagnostics);
+		}
+
+		diagnosticsRegistered = wanted;
+	}
+
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (!DoomMetricsConfig.GROUP.equals(event.getGroup())
-			|| !"hideEmptyCounters".equals(event.getKey()))
+		if (!DoomMetricsConfig.GROUP.equals(event.getGroup()))
+		{
+			return;
+		}
+
+		if ("debugLogging".equals(event.getKey()))
+		{
+			updateDiagnostics();
+			return;
+		}
+
+		if (!"hideEmptyCounters".equals(event.getKey()))
 		{
 			return;
 		}
