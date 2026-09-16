@@ -283,6 +283,11 @@ class RunLegendPanel extends JPanel
 		}
 
 		refresh();
+
+		// A click lands on the row under the pointer, whose line is the one brought forward. Taken
+		// off, it would leave every other line pushed back behind a line no longer drawn; put back
+		// on, it comes forward as it would have had the pointer just arrived.
+		onEmphasis.accept(hidden.contains(metric) ? null : metric);
 	}
 
 	/**
