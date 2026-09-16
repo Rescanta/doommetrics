@@ -5,6 +5,7 @@ import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import org.junit.Test;
 
 public class RunLegendPanelTest
@@ -90,6 +91,22 @@ public class RunLegendPanelTest
 		legend.setHideEmpty(true);
 
 		assertEquals(allDrawnBut(), offChart.get());
+	}
+
+	/** Clicking off the line that is brought forward must not leave the chart pushed back behind it. */
+	@Test
+	public void aLineClickedOffIsNoLongerBroughtForward()
+	{
+		AtomicReference<CombatMetric> forward = new AtomicReference<>();
+		legend.setToggleListener(offChart::set);
+		legend.setEmphasisListener(forward::set);
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+
+		legend.toggle(CombatMetric.ZCB_DAMAGE);
+		assertNull(forward.get());
+
+		legend.toggle(CombatMetric.ZCB_DAMAGE);
+		assertEquals(CombatMetric.ZCB_DAMAGE, forward.get());
 	}
 
 	/** Two delves, with the crossbow's spec on the first and nothing else counted. */
