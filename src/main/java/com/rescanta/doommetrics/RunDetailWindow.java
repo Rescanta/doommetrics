@@ -57,6 +57,17 @@ class RunDetailWindow extends JFrame
 	private final JPanel summaryRows = PanelStyle.column(PanelStyle.ROW_GAP);
 	private final JLabel idle = PanelStyle.caption("No run yet", SwingConstants.LEFT);
 
+	/** The rows under the two figures, built once and retexted - see {@link #setLive}. */
+	private final JLabel[] rowCaptions = new JLabel[DoomMetricsPanel.Live.ROWS];
+	private final JLabel[] rowValues = new JLabel[DoomMetricsPanel.Live.ROWS];
+	private final JPanel[] rows = new JPanel[DoomMetricsPanel.Live.ROWS];
+
+	/**
+	 * Which of {@link #rows} are up, a bit for each by its index, or -1 while the idle line is.
+	 * Starts as neither, so the first snapshot always lays them out.
+	 */
+	private int shownRows = Integer.MIN_VALUE;
+
 	/**
 	 * @param icon    the plugin's own icon, so the window is identifiable in the taskbar
 	 * @param onClose run when the user closes the window, to drop the plugin's reference to it
@@ -161,7 +172,7 @@ class RunDetailWindow extends JFrame
 	 */
 	void setLive(DoomMetricsPanel.Live live)
 	{
-		summaryRows.removeAll();
+		int shown = -1;
 
 		if (live == null)
 		{
@@ -173,7 +184,6 @@ class RunDetailWindow extends JFrame
 
 			heroCaptions[0].setText("Delve");
 			heroCaptions[1].setText("Time");
-			summaryRows.add(idle);
 		}
 		else
 		{
@@ -188,6 +198,8 @@ class RunDetailWindow extends JFrame
 				: DoomColors.PLAIN);
 			heroValues[1].setForeground(live.finished ? DoomColors.DIMMED : DoomColors.PLAIN);
 
+			shown = 0;
+
 			for (int i = DoomMetricsPanel.Live.HERO_ROWS; i < DoomMetricsPanel.Live.ROWS; i++)
 			{
 				if (live.labels[i] == null)
@@ -195,7 +207,45 @@ class RunDetailWindow extends JFrame
 					continue;
 				}
 
-				summaryRows.add(pair(live.labels[i], live.values[i]));
+				rowCaptions[i].setText(live.labels[i]);
+				rowValues[i].setText(live.values[i]);
+				shown |= 1 << i;
+			}
+		}
+
+		showRows(shown);
+	}
+
+	/**
+	 * Puts up the rows a snapshot has, and does nothing when they are the ones already up.
+	 *
+	 * <p>A snapshot is pushed every time the clock at the head moves, which is every second, and
+	 * taking the rows down and building them again for that would lay the sidebar out anew each
+	 * time. What changes the rows is rarer - a run starting or ending, a target reached - and is
+	 * the only thing that needs them put up again.
+	 */
+	private void showRows(int shown)
+	{
+		if (shown == shownRows)
+		{
+			return;
+		}
+
+		shownRows = shown;
+		summaryRows.removeAll();
+
+		if (shown < 0)
+		{
+			summaryRows.add(idle);
+		}
+		else
+		{
+			for (int i = DoomMetricsPanel.Live.HERO_ROWS; i < DoomMetricsPanel.Live.ROWS; i++)
+			{
+				if ((shown & (1 << i)) != 0)
+				{
+					summaryRows.add(rows[i]);
+				}
 			}
 		}
 
@@ -224,18 +274,25 @@ class RunDetailWindow extends JFrame
 			hero.add(tile);
 		}
 
+		for (int i = DoomMetricsPanel.Live.HERO_ROWS; i < DoomMetricsPanel.Live.ROWS; i++)
+		{
+			rowCaptions[i] = PanelStyle.caption("", SwingConstants.LEFT);
+			rowValues[i] = PanelStyle.body("", SwingConstants.RIGHT);
+			rows[i] = pair(rowCaptions[i], rowValues[i]);
+		}
+
 		summary.add(hero);
 		summary.add(PanelStyle.rule());
 		summary.add(summaryRows);
 		setLive(null);
 	}
 
-	private static JPanel pair(String label, String value)
+	private static JPanel pair(JLabel label, JLabel value)
 	{
 		JPanel panel = new JPanel(new BorderLayout());
 		panel.setBackground(PanelStyle.CARD);
-		panel.add(PanelStyle.caption(label, SwingConstants.LEFT), BorderLayout.WEST);
-		panel.add(PanelStyle.body(value, SwingConstants.RIGHT), BorderLayout.EAST);
+		panel.add(label, BorderLayout.WEST);
+		panel.add(value, BorderLayout.EAST);
 		return panel;
 	}
 
