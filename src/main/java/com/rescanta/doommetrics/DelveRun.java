@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.runelite.api.gameval.ItemID;
 
 /**
  * One trip into the Doom of Mokhaiotl, from entering the cave until the player leaves or dies.
@@ -55,6 +56,19 @@ class DelveRun
 	/** What an unknown unique is called where a name has to be written down. */
 	static final String UNKNOWN_UNIQUE_NAME = "Unknown unique";
 
+	/**
+	 * The id a notable drop is counted under.
+	 *
+	 * <p>The eye has two forms, and the warning, the pile and the claim each name it from a
+	 * different place. Should two of them name different forms they still mean the same eye, so
+	 * both forms count as the uncharged one - otherwise a warning would place one eye, the pile a
+	 * second, and the claim would keep neither.
+	 */
+	static int dropKey(int itemId)
+	{
+		return itemId == ItemID.EYE_OF_AYAK ? ItemID.EYE_OF_AYAK_UNCHARGED : itemId;
+	}
+
 	static final class Split
 	{
 		final int level;
@@ -78,9 +92,9 @@ class DelveRun
 	private final List<Split> splits = new ArrayList<>();
 
 	/**
-	 * How many of each notable drop this trip earned, keyed by item id and in the order each was
-	 * first seen. A deep run really can roll the same unique twice, so these are counts rather
-	 * than a set.
+	 * How many of each notable drop this trip earned, keyed by {@link #dropKey} and in the order
+	 * each was first seen. A deep run really can roll the same unique twice, so these are counts
+	 * rather than a set.
 	 *
 	 * <p>Each count is the most the loot pile has been seen holding, not a running total of what
 	 * has been added to it. That is what makes the sources safe to overlap: the pile is read both
@@ -140,8 +154,9 @@ class DelveRun
 	private final List<Landed> landed = new ArrayList<>();
 
 	/**
-	 * How many of each notable drop the pile is known to hold, keyed by item id - the figure a new
-	 * reading of the pile is measured against, so a pile that has not grown places nothing.
+	 * How many of each notable drop the pile is known to hold, keyed by {@link #dropKey} - the
+	 * figure a new reading of the pile is measured against, so a pile that has not grown places
+	 * nothing.
 	 *
 	 * <p>The game puts up a warning about a unique every time you try to descend with it still in
 	 * the pile, and the pile itself is sent over again and again. Only a count going up is a drop.
@@ -150,7 +165,7 @@ class DelveRun
 
 	/**
 	 * How many "Your loot contains" warnings each item has had since the last descend was tried,
-	 * keyed by item id.
+	 * keyed by {@link #dropKey}.
 	 *
 	 * <p>The game puts up one warning per copy of a unique in the pile, one after another, each time
 	 * you try to go deeper. So the number of warnings one try brings up for an item is how many of
@@ -288,11 +303,12 @@ class DelveRun
 			return;
 		}
 
-		Drop drop = loot.get(itemId);
+		int key = dropKey(itemId);
+		Drop drop = loot.get(key);
 
 		if (drop == null)
 		{
-			loot.put(itemId, new Drop(name, quantity));
+			loot.put(key, new Drop(name, quantity));
 			lootChanges++;
 		}
 		else if (quantity > drop.quantity)
@@ -305,7 +321,7 @@ class DelveRun
 	/** How many of a notable drop this trip has claimed, or 0 for none. */
 	int claimed(int itemId)
 	{
-		Drop drop = loot.get(itemId);
+		Drop drop = loot.get(dropKey(itemId));
 		return drop == null ? 0 : drop.quantity;
 	}
 
@@ -322,18 +338,19 @@ class DelveRun
 	 */
 	boolean sawInPile(int itemId, String name, int quantity)
 	{
-		int before = held.getOrDefault(itemId, 0);
+		int key = dropKey(itemId);
+		int before = held.getOrDefault(key, 0);
 
 		if (name == null || quantity <= before)
 		{
 			return false;
 		}
 
-		held.put(itemId, quantity);
+		held.put(key, quantity);
 		int level = dropLevel();
 		// A unique the game only signalled is this one, now that it has a name.
 		landed.removeIf(drop -> drop.itemId == UNKNOWN_UNIQUE && drop.level == level);
-		landed.add(new Landed(level, itemId, name, quantity - before, quantity));
+		landed.add(new Landed(level, key, name, quantity - before, quantity));
 		lootChanges++;
 		return true;
 	}
@@ -356,7 +373,7 @@ class DelveRun
 	 */
 	boolean warnedOf(int itemId, String name)
 	{
-		int count = warned.merge(itemId, 1, Integer::sum);
+		int count = warned.merge(dropKey(itemId), 1, Integer::sum);
 
 		if (!trustWarnings)
 		{
@@ -398,13 +415,13 @@ class DelveRun
 	/** How many of a notable drop the pile is known to hold, or 0 for none. */
 	int held(int itemId)
 	{
-		return held.getOrDefault(itemId, 0);
+		return held.getOrDefault(dropKey(itemId), 0);
 	}
 
 	/** Places one more of a notable drop than the run has seen. */
 	void landedOne(int itemId, String name)
 	{
-		sawInPile(itemId, name, held.getOrDefault(itemId, 0) + 1);
+		sawInPile(itemId, name, held(itemId) + 1);
 	}
 
 	/**
@@ -413,7 +430,7 @@ class DelveRun
 	 */
 	void pileAlreadyHeld(int itemId, int quantity)
 	{
-		held.merge(itemId, quantity, Math::max);
+		held.merge(dropKey(itemId), quantity, Math::max);
 	}
 
 	/**
