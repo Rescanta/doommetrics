@@ -524,7 +524,7 @@ class DelveChart extends JPanel
 		// which unit a line is counted in is on the legend, under its heading. The averaging is
 		// named here rather than left to be inferred from the shape of the lines.
 		String caption = window > 0
-			? "Counted per delve - bold lines are a " + window + " delve average"
+			? "Counted per delve - bold lines are averaged over " + window + " delves"
 			: "Counted per delve";
 
 		String[][] readout = readout();
@@ -867,10 +867,13 @@ class DelveChart extends JPanel
 	 * out: a plot a few hundred pixels wide has room for a marker on each of eighty delves and no
 	 * more, so the delve-by-delve reading and the averaged one hand over to each other rather than
 	 * overlapping in a range where neither is much good.
+	 *
+	 * <p>Always odd. The average is centred, reaching as far to one side as to the other, so an
+	 * even window would take in one delve more than the caption says it does.
 	 */
 	static int windowFor(int delves)
 	{
-		return delves < TREND_FROM_DELVES ? 0 : Math.max(9, Math.min(25, delves / 10));
+		return delves < TREND_FROM_DELVES ? 0 : (Math.max(9, Math.min(25, delves / 10)) | 1);
 	}
 
 	/**
