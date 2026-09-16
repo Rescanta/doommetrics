@@ -23,8 +23,8 @@ import net.runelite.client.ui.ColorScheme;
  *
  * <p>It shows the run in progress, and goes on showing it once it ends - the last run you made is
  * the one you want to read afterwards, and unlike the overlay this window is only on screen
- * because you opened it, so it has no reason to time itself out. Clearing the overlay clears this
- * too, since that is what asking to be rid of a finished run means.
+ * because you opened it, so it has no reason to time itself out. Clearing the overlay leaves it be
+ * for the same reason: Clear takes a finished run off the game screen, and this is not on it.
  *
  * <p>Nothing here is read back from disk, so a window opened before this session's first run is
  * empty and says so. What survives a client restart is the milestone table and the lifetime totals,
