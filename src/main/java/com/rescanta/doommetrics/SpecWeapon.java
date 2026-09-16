@@ -219,6 +219,7 @@ enum SpecWeapon
 		switch (itemId)
 		{
 			case ItemID.ZARYTE_XBOW:
+			case ItemID.BR_ZARYTE_XBOW:
 				return ZARYTE_CROSSBOW;
 
 			case ItemID.DRAGON_KNIFE:
