@@ -101,6 +101,29 @@ public class DelveTotalsTest
 		assertEquals(run.fullPace(), session.kph(), DELTA);
 	}
 
+	/** The same for a run joined part way into a delve, which both leave that delve out of. */
+	@Test
+	public void aJoinedRunReadsTheSameAsThatRunsFullPace()
+	{
+		// Picked up thirty seconds before the kill on delve 12, then nine more at ninety seconds.
+		DelveRun run = new DelveRun(Instant.EPOCH, 12, true);
+		DelveTotals session = new DelveTotals();
+
+		for (int level = 12; level <= 21; level++)
+		{
+			run.complete(level, Instant.EPOCH.plusSeconds(30 + (level - 12) * 90L), null);
+
+			if (run.lastClearTimed())
+			{
+				session.add(level >= DelveRun.DEEP_DELVE_LEVEL ? 1 : 0, run.lastClearTicks());
+			}
+		}
+
+		assertEquals(9, session.deep);
+		assertEquals(40.0, session.kph(), DELTA);
+		assertEquals(run.fullPace(), session.kph(), DELTA);
+	}
+
 	@Test
 	public void aTotalSurvivesTheRoundTrip()
 	{

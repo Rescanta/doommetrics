@@ -76,11 +76,6 @@ public class DelveRunTest
 		assertEquals(13, run.currentLevel());
 	}
 
-	/**
-	 * The delve 1 clear from the log at 22:07:26: the chat line landed at 22:06:37, the game's own
-	 * clock started at 22:06:39, and it reported 0:47.4. Anchoring on the chat line charged the
-	 * two second walk-in to the delve and read 0:49 instead.
-	 */
 	/** Every clear of a run watched from the start has a measured segment to charge to a rate. */
 	@Test
 	public void everyClearOfAWatchedRunIsTimed()
@@ -145,6 +140,11 @@ public class DelveRunTest
 		assertTrue(run.lastClearTimed());
 	}
 
+	/**
+	 * The delve 1 clear from the log at 22:07:26: the chat line landed at 22:06:37, the game's own
+	 * clock started at 22:06:39, and it reported 0:47.4. Anchoring on the chat line charged the
+	 * two second walk-in to the delve and read 0:49 instead.
+	 */
 	@Test
 	public void reanchoringMakesTheFirstSegmentMatchTheGame()
 	{
@@ -278,6 +278,39 @@ public class DelveRunTest
 		assertNull(run.deepPace());
 		// Delve 8 still counts towards full pace: one deep delve in 10:00.
 		assertEquals(6.0, run.fullPace(), DELTA);
+	}
+
+	/**
+	 * Picked up ten seconds before the kill on delve 12, a run that counted that delve would credit
+	 * it to those ten seconds and read 360/hr. It is paced from that clear on instead.
+	 */
+	@Test
+	public void aRunJoinedPartWayIntoADelveIsPacedFromItsClear()
+	{
+		DelveRun run = new DelveRun(START, 12, true);
+		run.complete(12, at(10), null);
+
+		assertNull(run.fullPace());
+		assertNull(run.deepPace());
+		assertNull(run.untilTarget(20, at(10)));
+
+		run.complete(13, at(100), null);
+
+		assertEquals(40.0, run.fullPace(), DELTA);
+		assertEquals(40.0, run.deepPace(), DELTA);
+		assertEquals(Duration.ofSeconds(630), run.untilTarget(20, at(100)));
+	}
+
+	/** Joined on a delve's own chat line, the run saw that delve start, and paces it as usual. */
+	@Test
+	public void aRunJoinedAtADelveStartIsPacedFromIt()
+	{
+		DelveRun run = new DelveRun(START, 12, true);
+		run.watchedFromDelveStart(START);
+		run.complete(12, at(90), null);
+
+		assertEquals(40.0, run.fullPace(), DELTA);
+		assertEquals(40.0, run.deepPace(), DELTA);
 	}
 
 	/**

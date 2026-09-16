@@ -77,6 +77,40 @@ public class SessionClockTest
 		assertEquals(Duration.ofMinutes(20), clock.elapsed(at(40)));
 	}
 
+	/** A dropped connection that comes back left the character in the world, so its wait counts. */
+	@Test
+	public void aReconnectKeepsItsWait()
+	{
+		SessionClock clock = new SessionClock();
+		clock.start(at(0));
+		clock.connectionLost(at(10));
+		clock.resume(at(11));
+
+		assertEquals(Duration.ofMinutes(20), clock.elapsed(at(20)));
+
+		// Settled by the reconnect, so a later logout stops the clock where it happens.
+		clock.pause(at(30));
+
+		assertEquals(Duration.ofMinutes(30), clock.elapsed(at(40)));
+	}
+
+	/** One that ends at the login screen was a logout from the moment the connection first went. */
+	@Test
+	public void aDropThatEndsAtTheLoginScreenStopsTheClockWhereItWent()
+	{
+		SessionClock clock = new SessionClock();
+		clock.start(at(0));
+		clock.connectionLost(at(10));
+		clock.connectionLost(at(11));
+		clock.pause(at(12));
+
+		assertEquals(Duration.ofMinutes(10), clock.elapsed(at(30)));
+
+		clock.resume(at(30));
+
+		assertEquals(Duration.ofMinutes(20), clock.elapsed(at(40)));
+	}
+
 	@Test
 	public void aSecondStartKeepsTheFirst()
 	{
