@@ -32,25 +32,24 @@ enum CombatMetric
 		new Color(0xD95926)),
 
 	AGS_HEAL(Group.SPEC_HEAL, "agsHeal", "Ancient godsword", "AGS", Unit.HITPOINTS,
-		new Color(0x199E70)),
+		new Color(0xD95926)),
 	BLOWPIPE_HEAL(Group.SPEC_HEAL, "bpHeal", "Blowpipe", "BP", Unit.HITPOINTS,
-		new Color(0xC98500)),
+		new Color(0x199E70)),
 	OTHER_SPEC_HEAL(Group.SPEC_HEAL, "otherSpecHeal", "Other specs", "Other specs", Unit.HITPOINTS,
 		new Color(0xD55181)),
 
 	ELDRITCH_PRAYER(Group.PRAYER, "eldritchPrayer", "Eldritch staff", "Eldritch", Unit.PRAYER,
-		new Color(0x008300)),
+		new Color(0xC98500)),
 
 	ZCB_DAMAGE(Group.DAMAGE, "zcbDamage", "Zaryte crossbow", "ZCB", Unit.DAMAGE,
-		new Color(0x9085E9)),
+		new Color(0xD55181)),
 	OTHER_SPEC_DAMAGE(Group.DAMAGE, "otherSpecDamage", "Other specs", "Other dmg", Unit.DAMAGE,
 		new Color(0xE66767)),
 
-	// The punish rows take the slots the catch-alls held before they were taken off the chart.
 	SCYTHE_PUNISH(Group.PUNISH, "scythePunish", "Scythe of vitur", "Scythe", Unit.DAMAGE,
-		new Color(0xD95926)),
+		new Color(0x008300)),
 	NOXIOUS_HALBERD_PUNISH(Group.PUNISH, "noxiousHalberdPunish", "Noxious halberd", "Nox halb",
-		Unit.DAMAGE, new Color(0xD55181)),
+		Unit.DAMAGE, new Color(0x9085E9)),
 	CRYSTAL_HALBERD_PUNISH(Group.PUNISH, "crystalHalberdPunish", "Crystal halberd", "Crystal halb",
 		Unit.DAMAGE, new Color(0xE66767)),
 	OTHER_MELEE_PUNISH(Group.PUNISH, "otherMeleePunish", "Other melee", "Other melee", Unit.DAMAGE,
@@ -308,11 +307,15 @@ enum CombatMetric
 	 * is listed under - which is where the legend keeps its unit-coloured tab.
 	 *
 	 * <p>These are the eight slots of a categorical palette validated as a set against this
-	 * plugin's dark surface, in this order: the ordering is what makes the colour-blind separation
-	 * hold, so a metric may be added or retired but the survivors must keep the slot they had.
-	 * Measured worst adjacent pair is a colour-blind Delta E of 8.4 against a target of 8, and a
-	 * normal-vision Delta E of 19.3 against a floor of 15, all eight clearing 3:1 contrast on the
-	 * panel background. Identity never rests on the colour alone either way: every line is named
+	 * plugin's dark surface, taken by the counters drawn in the order they are listed, skipping
+	 * none. The validation measures each slot against the one after it, so it only holds while the
+	 * lines listed side by side are slots that sit side by side: handing a new counter a slot
+	 * another left free puts two hues next to each other that were never checked as neighbours,
+	 * which is how three warm punish rows once came to sit together. A counter added or retired
+	 * means the slots are handed out again from the first - {@code CombatMetricTest} pins the
+	 * order so that cannot happen quietly. Measured worst adjacent pair is a colour-blind Delta E
+	 * of 8.4 against a target of 8, and a normal-vision Delta E of 19.3 against a floor of 15, all
+	 * eight clearing 3:1 contrast on the panel background. Identity never rests on the colour alone either way: every line is named
 	 * in the legend beside it, and hovering a delve puts that delve's figures in the same table.
 	 *
 	 * <p>The palette has eight validated slots and no ninth, and there are eight counters drawn, so
