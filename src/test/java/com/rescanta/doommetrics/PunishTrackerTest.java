@@ -162,10 +162,16 @@ public class PunishTrackerTest
 		tracker.swung(100);
 		tickEnded(100, false, PunishWeapon.SCYTHE);
 
+		// The window's last tick is still inside it.
 		mine(30, 100 + PunishTracker.HIT_WINDOW);
 		tickEnded(100 + PunishTracker.HIT_WINDOW, false, null);
 
+		// The tick after it is not, so a dart landing then is left to the spec tracker - through
+		// the same check the plugin makes before it holds a hit for the punish.
 		assertFalse(tracker.mayBePunish(100 + PunishTracker.HIT_WINDOW + 1));
+		mine(25, 100 + PunishTracker.HIT_WINDOW + 1);
+		tickEnded(100 + PunishTracker.HIT_WINDOW + 1, false, PunishWeapon.SCYTHE);
+
 		assertEquals(list("scythePunish=30"), recorded);
 	}
 
