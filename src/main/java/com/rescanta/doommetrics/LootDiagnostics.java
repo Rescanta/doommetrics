@@ -44,7 +44,8 @@ import net.runelite.client.eventbus.Subscribe;
  * every descend. What is not known is which of those reach the client as something a plugin can
  * read, and in what order. This logs all of the candidates and decides nothing.
  *
- * <p>Only while the debug logging setting is on, and only in the stretches where a drop can be
+ * <p>Only on the event bus while the debug logging setting is on - the plugin puts it there and
+ * takes it off again as the setting changes - and only writing in the stretches where a drop can be
  * shown: from the boss's death to the next delve starting, and for a while after a run ends so the
  * claim is caught. The fight itself is left out - every attack plays a sound and every splat on the
  * floor is an object, and a run's worth of those would bury the few lines this is after.

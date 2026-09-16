@@ -442,7 +442,7 @@ rather than the whole file.
 
 | Setting | Default | Notes |
 |---|---|---|
-| Debug logging | off | Logs every Doom varplayer change and delve transition |
+| Debug logging | off | Logs delve transitions, Doom varplayer changes and what each counter was credited, and around a delve's end the sounds, objects, menu clicks, interface text, varbits and scripts the game sends |
 
 ## Development
 
