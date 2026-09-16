@@ -481,6 +481,8 @@ public class CombatTrackerTest
 	{
 		assertEquals(SpecWeapon.ZARYTE_CROSSBOW,
 			SpecWeapon.forItem(ItemID.ZARYTE_XBOW));
+		assertEquals(SpecWeapon.ZARYTE_CROSSBOW,
+			SpecWeapon.forItem(ItemID.BR_ZARYTE_XBOW));
 		assertEquals(SpecWeapon.ANCIENT_GODSWORD,
 			SpecWeapon.forItem(ItemID.ANCIENT_GODSWORD));
 		assertEquals(SpecWeapon.BLOWPIPE,
