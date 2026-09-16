@@ -11,8 +11,8 @@ import net.runelite.client.ui.overlay.infobox.InfoBox;
  * The run as one square: a picture, one figure over it, and a tooltip for everything the figure
  * left out.
  *
- * <p>Which figure is the config's to say, and it can be any of the sixteen in
- * {@link InfoBoxFigure}, counters included. The counter checkboxes have no say here - they choose
+ * <p>Which figure is the config's to say, and it can be any of those in {@link InfoBoxFigure},
+ * counters included. The counter checkboxes have no say here - they choose
  * which lines the panel draws, and a square has one line.
  *
  * <p>Added once at startup and taken down at shutdown rather than added and removed as runs come
@@ -37,10 +37,42 @@ class DoomMetricsInfoBox extends InfoBox
 			DoomMetricsPlugin.CLEAR_OPTION, "Doom Metrics"));
 	}
 
+	/**
+	 * The square's picture: what its figure counts, when it counts one thing and the config asks
+	 * for icons, and the plugin's own the rest of the time - a group, a figure that is not a
+	 * counter, or an icon the game has not handed over yet.
+	 *
+	 * <p>The client scales this once, when it is told the picture has changed, rather than every
+	 * frame - so the plugin looks at it on every tick and tells the client when it moves.
+	 */
+	@Override
+	public BufferedImage getImage()
+	{
+		CombatMetric metric = config.infoboxFigure().metric();
+
+		if (config.counterIcons() && metric != null)
+		{
+			BufferedImage picture = plugin.getIcons().counter(metric);
+
+			if (picture != null)
+			{
+				return picture;
+			}
+		}
+
+		return super.getImage();
+	}
+
 	@Override
 	public boolean render()
 	{
-		return config.displayStyle() == DisplayStyle.INFOBOX && plugin.getDisplayRun() != null;
+		if (config.displayStyle() != DisplayStyle.INFOBOX)
+		{
+			return false;
+		}
+
+		DelveRun run = plugin.getDisplayRun();
+		return run != null && config.infoboxFigure().shown(run, config);
 	}
 
 	@Override

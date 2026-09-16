@@ -19,11 +19,15 @@ class PreviewConfig implements DoomMetricsConfig
 	InfoBoxFigure infoboxFigure = InfoBoxFigure.DELVE;
 	PaceMode paceMode = PaceMode.DEEP_AVERAGE;
 	MetricDisplay grouping = MetricDisplay.SEPARATE;
+	boolean hidePluginName = false;
 	boolean showDelveNumber = true;
 	boolean showRunTimer = true;
 	boolean showPace = true;
 	boolean showTargetDelve = false;
+	boolean counterIcons = false;
+	boolean hideEmptyCounters = true;
 	int targetDelve = 50;
+	TargetPrediction targetPrediction = TargetPrediction.FULL_RUN;
 
 	PreviewConfig()
 	{
@@ -60,11 +64,15 @@ class PreviewConfig implements DoomMetricsConfig
 		infoboxFigure = other.infoboxFigure;
 		paceMode = other.paceMode;
 		grouping = other.grouping;
+		hidePluginName = other.hidePluginName;
 		showDelveNumber = other.showDelveNumber;
 		showRunTimer = other.showRunTimer;
 		showPace = other.showPace;
 		showTargetDelve = other.showTargetDelve;
 		targetDelve = other.targetDelve;
+		targetPrediction = other.targetPrediction;
+		counterIcons = other.counterIcons;
+		hideEmptyCounters = other.hideEmptyCounters;
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
@@ -94,6 +102,12 @@ class PreviewConfig implements DoomMetricsConfig
 	public MetricDisplay metricGrouping()
 	{
 		return grouping;
+	}
+
+	@Override
+	public boolean hidePluginName()
+	{
+		return hidePluginName;
 	}
 
 	@Override
@@ -127,15 +141,27 @@ class PreviewConfig implements DoomMetricsConfig
 	}
 
 	@Override
-	public boolean showBloodBarrage()
+	public TargetPrediction targetPrediction()
 	{
-		return counter(CombatMetric.BLOOD_BARRAGE_HEAL);
+		return targetPrediction;
 	}
 
 	@Override
-	public boolean showOtherSpell()
+	public boolean counterIcons()
 	{
-		return counter(CombatMetric.OTHER_SPELL_HEAL);
+		return counterIcons;
+	}
+
+	@Override
+	public boolean hideEmptyCounters()
+	{
+		return hideEmptyCounters;
+	}
+
+	@Override
+	public boolean showBloodBarrage()
+	{
+		return counter(CombatMetric.BLOOD_BARRAGE_HEAL);
 	}
 
 	@Override
@@ -151,12 +177,6 @@ class PreviewConfig implements DoomMetricsConfig
 	}
 
 	@Override
-	public boolean showOtherSpecHeal()
-	{
-		return counter(CombatMetric.OTHER_SPEC_HEAL);
-	}
-
-	@Override
 	public boolean showEldritchPrayer()
 	{
 		return counter(CombatMetric.ELDRITCH_PRAYER);
@@ -169,8 +189,20 @@ class PreviewConfig implements DoomMetricsConfig
 	}
 
 	@Override
-	public boolean showOtherSpecDamage()
+	public boolean showScythePunish()
 	{
-		return counter(CombatMetric.OTHER_SPEC_DAMAGE);
+		return counter(CombatMetric.SCYTHE_PUNISH);
+	}
+
+	@Override
+	public boolean showNoxiousHalberdPunish()
+	{
+		return counter(CombatMetric.NOXIOUS_HALBERD_PUNISH);
+	}
+
+	@Override
+	public boolean showCrystalHalberdPunish()
+	{
+		return counter(CombatMetric.CRYSTAL_HALBERD_PUNISH);
 	}
 }

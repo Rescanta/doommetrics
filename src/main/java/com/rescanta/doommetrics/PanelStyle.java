@@ -6,6 +6,8 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
+import java.awt.image.BufferedImage;
+import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -17,7 +19,7 @@ import net.runelite.client.ui.DynamicGridLayout;
 import net.runelite.client.ui.FontManager;
 
 /**
- * The look the side panel and the history window are both built out of: three text weights, one
+ * The look the side panel and the run detail window are both built out of: three text weights, one
  * card, one section heading.
  *
  * <p>Held in one place because the two windows draw the same figures and a block that reads as a
@@ -167,6 +169,27 @@ final class PanelStyle
 				g.fillRect(0, getHeight() / 2, getWidth(), 1);
 			}
 		};
+	}
+
+	/**
+	 * Puts a picture on {@code label} in place of its words, or puts the words back when there is
+	 * no picture to show - one still on its way from the game, or none at all.
+	 *
+	 * <p>The name never goes on the label's own tooltip. A tooltip gives the label mouse listeners
+	 * of its own, and a row that answers clicks and hovers would stop hearing them over its name.
+	 * The row carries the name in its tooltip instead.
+	 */
+	static void nameOrIcon(JLabel label, String name, BufferedImage icon)
+	{
+		if (icon == null)
+		{
+			label.setIcon(null);
+			label.setText(name);
+			return;
+		}
+
+		label.setIcon(new ImageIcon(icon));
+		label.setText("");
 	}
 
 	/** A unit's colour as a meter fill: the same hue, thin enough to read a figure over. */

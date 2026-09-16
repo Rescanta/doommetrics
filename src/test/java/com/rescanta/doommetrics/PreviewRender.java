@@ -4,6 +4,7 @@ import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
@@ -12,11 +13,13 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import javax.imageio.ImageIO;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import net.runelite.client.ui.FontManager;
+import net.runelite.client.ui.JagexColors;
 import net.runelite.client.ui.overlay.components.InfoBoxComponent;
 import net.runelite.client.util.ImageUtil;
 
@@ -53,6 +56,70 @@ final class PreviewRender
 			return label;
 		}
 	}
+
+	/**
+	 * The two chatboxes a player can have, and what each draws the plugin's words in: the colour
+	 * RuneLite gives a {@link ChatAnnouncement#TYPE} line on that box, the game's own unless the
+	 * player has set one.
+	 */
+	enum Chatbox
+	{
+		TRANSPARENT("Transparent", JagexColors.CHAT_GAME_EXAMINE_TEXT_TRANSPARENT_BACKGROUND, true),
+		OPAQUE("Opaque", JagexColors.CHAT_GAME_EXAMINE_TEXT_OPAQUE_BACKGROUND, false);
+
+		final String label;
+		final Color words;
+
+		/** The transparent box shadows its text, so it reads over whatever the game draws behind. */
+		final boolean shadowed;
+
+		Chatbox(String label, Color words, boolean shadowed)
+		{
+			this.label = label;
+			this.words = words;
+			this.shadowed = shadowed;
+		}
+
+		@Override
+		public String toString()
+		{
+			return label;
+		}
+	}
+
+	/** A stretch of a chat row in one colour. */
+	private static final class Piece
+	{
+		final String text;
+		final Color color;
+
+		Piece(String text, Color color)
+		{
+			this.text = text;
+			this.color = color;
+		}
+	}
+
+	/**
+	 * What a figure in a chat line is drawn in: RuneLite's default game message highlight, which
+	 * {@code ChatColorConfig} makes the same red for both chatboxes. It only reaches a line sent as
+	 * {@link ChatAnnouncement#TYPE}; any other type and the figures are drawn like the words.
+	 */
+	static final Color CHAT_HIGHLIGHT = new Color(0xEF1020);
+
+	/**
+	 * A flat stand-in for the opaque chatbox's parchment, which is a game sprite the harness has no
+	 * copy of. Near enough to judge black and red text against, and no nearer.
+	 */
+	private static final Color PARCHMENT = new Color(0xCFBF98);
+
+	/**
+	 * How far a line of chat runs before the chatbox wraps it, unstretched. Measured off a stretched
+	 * client, so it shows which lines wrap rather than exactly where they break.
+	 */
+	static final int CHAT_WIDTH = 486;
+
+	private static final int CHAT_MARGIN = 6;
 
 	/** Room for the tallest overlay any scene can produce. The drawing is cropped back to fit. */
 	private static final int CANVAS = 900;
@@ -229,6 +296,136 @@ final class PreviewRender
 		return image;
 	}
 
+	/**
+	 * Chat lines as the chatbox draws them: wrapped at {@link #CHAT_WIDTH}, the words in the box's
+	 * own colour and each figure in the highlight. On the transparent box they are shadowed and
+	 * drawn over {@code backdrop}, standing for the game behind it; on the opaque one, over the
+	 * parchment.
+	 *
+	 * <p>Null when there are no lines, the same answer {@link #overlay} gives when it draws nothing.
+	 */
+	static BufferedImage chat(List<ChatAnnouncement> lines, Chatbox box, Backdrop backdrop)
+	{
+		if (lines.isEmpty())
+		{
+			return null;
+		}
+
+		Font font = FontManager.getRunescapeFont();
+		Graphics2D measuring = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics();
+		measuring.setFont(font);
+		FontMetrics metrics = measuring.getFontMetrics();
+		measuring.dispose();
+
+		List<List<Piece>> rows = new ArrayList<>();
+
+		for (ChatAnnouncement line : lines)
+		{
+			rows.addAll(wrap(line, box, metrics));
+		}
+
+		int pitch = metrics.getHeight();
+		BufferedImage image = new BufferedImage(CHAT_WIDTH + CHAT_MARGIN * 2,
+			rows.size() * pitch + CHAT_MARGIN * 2, BufferedImage.TYPE_INT_RGB);
+		Graphics2D graphics = image.createGraphics();
+		graphics.setColor(box == Chatbox.OPAQUE ? PARCHMENT : backdrop.color);
+		graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
+		graphics.setFont(font);
+		graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+			RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+
+		for (int i = 0; i < rows.size(); i++)
+		{
+			int x = CHAT_MARGIN;
+			int y = CHAT_MARGIN + i * pitch + metrics.getAscent();
+
+			for (Piece piece : rows.get(i))
+			{
+				if (box.shadowed)
+				{
+					graphics.setColor(Color.BLACK);
+					graphics.drawString(piece.text, x + 1, y + 1);
+				}
+
+				graphics.setColor(piece.color);
+				graphics.drawString(piece.text, x, y);
+				x += metrics.stringWidth(piece.text);
+			}
+		}
+
+		graphics.dispose();
+		return image;
+	}
+
+	/**
+	 * One message broken into the rows the chatbox would draw it on, at the last space that keeps a
+	 * row inside {@link #CHAT_WIDTH}. A word can change colour part way - {@code 60.0/hr.} is a red
+	 * figure and a full stop in the words' colour - so it is kept as the stretches it is made of.
+	 */
+	private static List<List<Piece>> wrap(ChatAnnouncement line, Chatbox box, FontMetrics metrics)
+	{
+		List<List<Piece>> words = new ArrayList<>();
+		words.add(new ArrayList<>());
+
+		for (ChatAnnouncement.Part part : line.parts())
+		{
+			Color color = part.figure ? CHAT_HIGHLIGHT : box.words;
+			String[] chunks = part.text.split(" ", -1);
+
+			for (int i = 0; i < chunks.length; i++)
+			{
+				if (i > 0)
+				{
+					words.add(new ArrayList<>());
+				}
+
+				if (!chunks[i].isEmpty())
+				{
+					words.get(words.size() - 1).add(new Piece(chunks[i], color));
+				}
+			}
+		}
+
+		List<List<Piece>> rows = new ArrayList<>();
+		List<Piece> row = new ArrayList<>();
+		int space = metrics.stringWidth(" ");
+		int width = 0;
+
+		for (List<Piece> word : words)
+		{
+			if (word.isEmpty())
+			{
+				continue;
+			}
+
+			int wide = 0;
+
+			for (Piece piece : word)
+			{
+				wide += metrics.stringWidth(piece.text);
+			}
+
+			if (!row.isEmpty() && width + space + wide > CHAT_WIDTH)
+			{
+				rows.add(row);
+				row = new ArrayList<>();
+				width = 0;
+			}
+
+			if (!row.isEmpty())
+			{
+				row.add(new Piece(" ", box.words));
+				width += space;
+			}
+
+			row.addAll(word);
+			width += wide;
+		}
+
+		rows.add(row);
+		return rows;
+	}
+
 	/** A Swing component at its preferred size, drawn without ever putting a window on screen. */
 	static BufferedImage component(JComponent content)
 	{
@@ -249,7 +446,7 @@ final class PreviewRender
 		}
 	}
 
-	/** A whole window - the history window is one - drawn at the size given. */
+	/** A whole window - the run detail window is one - drawn at the size given. */
 	static BufferedImage window(JFrame frame, int width, int height)
 	{
 		try

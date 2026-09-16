@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -16,12 +17,12 @@ import net.runelite.client.ui.FontManager;
  * A {@link CombatTotals} laid out as a table: what healed you, what restored your prayer and what
  * your specs hit for, under the heading each belongs to.
  *
- * <p>A component in its own right for the same reason {@link MilestoneTablePanel} is one - the side
- * panel draws the sitting's figures with it and the history window draws the character's lifetime
- * figures with it, and two tables built separately would drift apart.
+ * <p>A component in its own right so the figures are laid out in one place: the side panel draws
+ * the sitting's tally with it, and anything else that has a {@link CombatTotals} to show can draw
+ * that one the same way rather than growing a second table that drifts from this.
  *
  * <p>Every row is built once and only ever retexted. The rows never change: eight metrics under
- * four headings, whether or not any of them has fired. A metric that has counted nothing reads zero
+ * five headings, whether or not any of them has fired. A metric that has counted nothing reads zero
  * in the muted colour rather than vanishing, so the table does not reflow as a run goes on and so
  * the reader can see that a source they expected to fire has not.
  *
@@ -34,8 +35,11 @@ import net.runelite.client.ui.FontManager;
  */
 class CombatTablePanel extends JPanel
 {
-	/** The rows, in declaration order, so an update is eight setTexts and eight fills. */
+	/** The rows, in declaration order, so an update is a setText and a fill per metric. */
 	private final MeterRow[] rows = new MeterRow[CombatMetric.values().length];
+
+	/** What each row's name is drawn as - a picture where there is one, the words otherwise. */
+	private Icons icons = Icons.NONE;
 
 	CombatTablePanel()
 	{
@@ -50,7 +54,7 @@ class CombatTablePanel extends JPanel
 		CombatMetric.Group heading = null;
 		int striped = 0;
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			if (metric.group() != heading)
 			{
@@ -70,6 +74,20 @@ class CombatTablePanel extends JPanel
 	}
 
 	/**
+	 * @param icons the pictures to draw in place of the counters' names. Handed over again as they
+	 *              arrive from the game, and a name stays in words until its picture has.
+	 */
+	void setIcons(Icons icons)
+	{
+		this.icons = icons;
+
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		{
+			rows[metric.ordinal()].showName(icons);
+		}
+	}
+
+	/**
 	 * Repaints every figure. A null tally reads as all zeroes, which is what it means.
 	 *
 	 * <p>The meters are scaled per unit rather than across the whole table: hitpoints, prayer
@@ -83,13 +101,13 @@ class CombatTablePanel extends JPanel
 	{
 		long[] largest = new long[CombatMetric.Unit.values().length];
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			long amount = totals == null ? 0 : totals.get(metric);
 			largest[metric.unit().ordinal()] = Math.max(largest[metric.unit().ordinal()], amount);
 		}
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			long amount = totals == null ? 0 : totals.get(metric);
 			rows[metric.ordinal()].set(amount, largest[metric.unit().ordinal()]);
@@ -134,6 +152,7 @@ class CombatTablePanel extends JPanel
 		private final CombatMetric metric;
 		private final Color stripe;
 		private final JLabel value = PanelStyle.body("0", SwingConstants.RIGHT);
+		private final JLabel label;
 
 		/** How much of the row the meter fills, from nothing to {@link PanelStyle#METER_WIDTH}. */
 		private double fill;
@@ -144,13 +163,28 @@ class CombatTablePanel extends JPanel
 			this.metric = metric;
 			this.stripe = stripe;
 
-			JLabel label = PanelStyle.body(metric.label(), SwingConstants.LEFT);
+			label = PanelStyle.body(metric.label(), SwingConstants.LEFT);
 			label.setBorder(PanelStyle.CELL_PADDING);
 			value.setBorder(PanelStyle.CELL_PADDING);
 
 			setBackground(stripe);
 			add(label, BorderLayout.WEST);
 			add(value, BorderLayout.EAST);
+
+			// On the row rather than the label, so the gap beside a short name answers too, and so
+			// the name is there to be read when an icon stands in for it. The figure keeps its own
+			// tooltip, which Swing shows in preference while over it.
+			List<String> sources = metric.sources();
+
+			setToolTipText(sources.isEmpty()
+				? metric.label()
+				: "<html>" + metric.label() + "<br><br>Counted from:<br>"
+					+ String.join("<br>", sources) + "</html>");
+		}
+
+		private void showName(Icons icons)
+		{
+			PanelStyle.nameOrIcon(label, metric.label(), icons.smallCounter(metric));
 		}
 
 		/**

@@ -2,6 +2,8 @@ package com.rescanta.doommetrics;
 
 import java.awt.Dimension;
 import java.awt.Graphics2D;
+import java.awt.Point;
+import java.awt.image.BufferedImage;
 import java.time.Instant;
 import javax.inject.Inject;
 import net.runelite.api.MenuAction;
@@ -9,7 +11,10 @@ import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayMenuEntry;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.components.ComponentOrientation;
+import net.runelite.client.ui.overlay.components.ImageComponent;
 import net.runelite.client.ui.overlay.components.LineComponent;
+import net.runelite.client.ui.overlay.components.SplitComponent;
 import net.runelite.client.ui.overlay.components.TitleComponent;
 
 class DoomMetricsOverlay extends OverlayPanel
@@ -18,7 +23,11 @@ class DoomMetricsOverlay extends OverlayPanel
 	// these are walked several times a frame.
 	private static final CombatMetric.Group[] GROUPS = CombatMetric.Group.values();
 
-	private static final CombatMetric[] METRICS = CombatMetric.values();
+	private static final CombatMetric[] METRICS =
+		CombatMetric.DISPLAYED.toArray(new CombatMetric[0]);
+
+	/** Between a counter's icon and the rest of its row, when it is drawn with one. */
+	private static final Point ICON_GAP = new Point(4, 0);
 
 	private final DoomMetricsPlugin plugin;
 	private final DoomMetricsConfig config;
@@ -53,9 +62,12 @@ class DoomMetricsOverlay extends OverlayPanel
 			return null;
 		}
 
-		panelComponent.getChildren().add(TitleComponent.builder()
-			.text("Doom Metrics")
-			.build());
+		if (!config.hidePluginName())
+		{
+			panelComponent.getChildren().add(TitleComponent.builder()
+				.text("Doom Metrics")
+				.build());
+		}
 
 		if (run.isFinished())
 		{
@@ -85,19 +97,32 @@ class DoomMetricsOverlay extends OverlayPanel
 
 		if (config.showPace())
 		{
-			PaceMode mode = config.paceMode();
+			PaceMode mode = run.paceMode(config.paceMode());
 			addLine(mode.toString(), DoomFormat.pace(run.pace(mode)));
 		}
 
 		if (config.showTargetDelve())
 		{
 			int target = config.targetDelve();
-			addLine("Target", Integer.toString(target));
-			addLine("Predicted",
-				DoomFormat.prediction(run.untilTarget(target, now), run.hasReached(target)));
+			TargetPrediction prediction = config.targetPrediction();
+			addLine(TargetPrediction.targetLabel(run, target), Integer.toString(target));
+
+			String remaining = prediction.remainingLabel(run, target);
+
+			if (remaining != null)
+			{
+				addLine(remaining, TargetPrediction.remainingValue(run, target, now));
+			}
+
+			String total = prediction.totalLabel(run);
+
+			if (total != null)
+			{
+				addLine(total, TargetPrediction.totalValue(run, target, now));
+			}
 		}
 
-		addCombatLines(run.getCombat());
+		addCombatLines(run, now);
 
 		return super.render(graphics);
 	}
@@ -111,19 +136,33 @@ class DoomMetricsOverlay extends OverlayPanel
 	 * you had not already been told. What the labels lose by having no heading to qualify them they
 	 * make up in saying outright what they count - see {@link CombatMetric#overlayLabel()}.
 	 *
-	 * <p>A source that has counted nothing still gets its line, dimmed, for the same reason the
-	 * table keeps its zero rows: the overlay does not resize under you mid-delve, and a spec you
-	 * expected to be firing is visibly not.
+	 * <p>A source that has counted nothing is left off by default, so everything your gear might
+	 * use can be ticked without the overlay filling with zeros. With that switched off it gets its
+	 * line, dimmed, for the same reason the table keeps its zero rows: the overlay does not resize
+	 * under you mid-delve, and a spec you expected to be firing is visibly not.
+	 *
+	 * <p>A line that has just gained reads as the gain for a few seconds - {@code +97} - before it
+	 * goes back to the run's total. See {@link RecentGains}.
+	 *
+	 * <p>With icons switched on, each line is led by the icon of what it counts in place of its
+	 * name. A group's line keeps its heading: it sums several sources, and no one icon stands for
+	 * all of them.
 	 */
-	private void addCombatLines(CombatTotals combat)
+	private void addCombatLines(DelveRun run, Instant now)
 	{
+		CombatTotals combat = run.getCombat();
+		boolean hideEmpty = config.hideEmptyCounters();
+
 		if (config.metricGrouping() == MetricDisplay.SEPARATE)
 		{
+			Icons icons = config.counterIcons() ? plugin.getIcons() : Icons.NONE;
+
 			for (CombatMetric metric : METRICS)
 			{
-				if (isShown(metric))
+				if (isShown(metric) && !(hideEmpty && combat.get(metric) == 0))
 				{
-					addAmount(metric.overlayLabel(), combat.get(metric), metric.unit());
+					addAmount(metric.overlayLabel(), icons.smallCounter(metric), combat.get(metric),
+						run.recentGain(metric, now), metric.unit());
 				}
 			}
 
@@ -133,6 +172,7 @@ class DoomMetricsOverlay extends OverlayPanel
 		for (CombatMetric.Group group : GROUPS)
 		{
 			long total = 0;
+			long recent = 0;
 			boolean shown = false;
 
 			for (CombatMetric metric : METRICS)
@@ -140,15 +180,16 @@ class DoomMetricsOverlay extends OverlayPanel
 				if (metric.group() == group && isShown(metric))
 				{
 					total += combat.get(metric);
+					recent += run.recentGain(metric, now);
 					shown = true;
 				}
 			}
 
 			// Only the sources you ticked are in the figure, so a group with none of them ticked
 			// has no line rather than a zero: nothing was asked for, so nothing is being answered.
-			if (shown)
+			if (shown && !(hideEmpty && total == 0))
 			{
-				addAmount(group.overlayHeading(), total, group.unit());
+				addAmount(group.overlayHeading(), null, total, recent, group.unit());
 			}
 		}
 	}
@@ -160,17 +201,11 @@ class DoomMetricsOverlay extends OverlayPanel
 			case BLOOD_BARRAGE_HEAL:
 				return config.showBloodBarrage();
 
-			case OTHER_SPELL_HEAL:
-				return config.showOtherSpell();
-
 			case AGS_HEAL:
 				return config.showAgsHeal();
 
 			case BLOWPIPE_HEAL:
 				return config.showBpHeal();
-
-			case OTHER_SPEC_HEAL:
-				return config.showOtherSpecHeal();
 
 			case ELDRITCH_PRAYER:
 				return config.showEldritchPrayer();
@@ -178,8 +213,14 @@ class DoomMetricsOverlay extends OverlayPanel
 			case ZCB_DAMAGE:
 				return config.showZcbDamage();
 
-			case OTHER_SPEC_DAMAGE:
-				return config.showOtherSpecDamage();
+			case SCYTHE_PUNISH:
+				return config.showScythePunish();
+
+			case NOXIOUS_HALBERD_PUNISH:
+				return config.showNoxiousHalberdPunish();
+
+			case CRYSTAL_HALBERD_PUNISH:
+				return config.showCrystalHalberdPunish();
 
 			default:
 				return false;
@@ -193,13 +234,31 @@ class DoomMetricsOverlay extends OverlayPanel
 	 * <p>A zero stays grey rather than taking a faint tint of its unit: a counter that has not
 	 * fired is being drawn back deliberately, and the whole point of the colour is that it marks
 	 * out a figure worth reading.
+	 *
+	 * @param icon   drawn in place of {@code left} when there is one, or null for the words
+	 * @param recent what the counter has just gained, drawn in place of the total while it is
+	 *               more than nothing
 	 */
-	private void addAmount(String left, long amount, CombatMetric.Unit unit)
+	private void addAmount(String left, BufferedImage icon, long amount, long recent,
+		CombatMetric.Unit unit)
 	{
-		panelComponent.getChildren().add(LineComponent.builder()
-			.left(left)
-			.right(DoomFormat.count(amount))
+		LineComponent line = LineComponent.builder()
+			.left(icon == null ? left : "")
+			.right(recent > 0 ? "+" + DoomFormat.count(recent) : DoomFormat.count(amount))
 			.rightColor(amount > 0 ? unit.color() : DoomColors.DIMMED)
+			.build();
+
+		if (icon == null)
+		{
+			panelComponent.getChildren().add(line);
+			return;
+		}
+
+		panelComponent.getChildren().add(SplitComponent.builder()
+			.first(new ImageComponent(icon))
+			.second(line)
+			.orientation(ComponentOrientation.HORIZONTAL)
+			.gap(ICON_GAP)
 			.build());
 	}
 

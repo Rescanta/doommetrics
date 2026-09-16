@@ -39,7 +39,7 @@ import net.runelite.client.ui.laf.RuneLiteLAF;
  * The plugin's interfaces, on screen, with no game underneath them.
  *
  * <p>Run it with {@code gradlew preview}. The overlay is on the left over a backdrop you can
- * change, the side panel is on the right at the width RuneLite gives it, and the history window
+ * change, the side panel is on the right at the width RuneLite gives it, and the detail window
  * opens from a button. Every option that changes how they look is a control down the side, so
  * something you would otherwise log in, walk to the Doom and delve twenty times to see is a
  * checkbox away instead.
@@ -68,7 +68,7 @@ public class PreviewWindow
 
 	private final PreviewPlugin plugin = new PreviewPlugin();
 	private final DoomMetricsOverlay overlay = new DoomMetricsOverlay(plugin, config);
-	private final DoomMetricsPanel panel = new DoomMetricsPanel(this::openHistory);
+	private final DoomMetricsPanel panel = new DoomMetricsPanel(this::openDetail);
 
 	/** The same square the plugin puts up, reading the same config the overlay beside it does. */
 	private final DoomMetricsInfoBox infoBox =
@@ -81,22 +81,28 @@ public class PreviewWindow
 	private final JComboBox<PreviewRender.Backdrop> backdropPicker =
 		new JComboBox<>(PreviewRender.Backdrop.values());
 	private final JComboBox<Integer> zoomPicker = new JComboBox<>(new Integer[]{1, 2, 3});
+	private final JComboBox<PreviewRender.Chatbox> chatboxPicker =
+		new JComboBox<>(PreviewRender.Chatbox.values());
 	private final JComboBox<PaceMode> pacePicker = new JComboBox<>(PaceMode.values());
 	private final JComboBox<MetricDisplay> groupingPicker = new JComboBox<>(MetricDisplay.values());
+	private final JComboBox<TargetPrediction> predictionPicker =
+		new JComboBox<>(TargetPrediction.values());
 
 	/** Puts every control back to what the config says, for when a scene changes it underneath. */
 	private final List<Runnable> restaters = new ArrayList<>();
 
 	private final JLabel note = new JLabel();
 	private final OverlayCanvas canvas = new OverlayCanvas();
+	private final ChatCanvas chat = new ChatCanvas();
 
 	private PreviewScene scene;
-	private HistoryWindow history;
+	private RunDetailWindow detail;
 
 	private void open()
 	{
 		JFrame frame = new JFrame("Doom Metrics - interface preview");
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		panel.setIcons(PreviewIcons.INSTANCE);
 		frame.setContentPane(content());
 		frame.setSize(1180, 780);
 		frame.setLocationRelativeTo(null);
@@ -115,9 +121,19 @@ public class PreviewWindow
 		root.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		root.setBorder(new EmptyBorder(10, 10, 10, 10));
 		root.add(controls(), BorderLayout.WEST);
-		root.add(canvas, BorderLayout.CENTER);
+		root.add(game(), BorderLayout.CENTER);
 		root.add(sidePanel(), BorderLayout.EAST);
 		return root;
+	}
+
+	/** The overlay where the game's corner would be, and the chatbox under it. */
+	private JComponent game()
+	{
+		JPanel game = new JPanel(new BorderLayout(0, 10));
+		game.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		game.add(canvas, BorderLayout.CENTER);
+		game.add(titled("Chat", chat), BorderLayout.SOUTH);
+		return game;
 	}
 
 	/** The side panel as RuneLite hangs it: fixed width, scrolled, nothing else beside it. */
@@ -140,7 +156,12 @@ public class PreviewWindow
 
 		zoomPicker.setSelectedItem(2);
 		zoomPicker.addActionListener(event -> canvas.repaint());
-		backdropPicker.addActionListener(event -> canvas.repaint());
+		chatboxPicker.addActionListener(event -> chat.repaint());
+		backdropPicker.addActionListener(event ->
+		{
+			canvas.repaint();
+			chat.repaint();
+		});
 
 		stylePicker.addActionListener(event ->
 		{
@@ -170,6 +191,13 @@ public class PreviewWindow
 		});
 		restaters.add(() -> groupingPicker.setSelectedItem(config.grouping));
 
+		predictionPicker.addActionListener(event ->
+		{
+			config.targetPrediction = (TargetPrediction) predictionPicker.getSelectedItem();
+			refresh();
+		});
+		restaters.add(() -> predictionPicker.setSelectedItem(config.targetPrediction));
+
 		note.setFont(FontManager.getRunescapeSmallFont());
 		note.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		note.setAlignmentX(0f);
@@ -183,31 +211,39 @@ public class PreviewWindow
 		stack.add(Box.createVerticalStrut(10));
 		stack.add(labelled("Backdrop", backdropPicker));
 		stack.add(labelled("Zoom", zoomPicker));
+		stack.add(labelled("Chatbox", chatboxPicker));
 
 		stack.add(heading("Display"));
 		stack.add(labelled("Style", stylePicker));
 		stack.add(labelled("Square", figurePicker));
 
 		stack.add(heading("Overlay rows"));
+		stack.add(toggle("Hide plugin name",
+			() -> config.hidePluginName, on -> config.hidePluginName = on));
 		stack.add(toggle("Delve number",
 			() -> config.showDelveNumber, on -> config.showDelveNumber = on));
 		stack.add(toggle("Run timer", () -> config.showRunTimer, on -> config.showRunTimer = on));
 		stack.add(toggle("Pace", () -> config.showPace, on -> config.showPace = on));
 		stack.add(toggle("Target delve",
 			() -> config.showTargetDelve, on -> config.showTargetDelve = on));
+		stack.add(labelled("Prediction", predictionPicker));
 		stack.add(labelled("Pace mode", pacePicker));
 		stack.add(labelled("Counters", groupingPicker));
+		stack.add(toggle("Icons for counters",
+			() -> config.counterIcons, on -> config.counterIcons = on));
+		stack.add(toggle("Hide counters at 0",
+			() -> config.hideEmptyCounters, on -> config.hideEmptyCounters = on));
 
 		stack.add(heading("Counters shown"));
 
-		for (CombatMetric metric : CombatMetric.values())
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			stack.add(toggle(metric.overlayLabel(),
 				() -> config.counter(metric), on -> config.counter(metric, on)));
 		}
 
 		stack.add(Box.createVerticalStrut(10));
-		stack.add(button("Open history window", this::openHistory));
+		stack.add(button("Open run detail window", this::openDetail));
 		stack.add(button("Write PNGs", this::writeShots));
 		stack.add(Box.createVerticalGlue());
 
@@ -234,9 +270,9 @@ public class PreviewWindow
 		note.setText("<html><body style='width:210px'>" + loaded.note + "</body></html>");
 		panel.setRows(loaded.rows);
 
-		if (history != null)
+		if (detail != null)
 		{
-			openHistory();
+			openDetail();
 		}
 
 		for (Runnable restate : restaters)
@@ -257,20 +293,32 @@ public class PreviewWindow
 		panel.setLive(scene.live(config));
 		panel.setStats(scene.stats);
 		panel.setCombat(scene.panelCombat());
-		canvas.repaint();
-	}
 
-	private void openHistory()
-	{
-		if (history == null)
+		if (detail != null)
 		{
-			history = new HistoryWindow(null, () -> history = null);
+			// The head of the detail window is the same rows the side panel draws, so a knob
+			// turned in the preview has to move both of them.
+			detail.setLive(scene.live(config));
+			detail.setHideEmpty(config.hideEmptyCounters);
 		}
 
-		history.setRows(scene.rows);
-		history.setLifetimeCombat(scene.lifetime);
-		history.setSeries(scene.series);
-		history.open(canvas);
+		canvas.repaint();
+		chat.repaint();
+	}
+
+	private void openDetail()
+	{
+		if (detail == null)
+		{
+			detail = new RunDetailWindow(null, () -> detail = null);
+			detail.setIcons(PreviewIcons.INSTANCE);
+		}
+
+		detail.setHideEmpty(config.hideEmptyCounters);
+
+		detail.setLive(scene.live(config));
+		detail.setDetail(scene.detail());
+		detail.open(canvas);
 	}
 
 	private void writeShots()
@@ -330,6 +378,47 @@ public class PreviewWindow
 				default:
 					return "No run to draw, so the overlay draws nothing";
 			}
+		}
+	}
+
+	/**
+	 * Every line the scene's run would post, in the chatbox picked, at the game's own size rather
+	 * than the overlay's zoom - a chat line is only ever read at that size, and wraps at it.
+	 */
+	private class ChatCanvas extends JComponent
+	{
+		ChatCanvas()
+		{
+			setPreferredSize(new Dimension(0, 170));
+		}
+
+		@Override
+		protected void paintComponent(Graphics graphics)
+		{
+			PreviewRender.Backdrop backdrop =
+				(PreviewRender.Backdrop) backdropPicker.getSelectedItem();
+
+			Graphics2D target = (Graphics2D) graphics;
+			target.setColor(backdrop.color);
+			target.fillRect(0, 0, getWidth(), getHeight());
+
+			if (scene == null)
+			{
+				return;
+			}
+
+			BufferedImage drawn = PreviewRender.chat(scene.chat(config),
+				(PreviewRender.Chatbox) chatboxPicker.getSelectedItem(), backdrop);
+
+			if (drawn == null)
+			{
+				target.setFont(FontManager.getRunescapeFont());
+				target.setColor(ColorScheme.TEXT_COLOR);
+				target.drawString("No delve cleared, so nothing has been posted to chat", 12, 30);
+				return;
+			}
+
+			target.drawImage(drawn, 10, 10, null);
 		}
 	}
 

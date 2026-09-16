@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,7 @@ import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
 import net.runelite.api.Hitsplat;
+import net.runelite.api.HitsplatID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
@@ -30,34 +33,43 @@ import net.runelite.api.NPC;
 import net.runelite.api.ScriptID;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
+import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.VarbitChanged;
+import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.InfoBoxMenuClicked;
 import net.runelite.client.events.OverlayMenuClicked;
 import net.runelite.client.events.RuneScapeProfileChanged;
+import net.runelite.client.game.ItemEquipmentStats;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStats;
+import net.runelite.client.game.SpriteManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
@@ -65,6 +77,7 @@ import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.util.Text;
 
 @Slf4j
 @PluginDescriptor(
@@ -88,6 +101,15 @@ public class DoomMetricsPlugin extends Plugin
 	 * no varplayer and posts no chat message.
 	 */
 	private static final int ABANDON_TICKS = 100;
+
+	/** How often the prayer regeneration potion gives a point back, in game ticks. */
+	private static final int PRAYER_REGEN_PERIOD = 12;
+
+	/**
+	 * How often a hitpoint comes back on its own, in game ticks - one a minute, which is what a
+	 * player who is not going out of their way to heal faster regenerates at.
+	 */
+	private static final int HITPOINTS_REGEN_PERIOD = 100;
 
 	/** Package-private so the infobox can carry the same option the overlay does. */
 	static final String CLEAR_OPTION = "Clear";
@@ -119,6 +141,16 @@ public class DoomMetricsPlugin extends Plugin
 		"You have a funny feeling like you would have been followed",
 		"You feel something weird sneaking into your backpack"
 	};
+
+	/**
+	 * The warning the game puts up for each unique in the pile as you try to go deeper - one per
+	 * copy, every try: "Your loot contains Dom! Are you sure you want to descend further?". The
+	 * name is taken from it only as a fallback, since the dialog also shows the item itself.
+	 */
+	private static final Pattern LOOT_WARNING = Pattern.compile("^Your loot contains (.+?)! Are you sure");
+
+	/** The menu option that goes deeper, on the hole and on the loot screen alike. */
+	private static final String DESCEND_OPTION = "Descend";
 
 	/**
 	 * How long one of our handlers may take before it is worth a line in the log.
@@ -183,9 +215,6 @@ public class DoomMetricsPlugin extends Plugin
 		SpotanimID.SANGUINESTI_STAFF_IMPACT_JUSTICIAR
 	};
 
-	/** The name of the thing whose damage is not counted - see {@link #countsAsDamage}. */
-	private static final String VOLATILE_EARTH = "volatile earth";
-
 	@Inject
 	private Client client;
 
@@ -220,7 +249,23 @@ public class DoomMetricsPlugin extends Plugin
 	private ItemManager itemManager;
 
 	@Inject
+	private SpriteManager spriteManager;
+
+	@Inject
 	private ClientThread clientThread;
+
+	@Inject
+	private EventBus eventBus;
+
+	/** Logs what the game shows around a delve's end, under the debug setting. See the class. */
+	private LootDiagnostics lootDiagnostics;
+
+	/**
+	 * Whether {@link #lootDiagnostics} is on the event bus, which it only is while debug logging is
+	 * on. It listens to scripts, varbits, sounds and object spawns, which fire far too often to hand
+	 * to a listener with nothing to do - see {@link #updateDiagnostics}.
+	 */
+	private boolean diagnosticsRegistered;
 
 	private DoomMetricsPanel panel;
 	private NavigationButton navButton;
@@ -228,32 +273,29 @@ public class DoomMetricsPlugin extends Plugin
 	/** The square, up for as long as the plugin is. It decides for itself when to draw. */
 	private DoomMetricsInfoBox infoBox;
 
-	/** Read on the Swing thread when the history window is built, cleared on shutdown. */
+	/** The picture the client last scaled for the square - see {@link #refreshInfoBoxPicture}. */
+	private BufferedImage infoBoxPicture;
+
+	/** The pictures drawn in place of names, from the game, for as long as the plugin is up. */
+	private volatile GameIcons icons;
+
+	/** Read on the Swing thread when the detail window is built, cleared on shutdown. */
 	private volatile BufferedImage icon;
 
 	/**
-	 * The history window while it is open, or null. Swing thread only - it is created, read and
+	 * The run detail window while it is open, or null. Swing thread only - it is created, read and
 	 * disposed there, so the client thread never touches a frame mid-layout.
 	 */
-	private HistoryWindow historyWindow;
+	private RunDetailWindow detailWindow;
 
 	/**
-	 * The last milestone snapshot pushed to the Swing thread, so a window opening between two runs
-	 * has a table to draw without reading the model the client thread owns. Swing thread only.
+	 * The run the open window is drawing, held so a window opened between two runs has the last
+	 * one to show without reaching back into a run the client thread owns. Swing thread only.
 	 */
-	private List<MilestoneTablePanel.Row> tableRows = Collections.emptyList();
+	private RunDetail windowDetail = RunDetail.empty();
 
-	/**
-	 * The history the open window's chart is drawing, so a run finishing while it is up can be
-	 * added without re-reading the file. Swing thread only.
-	 */
-	private RunSeries chartSeries = RunSeries.empty();
-
-	/**
-	 * The last lifetime combat snapshot pushed to the Swing thread, so a window opening between two
-	 * runs has figures to draw without reading the tally the client thread owns. Swing thread only.
-	 */
-	private CombatTotals windowCombat = new CombatTotals();
+	/** The last live rows pushed across, for the same reason. Swing thread only. */
+	private DoomMetricsPanel.Live windowLive;
 
 	/** This character's lifetime table, reloaded whenever the profile changes. */
 	private final MilestoneTable milestones = new MilestoneTable();
@@ -279,6 +321,16 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	private final CombatTracker combatTracker = new CombatTracker(this::recordCombat);
 
+	/** Works out which hits on the boss were a melee punish. Fed only while a run is in progress. */
+	private final PunishTracker punishTracker = new PunishTracker(this::recordCombat, this::handBack);
+
+	/**
+	 * The boss, standing, shielded or burrowed, while it is in the scene - the one NPC whose prayer
+	 * is read every tick. Held from its spawn rather than looked for, and the same object across
+	 * its forms: shielding and burrowing change what it is, not which NPC it is.
+	 */
+	private NPC boss;
+
 	/**
 	 * The special attack energy as we last saw it. A spec is a drop in this - it only ever climbs
 	 * on its own - and the weapon held when it drops is what fired.
@@ -290,6 +342,12 @@ public class DoomMetricsPlugin extends Plugin
 
 	/** The boosted hitpoints level as we last saw it, for the same reason. */
 	private int hitpoints;
+
+	/** Tells the regeneration potion's drip from the prayer points the gear gave back. */
+	private final Regeneration prayerRegeneration = new Regeneration();
+
+	/** Tells the hitpoints that come back on their own from the ones the gear gave back. */
+	private final Regeneration hitpointsRegeneration = new Regeneration();
 
 	/**
 	 * When the session's most recent run ended, or null while one is in progress or before the
@@ -313,8 +371,18 @@ public class DoomMetricsPlugin extends Plugin
 
 	private DelveRun run;
 
-	/** The last run that ended for a reason worth showing, kept for the linger window. */
+	/**
+	 * The last run that ended for a reason worth showing: kept for the linger window, and drawn by
+	 * the run detail window until the next run starts.
+	 */
 	private DelveRun lastRun;
+
+	/**
+	 * Whether Clear has taken {@link #lastRun} off the game screen. The detail window goes on
+	 * drawing it: Clear is for what sits over the game, and the window is only up because it was
+	 * opened.
+	 */
+	private boolean lastRunCleared;
 
 	/**
 	 * Set while {@link #run} is being held open across a lost connection, and null the rest of the
@@ -337,8 +405,20 @@ public class DoomMetricsPlugin extends Plugin
 	/** What the live section last drew, so an unchanged tick costs nothing. */
 	private String lastLiveKey;
 
+	/** What the run detail window last drew, for the same reason - see {@link #refreshDetail}. */
+	private String lastDetailKey;
+
 	private int bossCount;
 	private int ticksWithoutBoss;
+
+	/**
+	 * Set when "Claim and leave" is clicked, and cleared by anything that shows the run carrying on.
+	 * Only while it is set is the claimed loot filling in taken as the claim - see
+	 * {@link #handleItemContainerChanged} - so a copy of it sent for any other reason cannot end a
+	 * run. The claim script and the buttons that take the claimed loot still close the run out on
+	 * their own.
+	 */
+	private boolean claimRequested;
 
 	@Provides
 	DoomMetricsConfig provideConfig(ConfigManager configManager)
@@ -352,7 +432,13 @@ public class DoomMetricsPlugin extends Plugin
 		overlayManager.add(overlay);
 
 		icon = ImageUtil.loadImageResource(DoomMetricsPlugin.class, "panel_icon.png");
-		panel = new DoomMetricsPanel(this::openHistoryWindow);
+		panel = new DoomMetricsPanel(this::openDetailWindow);
+
+		// Asked for up front, so they are in hand by the time anything is drawn with them.
+		icons = new GameIcons(itemManager, spriteManager,
+			() -> SwingUtilities.invokeLater(this::iconsArrived));
+		icons.preload(NOTABLE_DROPS);
+		panel.setIcons(icons);
 		navButton = NavigationButton.builder()
 			.tooltip("Doom Metrics")
 			.icon(icon)
@@ -364,6 +450,10 @@ public class DoomMetricsPlugin extends Plugin
 		infoBox = new DoomMetricsInfoBox(icon, this, config);
 		infoBoxManager.addInfoBox(infoBox);
 
+		lootDiagnostics = new LootDiagnostics(client, config, () -> run != null,
+			() -> run != null && run.isBetweenDelves());
+		updateDiagnostics();
+
 		reset();
 		loadMilestones();
 		loadTotals();
@@ -372,6 +462,14 @@ public class DoomMetricsPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		if (diagnosticsRegistered)
+		{
+			eventBus.unregister(lootDiagnostics);
+			diagnosticsRegistered = false;
+		}
+
+		lootDiagnostics = null;
+
 		overlayManager.remove(overlay);
 		infoBoxManager.removeInfoBox(infoBox);
 		infoBox = null;
@@ -379,18 +477,74 @@ public class DoomMetricsPlugin extends Plugin
 		navButton = null;
 		panel = null;
 		icon = null;
+		icons = null;
+		infoBoxPicture = null;
 
 		// The window outlives the side panel unless it is taken down explicitly, and a disabled
 		// plugin leaving a frame on screen would go on drawing data it no longer maintains.
-		SwingUtilities.invokeLater(this::closeHistoryWindow);
+		SwingUtilities.invokeLater(this::closeDetailWindow);
 
 		reset();
+	}
+
+	/**
+	 * The pictures drawn in place of names: the game's, while the plugin is up, and none at all
+	 * otherwise. Package-private so the preview harness can hand over its own.
+	 */
+	Icons getIcons()
+	{
+		GameIcons held = icons;
+		return held == null ? Icons.NONE : held;
+	}
+
+	/**
+	 * Hands the pictures over again as each one arrives from the game, so a name drawn in words
+	 * while its picture was on its way is swapped for it. Swing thread.
+	 */
+	private void iconsArrived()
+	{
+		DoomMetricsPanel shown = panel;
+
+		if (shown != null)
+		{
+			shown.setIcons(getIcons());
+		}
+
+		if (detailWindow != null)
+		{
+			detailWindow.setIcons(getIcons());
+		}
+	}
+
+	/**
+	 * Tells the client when the square's picture has changed - a single counter picked, icons
+	 * switched on or off, or the icon arriving from the game. The client scales an infobox's
+	 * picture once, when told to, rather than on every frame, so a picture swapped without telling
+	 * it would never be drawn. Looked at once a tick, which costs a comparison.
+	 */
+	private void refreshInfoBoxPicture()
+	{
+		DoomMetricsInfoBox box = infoBox;
+
+		if (box == null)
+		{
+			return;
+		}
+
+		BufferedImage picture = box.getImage();
+
+		if (picture != infoBoxPicture)
+		{
+			infoBoxPicture = picture;
+			infoBoxManager.updateInfoBoxImage(box);
+		}
 	}
 
 	private void reset()
 	{
 		run = null;
 		lastRun = null;
+		lastRunCleared = false;
 		resumeCheck = null;
 		runProfile = null;
 		loginAt = null;
@@ -399,9 +553,14 @@ public class DoomMetricsPlugin extends Plugin
 		session = new DelveTotals();
 		sessionCombat = new CombatTotals();
 		combatTracker.reset();
+		punishTracker.reset();
+		boss = null;
+		claimRequested = false;
 		specEnergy = 0;
 		prayerPoints = 0;
 		hitpoints = 0;
+		prayerRegeneration.reset();
+		hitpointsRegeneration.reset();
 		sessionEndedAt = null;
 		sessionStartedAt = null;
 		sessionProfile = null;
@@ -418,7 +577,7 @@ public class DoomMetricsPlugin extends Plugin
 			return run;
 		}
 
-		if (lastRun == null || lastRun.getEndedAt() == null)
+		if (lastRun == null || lastRunCleared || lastRun.getEndedAt() == null)
 		{
 			return null;
 		}
@@ -431,6 +590,58 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		return lastRun;
+	}
+
+	/** Puts the diagnostics on the event bus while debug logging is on, and takes them off after. */
+	private void updateDiagnostics()
+	{
+		boolean wanted = config.debugLogging();
+
+		if (lootDiagnostics == null || wanted == diagnosticsRegistered)
+		{
+			return;
+		}
+
+		if (wanted)
+		{
+			eventBus.register(lootDiagnostics);
+		}
+		else
+		{
+			eventBus.unregister(lootDiagnostics);
+		}
+
+		diagnosticsRegistered = wanted;
+	}
+
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if (!DoomMetricsConfig.GROUP.equals(event.getGroup()))
+		{
+			return;
+		}
+
+		if ("debugLogging".equals(event.getKey()))
+		{
+			updateDiagnostics();
+			return;
+		}
+
+		if (!"hideEmptyCounters".equals(event.getKey()))
+		{
+			return;
+		}
+
+		// The overlay reads the setting every frame; the window only when told.
+		boolean hideEmpty = config.hideEmptyCounters();
+		SwingUtilities.invokeLater(() ->
+		{
+			if (detailWindow != null)
+			{
+				detailWindow.setHideEmpty(hideEmpty);
+			}
+		});
 	}
 
 	@Subscribe
@@ -452,6 +663,12 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
+		if (event.getType() == ChatMessageType.MESBOX)
+		{
+			lootWarning(event.getMessage());
+			return;
+		}
+
 		if (event.getType() != ChatMessageType.GAMEMESSAGE)
 		{
 			return;
@@ -459,7 +676,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (isPetMessage(event.getMessage()))
 		{
-			petDropped();
+			petClaimed();
 			return;
 		}
 
@@ -494,25 +711,89 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Records the pet against the run in progress.
+	 * The pet leaving with a claim.
 	 *
-	 * <p>The pet is the one drop the loot pile cannot be relied on for: it is handed over the
-	 * moment it rolls rather than waiting to be claimed with the rest, so this chat line is the
-	 * only sight of it there is. Should it turn up in the pile as well, keying loot by item id
-	 * means the run still only counts it once.
+	 * <p>The game says nothing about the pet until the loot is claimed, and then says this whether
+	 * or not the pet is new - "would have been followed" is the one already owned, which never
+	 * reaches the claimed loot at all. So this is the claim's word that the pet was in the pile.
+	 * One the warnings already placed stays where it is; one that dropped on the last delve, and so
+	 * never came up in a warning, is placed there.
 	 *
-	 * <p>Attributing it to the Doom needs no further checking, because there is nothing else to
-	 * attribute it to - a pet rolled while a delve is in progress came from the thing being fought.
+	 * <p>It lands in the same tick as the claim, ahead of the claimed loot that closes the run out -
+	 * see {@link #finishClaim}.
 	 */
-	private void petDropped()
+	private void petClaimed()
 	{
 		if (run == null)
 		{
 			return;
 		}
 
-		recordLoot(ItemID.DOMPET, 1);
-		log.debug("Pet dropped on delve {}", run.currentLevel());
+		int pets = Math.max(1, run.held(ItemID.DOMPET));
+		run.sawInPile(ItemID.DOMPET, itemName(ItemID.DOMPET), pets);
+		recordLoot(ItemID.DOMPET, pets);
+		log.debug("Pet claimed, from delve {}", run.dropLevel());
+	}
+
+	/**
+	 * A "Your loot contains" warning, as you try to go deeper with a unique still in the pile.
+	 *
+	 * <p>This is the one sight of a unique nobody can skip: the loot screen is optional and the
+	 * pile is only sent when it is opened, but every descend brings these up, one per copy. The
+	 * dialog holds the item itself as well as its name, and the item is read on the way out of this
+	 * event rather than in it, once the dialog has been filled in.
+	 */
+	private void lootWarning(String message)
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		Matcher matcher = LOOT_WARNING.matcher(Text.removeTags(message));
+
+		if (!matcher.find())
+		{
+			return;
+		}
+
+		String named = matcher.group(1);
+
+		clientThread.invokeLater(() ->
+		{
+			if (run == null)
+			{
+				return;
+			}
+
+			Widget shown = client.getWidget(InterfaceID.Objectbox.ITEM);
+			int itemId = shown != null && NOTABLE_DROPS.contains(shown.getItemId())
+				? shown.getItemId()
+				: notableNamed(named);
+
+			if (itemId < 0)
+			{
+				log.debug("Loot warning for \"{}\", which is not a drop we track", named);
+				return;
+			}
+
+			boolean placed = run.warnedOf(itemId, itemName(itemId));
+			log.debug("Loot warning for item {} on delve {}, placed: {}", itemId, run.dropLevel(), placed);
+		});
+	}
+
+	/** The notable drop the game calls {@code name}, or -1 for none. */
+	private int notableNamed(String name)
+	{
+		for (int itemId : NOTABLE_DROPS)
+		{
+			if (name.equalsIgnoreCase(itemName(itemId)))
+			{
+				return itemId;
+			}
+		}
+
+		return -1;
 	}
 
 	/**
@@ -529,25 +810,12 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		ItemContainer pile = client.getItemContainer(InventoryID.DOM_LOOTPILE);
-
-		if (pile == null)
-		{
-			return;
-		}
-
-		// Totalled across the pile before anything is recorded, because two of the same unique are
-		// two separate slots holding one each, and reporting them one slot at a time would look
-		// like the same single drop seen twice.
-		Map<Integer, Integer> claimed = new LinkedHashMap<>();
-
-		for (Item item : pile.getItems())
-		{
-			if (NOTABLE_DROPS.contains(item.getId()))
-			{
-				claimed.merge(item.getId(), Math.max(1, item.getQuantity()), Integer::sum);
-			}
-		}
+		// Both copies of the pile, taking the larger count of each drop. The claim script reads the
+		// first, which is the one the game's own loot tracking reads; the second is the pile as it
+		// stands mid-run, read too so a claim never misses a drop the run watched land.
+		Map<Integer, Integer> claimed = notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE));
+		notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
+			.forEach((itemId, quantity) -> claimed.merge(itemId, quantity, Math::max));
 
 		claimed.forEach((itemId, quantity) ->
 		{
@@ -557,11 +825,128 @@ public class DoomMetricsPlugin extends Plugin
 		});
 	}
 
+	/**
+	 * How many of each notable drop a copy of the pile holds, keyed by item id. Empty for a pile
+	 * the game has not sent.
+	 *
+	 * <p>Totalled across the pile, because two of the same unique are two separate slots holding
+	 * one each, and reporting them one slot at a time would look like the same single drop seen
+	 * twice.
+	 */
+	private static Map<Integer, Integer> notableDrops(ItemContainer pile)
+	{
+		Map<Integer, Integer> drops = new LinkedHashMap<>();
+
+		if (pile == null)
+		{
+			return drops;
+		}
+
+		for (Item item : pile.getItems())
+		{
+			if (NOTABLE_DROPS.contains(item.getId()))
+			{
+				drops.merge(item.getId(), Math.max(1, item.getQuantity()), Integer::sum);
+			}
+		}
+
+		return drops;
+	}
+
 	/** Names the item from the cache, so the history is not pinned to names hardcoded here. */
 	private void recordLoot(int itemId, int quantity)
 	{
-		ItemComposition item = itemManager.getItemComposition(itemId);
-		run.recordLoot(itemId, item == null ? null : item.getName(), quantity);
+		run.recordLoot(itemId, itemName(itemId), quantity);
+	}
+
+	@Subscribe
+	public void onItemContainerChanged(ItemContainerChanged event)
+	{
+		long started = System.nanoTime();
+		handleItemContainerChanged(event);
+		reportSlow("onItemContainerChanged", started);
+	}
+
+	/**
+	 * Watches the loot pile grow, and places each notable drop on the delve it came off.
+	 *
+	 * <p>Only a count going up is a drop. The game sends the pile over again and again while a
+	 * unique sits in it - and warns about it on every descend - so being told the pile holds an eye
+	 * says nothing on its own; being told it holds one more eye than it did is the eye dropping.
+	 * Both copies of the pile are watched, and a drop that shows up in both is placed once: the
+	 * second copy to show it finds the run already knows.
+	 *
+	 * <p>This places drops, and does not claim them. What the run walked out with is still decided
+	 * at the claim - see {@link #claimLootPile}.
+	 */
+	private void handleItemContainerChanged(ItemContainerChanged event)
+	{
+		int containerId = event.getContainerId();
+
+		if (run == null
+			|| (containerId != InventoryID.DOM_LOOTPILE && containerId != InventoryID.DOM_LOOTPILE_DURING))
+		{
+			return;
+		}
+
+		Map<Integer, Integer> drops = notableDrops(event.getItemContainer());
+		log.debug("Loot pile {} sent on delve {} (between delves: {}), notable drops {}",
+			containerId, run.currentLevel(), run.dropLevel() != run.currentLevel(), drops);
+
+		drops.forEach((itemId, quantity) ->
+		{
+			if (run.sawInPile(itemId, itemName(itemId), quantity))
+			{
+				log.debug("Item {} landed on delve {}, pile now holds {}",
+					itemId, run.dropLevel(), quantity);
+			}
+		});
+
+		// The claimed loot, filled in as the claim is confirmed - the surest sign the claim went
+		// through. Empty is the same copy being cleared as the loot is taken, long after. Only once
+		// "Claim and leave" has been clicked, so a copy sent for any other reason cannot end the run.
+		if (containerId == InventoryID.DOM_LOOTPILE && claimRequested
+			&& !isEmpty(event.getItemContainer()))
+		{
+			finishClaim();
+		}
+	}
+
+	private static boolean isEmpty(ItemContainer container)
+	{
+		if (container == null)
+		{
+			return true;
+		}
+
+		for (Item item : container.getItems())
+		{
+			if (item.getId() > 0)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Closes out a run whose loot has just been claimed, reading the claim first.
+	 *
+	 * <p>Claiming is two clicks - "Claim and leave", then Confirm on the warning that it ends the run
+	 * - and only the second one claims anything. Backing out at the warning leaves you in the delve
+	 * with the run going. Everything that says the claim happened lands on the Confirm: the claimed
+	 * loot, the claim script, and the pet's chat line ahead of both.
+	 */
+	private void finishClaim()
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		claimLootPile();
+		endRun(EndReason.FINISHED, -1);
 	}
 
 	/**
@@ -577,7 +962,8 @@ public class DoomMetricsPlugin extends Plugin
 		}
 		else
 		{
-			run.enterLevel(level);
+			run.enterLevel(level, Instant.now());
+			claimRequested = false;
 			log.debug("Delve {} started", level);
 		}
 	}
@@ -600,7 +986,7 @@ public class DoomMetricsPlugin extends Plugin
 		log.debug("Delve {} cleared in {} (segment {})",
 			level, DoomFormat.preciseDuration(fight), DoomFormat.duration(split.segment));
 
-		announceClear(level, split);
+		announceClear(level);
 		recordMilestone(level);
 	}
 
@@ -629,9 +1015,10 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Claiming loot and leaving are both explicit "I am done" clicks, and they are the only end
-	 * signal for a trip that never descended past delve 1: DOM_CURRENT_LEVEL_TEMP stays at zero
-	 * throughout delve 1, so it has no transition to fire on.
+	 * Trying to descend, and the clicks around a claim.
+	 *
+	 * <p>The claim and leaving are the only end signal for a trip that never descended past delve 1:
+	 * DOM_CURRENT_LEVEL_TEMP stays at zero throughout delve 1, so it has no transition to fire on.
 	 */
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
@@ -649,32 +1036,51 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		int widgetId = event.getParam1();
-		boolean claiming = widgetId == InterfaceID.DomEndLevelUi.BTN_CLAIM;
 
-		if (!claiming && widgetId != InterfaceID.DomEndLevelUi.BTN_LEAVE)
+		// Trying to go deeper, from the hole or the loot screen. The warnings this brings up are
+		// counted afresh - but not the Descend on a warning itself, which is the same try going on
+		// to the next warning in the row.
+		if (widgetId == InterfaceID.DomEndLevelUi.BTN_DESCEND
+			|| (DESCEND_OPTION.equals(Text.removeTags(event.getMenuOption()))
+				&& WidgetUtil.componentToInterface(widgetId) != InterfaceID.OBJECTBOX))
 		{
+			run.descending();
+			claimRequested = false;
 			return;
 		}
 
-		if (claiming)
+		// "Claim and leave" is not the claim: it asks for a Confirm first, and backing out of that
+		// carries on the run. The claim closes the run out when it lands - see finishClaim. The
+		// click does say a claim may be on its way, which is what the claimed loot is read against.
+		if (widgetId == InterfaceID.DomEndLevelUi.BTN_CLAIM)
 		{
-			// Read here rather than waiting for the claim script, which lands after this click and
-			// so after the run has been closed out and written - by which point there is no run
-			// left to hang the drops on.
-			claimLootPile();
+			claimRequested = true;
+			return;
 		}
 
-		endRun(EndReason.FINISHED, -1);
+		// Taking the claimed loot to the inventory or the bank, and leaving, all come after the
+		// claim on the same screen, so a run still open by then has had its claim missed.
+		boolean claimed = widgetId == InterfaceID.DomEndLevelUi.BTN_INV_ALL
+			|| widgetId == InterfaceID.DomEndLevelUi.BTN_BANK_ALL;
+
+		if (claimed)
+		{
+			finishClaim();
+		}
+		else if (widgetId == InterfaceID.DomEndLevelUi.BTN_LEAVE)
+		{
+			endRun(EndReason.FINISHED, -1);
+		}
 	}
 
 	/**
 	 * The game's own signal that the loot has been claimed.
 	 *
 	 * <p>Claiming is the moment the pile becomes yours - leave any other way, or die, and it stays
-	 * behind - so it is the only moment worth reading the pile at, and this is the reading that is
-	 * certain to be at it. The claim button is watched as well, because that click is what closes
-	 * the run out and it cannot wait for this to arrive; between them one of the two is always in
-	 * time, and taking the largest count seen means it costs nothing when both are.
+	 * behind - so it is the only moment worth reading the pile at. The script fires on the Confirm,
+	 * in among the claimed loot arriving, so the claim is read once the tick's events are through
+	 * rather than in the middle of them. The claimed loot arriving closes the run out too, and
+	 * whichever gets there first does it - see {@link #finishClaim}.
 	 */
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event)
@@ -686,9 +1092,9 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void handleScriptPreFired(ScriptPreFired event)
 	{
-		if (event.getScriptId() == ScriptID.DOM_LOOT_CLAIM)
+		if (event.getScriptId() == ScriptID.DOM_LOOT_CLAIM && run != null)
 		{
-			claimLootPile();
+			clientThread.invokeLater(this::finishClaim);
 		}
 	}
 
@@ -728,55 +1134,129 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		Hitsplat hitsplat = event.getHitsplat();
-		boolean onMe = event.getActor() == client.getLocalPlayer();
+		Actor target = event.getActor();
 		int tick = client.getTickCount();
 
 		// Damage only. Healing is read off the hitpoints level instead - see onStatChanged - and
 		// reading it in both places would count every heal twice.
-		if (!onMe && hitsplat.isMine())
+		if (target == client.getLocalPlayer())
+		{
+			return;
+		}
+
+		boolean onBoss = isCountedBoss(target);
+
+		if (onBoss)
+		{
+			logBossHitsplat(hitsplat, tick);
+		}
+
+		if (onBoss && punishTracker.mayBePunish(tick) && isPunishSplat(hitsplat))
+		{
+			// Held to the end of the tick, when whether it was a punish is known. A hit that was
+			// not comes back through handBack and is counted as any other hit is.
+			punishTracker.hit(hitsplat.getAmount(), hitsplat.isMine(), tick);
+			return;
+		}
+
+		if (hitsplat.isMine())
 		{
 			// Passed on as a zero rather than skipped when it is a hit that does not count: the
 			// spec still spent itself on it, and a budget left unspent would be taken by the
 			// auto-attack behind it instead.
-			int amount = countsAsDamage(event.getActor()) ? hitsplat.getAmount() : 0;
+			int amount = countsAsDamage(target) ? hitsplat.getAmount() : 0;
 			logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
 			combatTracker.damaged(amount, tick);
 		}
 	}
 
 	/**
-	 * Whether a hit on {@code target} is worth adding to a damage figure.
+	 * Whether a hitsplat on the boss can be part of a punish: one of ours, or one drawn in another
+	 * player's colours.
 	 *
-	 * <p>The volatile earth that comes up before the shockwaves is not a health bar anybody is
-	 * racing. It guarantees a max hit, and two of them have to be broken to raise the shield that
-	 * keeps you alive - which is what makes it the best thing in the delve to spend a blowpipe or
-	 * an eldritch spec on, and what makes counting the damage misleading. A delve's spec damage
-	 * would read as though the work had been done there.
+	 * <p>The strength-bonus hitsplats a punish brings are not the ones {@link Hitsplat#isMine()}
+	 * accepts - they are drawn greyer than a hit, and the game does not even draw all of them - so
+	 * they would be dropped with everything else not ours. The fight is solo, which makes a splat
+	 * in another player's colours on the boss ours all the same, and the Doom has a type of its own
+	 * that is taken for the same reason. What stays out is damage over time: poison, venom and burn
+	 * are ticking on their own schedule, not landing with the swing.
+	 *
+	 * <p>Which of these the bonus splats really are is written to the log with every splat on the
+	 * boss - see {@link #logBossHitsplat}.
+	 */
+	private static boolean isPunishSplat(Hitsplat hitsplat)
+	{
+		return hitsplat.isMine() || hitsplat.isOthers()
+			|| hitsplat.getHitsplatType() == HitsplatID.DOOM;
+	}
+
+	/** Every hitsplat on the boss, with its type, while the debug toggle is on. */
+	private void logBossHitsplat(Hitsplat hitsplat, int tick)
+	{
+		if (!config.debugLogging())
+		{
+			return;
+		}
+
+		log.debug("Boss hitsplat {} of type {} at tick {}{}", hitsplat.getAmount(),
+			hitsplat.getHitsplatType(), tick,
+			punishTracker.mayBePunish(tick) ? ", held for the punish check" : "");
+	}
+
+	/**
+	 * A hit of ours on the boss that was held for the punish check, back to be counted the way any
+	 * other is - whole if it was no punish, and as nothing if it was. See {@link PunishTracker}.
+	 */
+	private void handBack(int amount, int tick)
+	{
+		logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
+		combatTracker.damaged(amount, tick);
+	}
+
+	/**
+	 * Whether a hit on {@code target} is worth adding to a damage figure: only a hit on the boss
+	 * itself, standing or burrowed.
+	 *
+	 * <p>Everything else a spec gets fired at down there is a job rather than a health bar anybody
+	 * is racing. The volatile earth before the shockwaves guarantees a max hit and has to be broken
+	 * to raise the shield that keeps you alive, and the larvae have to die before they reach you -
+	 * which makes both the best things in the delve to spend a blowpipe or an eldritch spec on, and
+	 * what makes counting the damage misleading. Nor does the boss count while its demonic shield
+	 * is up: what lands on the shield is not what gets the delve done. A delve's spec damage would
+	 * read as though the work had been done there.
+	 *
+	 * <p>The two that count are listed rather than the things that do not, so an add this version
+	 * has never seen stays out of the figure instead of quietly joining it. Every figure here is a
+	 * floor, and an unknown target costs one a hit rather than inflating it.
 	 *
 	 * <p>Only the damage is dropped. The heal and the prayer that spec was fired for are counted
 	 * exactly as they always were, which is the whole reason it was fired at that target.
 	 */
 	private boolean countsAsDamage(Actor target)
 	{
-		if (!(target instanceof NPC))
+		if (isCountedBoss(target))
 		{
 			return true;
 		}
 
-		NPC npc = (NPC) target;
-		String name = npc.getName();
-
-		// By name as well as by id, for the same reason the spec weapons are: the id list is what
-		// this version knew, and a form it did not know would quietly start counting again.
-		if (npc.getId() == NpcID.DOM_SHOCKWAVE_SHIELD
-			|| npc.getId() == NpcID.DOM_SHOCKWAVE_PATH_NODE
-			|| (name != null && name.toLowerCase().contains(VOLATILE_EARTH)))
+		if (target instanceof NPC)
 		{
-			log.debug("Not counting damage to {} ({})", name, npc.getId());
+			log.debug("Not counting damage to {} ({})", target.getName(), ((NPC) target).getId());
+		}
+
+		return false;
+	}
+
+	/** The boss standing or burrowed - the two forms a hit on counts. See {@link #countsAsDamage}. */
+	private static boolean isCountedBoss(Actor target)
+	{
+		if (!(target instanceof NPC))
+		{
 			return false;
 		}
 
-		return true;
+		int id = ((NPC) target).getId();
+		return id == NpcID.DOM_BOSS || id == NpcID.DOM_BOSS_BURROWED;
 	}
 
 	/**
@@ -799,6 +1279,67 @@ public class DoomMetricsPlugin extends Plugin
 		CombatMetric metric = combatTracker.wouldCredit(kind, tick);
 		log.debug("{} of {} at tick {} -> {}", kind, amount, tick,
 			metric == null ? "nothing open, held for this tick" : metric.key());
+	}
+
+	/**
+	 * The player starting an animation, offered to the punish tracker as a possible swing - which
+	 * it turns out to be only if a melee weapon is in hand once the tick ends. See
+	 * {@link PunishTracker#swung}.
+	 *
+	 * <p>The boss's own animations are logged under the debug toggle too, as the other place a
+	 * punish could be read from if the prayer ever stops saying so.
+	 */
+	@Subscribe
+	public void onAnimationChanged(AnimationChanged event)
+	{
+		long started = System.nanoTime();
+		handleAnimationChanged(event);
+		reportSlow("onAnimationChanged", started);
+	}
+
+	private void handleAnimationChanged(AnimationChanged event)
+	{
+		Actor actor = event.getActor();
+
+		if (run == null || actor == null)
+		{
+			return;
+		}
+
+		int animation = actor.getAnimation();
+		int tick = client.getTickCount();
+
+		if (actor == boss)
+		{
+			// The beam being cut off is the one sign of a punish landed before the prayer shows.
+			// Behind its shield the boss cuts it off over and over on its own, which is why only
+			// the standing boss's is taken - see PunishTracker.
+			if (animation == AnimationID.DOM_BEAM_CANCEL && boss.getId() != NpcID.DOM_BOSS_SHIELDED)
+			{
+				punishTracker.beamCancelled(tick);
+			}
+
+			if (config.debugLogging())
+			{
+				log.debug("Boss animation {} at tick {}", animation, tick);
+			}
+
+			return;
+		}
+
+		// An animation ending is not a swing starting, and nor is eating or drinking - the one
+		// thing a player is likely to do with a melee weapon already in hand under the prayer.
+		if (actor != client.getLocalPlayer() || animation < 0 || animation == AnimationID.HUMAN_EAT)
+		{
+			return;
+		}
+
+		punishTracker.swung(tick);
+
+		if (config.debugLogging())
+		{
+			log.debug("Animation {} at tick {}", animation, tick);
+		}
 	}
 
 	/**
@@ -841,9 +1382,8 @@ public class DoomMetricsPlugin extends Plugin
 			// ago, which is what keeps the login flood out.
 			if (run != null && prayerPoints > was)
 			{
-				int tick = client.getTickCount();
-				logAttribution(SpecEffect.Kind.PRAYER, prayerPoints - was, tick);
-				combatTracker.prayerGained(prayerPoints - was, tick);
+				rose(SpecEffect.Kind.PRAYER, prayerRegeneration, prayerRegenerationPeriod(),
+					was, prayerPoints, event.getLevel());
 			}
 		}
 		else if (event.getSkill() == Skill.HITPOINTS)
@@ -853,11 +1393,100 @@ public class DoomMetricsPlugin extends Plugin
 
 			if (run != null && hitpoints > was)
 			{
-				int tick = client.getTickCount();
-				logAttribution(SpecEffect.Kind.HEAL, hitpoints - was, tick);
-				combatTracker.healed(hitpoints - was, tick);
+				rose(SpecEffect.Kind.HEAL, hitpointsRegeneration, hitpointsRegenerationPeriod(),
+					was, hitpoints, event.getLevel());
 			}
 		}
+	}
+
+	/**
+	 * A level going up, offered to the tracker with whatever came back on its own taken out of it
+	 * first - see {@link Regeneration}.
+	 */
+	private void rose(SpecEffect.Kind kind, Regeneration regeneration, int period, int from, int to,
+		int natural)
+	{
+		int rise = to - from;
+		int tick = client.getTickCount();
+		boolean spare = combatTracker.wouldCredit(kind, tick) == null;
+		int gain = regeneration.without(from, to, natural, tick, period, spare);
+
+		if (gain < rise && config.debugLogging())
+		{
+			log.debug("{} of {} at tick {} has {} that came back on its own in it", kind, rise, tick,
+				rise - gain);
+		}
+
+		if (gain <= 0)
+		{
+			return;
+		}
+
+		logAttribution(kind, gain, tick);
+
+		if (kind == SpecEffect.Kind.PRAYER)
+		{
+			combatTracker.prayerGained(gain, tick);
+		}
+		else
+		{
+			combatTracker.healed(gain, tick);
+		}
+	}
+
+	/** How often the prayer regeneration potion is dripping, or 0 while no dose is in effect. */
+	private int prayerRegenerationPeriod()
+	{
+		return client.getVarbitValue(VarbitID.PRAYER_REGENERATION_POTION_TIMER) > 0
+			? PRAYER_REGEN_PERIOD
+			: 0;
+	}
+
+	/**
+	 * How often a hitpoint comes back on its own, in ticks.
+	 *
+	 * <p>One a minute as standard. Rapid Heal or a cape carrying the Hitpoints cape's perk doubles
+	 * it, and the two do not stack with each other; a regen bracelet doubles it again and does
+	 * stack with either, which is what makes four a minute the ceiling.
+	 */
+	private int hitpointsRegenerationPeriod()
+	{
+		int rate = 1;
+
+		if (client.getVarbitValue(VarbitID.PRAYER_RAPIDHEAL) == 1 || isWearingRegenCape())
+		{
+			rate *= 2;
+		}
+
+		if (isWearingRegenBracelet())
+		{
+			rate *= 2;
+		}
+
+		return HITPOINTS_REGEN_PERIOD / rate;
+	}
+
+	/**
+	 * Whether the cape being worn doubles hitpoints regeneration. The Hitpoints cape does, and so
+	 * does a max cape, which inherits every skillcape's perk - and comes in more recolours than a
+	 * list of ids can keep up with, so it is caught by name as {@link SpecWeapon} catches weapons.
+	 */
+	private boolean isWearingRegenCape()
+	{
+		int itemId = equipped(EquipmentInventorySlot.CAPE);
+
+		if (itemId == ItemID.SKILLCAPE_HITPOINTS || itemId == ItemID.SKILLCAPE_HITPOINTS_TRIMMED)
+		{
+			return true;
+		}
+
+		String name = itemName(itemId);
+		return name != null && name.toLowerCase().contains("max cape");
+	}
+
+	private boolean isWearingRegenBracelet()
+	{
+		return equipped(EquipmentInventorySlot.GLOVES) == ItemID.JEWL_BRACELET_REGEN;
 	}
 
 	/**
@@ -945,11 +1574,11 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		run.recordCombat(metric, amount);
+		run.recordCombat(metric, amount, Instant.now());
 
 		if (config.debugLogging())
 		{
-			log.debug("Counted {} to {} on delve {}", amount, metric.key(), run.currentLevel());
+			log.debug("Counted {} to {} on delve {}", amount, metric.key(), run.dropLevel());
 		}
 	}
 
@@ -1040,7 +1669,7 @@ public class DoomMetricsPlugin extends Plugin
 				return;
 			}
 
-			int itemId = equippedWeapon();
+			int itemId = equipped(EquipmentInventorySlot.WEAPON);
 			SpecWeapon weapon = SpecWeapon.forItem(itemId, itemName(itemId));
 
 			if (weapon == null)
@@ -1056,8 +1685,8 @@ public class DoomMetricsPlugin extends Plugin
 		});
 	}
 
-	/** The item id in the weapon slot, or 0 when the slot is empty or unreadable. */
-	private int equippedWeapon()
+	/** The item id worn in {@code slot}, or 0 when the slot is empty or unreadable. */
+	private int equipped(EquipmentInventorySlot slot)
 	{
 		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
 
@@ -1066,8 +1695,8 @@ public class DoomMetricsPlugin extends Plugin
 			return 0;
 		}
 
-		Item weapon = worn.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
-		return weapon == null ? 0 : weapon.getId();
+		Item item = worn.getItem(slot.getSlotIdx());
+		return item == null ? 0 : item.getId();
 	}
 
 	/** An item's name from the cache, or null when there is nothing to name. */
@@ -1150,28 +1779,6 @@ public class DoomMetricsPlugin extends Plugin
 
 		startSessionForCurrentCharacter();
 		refreshLive();
-		refreshLifetimeCombat();
-	}
-
-	/**
-	 * Pushes the lifetime combat figures over to the Swing thread. Called from the client thread,
-	 * which owns the tally, so a copy crosses rather than the tally itself.
-	 */
-	private void refreshLifetimeCombat()
-	{
-		CombatTotals totals = lifetimeCombat.copy();
-
-		SwingUtilities.invokeLater(() ->
-		{
-			// Held so a window opened later has figures to draw without reaching back into a tally
-			// the client thread may already be writing to again.
-			windowCombat = totals;
-
-			if (historyWindow != null)
-			{
-				historyWindow.setLifetimeCombat(totals);
-			}
-		});
 	}
 
 	/**
@@ -1248,6 +1855,7 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			bossCount++;
 			ticksWithoutBoss = 0;
+			boss = event.getNpc();
 		}
 	}
 
@@ -1265,6 +1873,11 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			bossCount = Math.max(0, bossCount - 1);
 		}
+
+		if (event.getNpc() == boss)
+		{
+			boss = null;
+		}
 	}
 
 	@Subscribe
@@ -1279,7 +1892,100 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		checkResume();
 		trackAbandonedRun();
+		trackPunish();
 		refreshLive();
+		refreshInfoBoxPicture();
+	}
+
+	/**
+	 * Tells the punish tracker whether the boss is praying, and what is in hand if a swing is
+	 * waiting to be read - at the end of the tick, which is when both are settled.
+	 */
+	private void trackPunish()
+	{
+		if (run == null)
+		{
+			return;
+		}
+
+		int tick = client.getTickCount();
+		boolean praying = isBossPraying();
+
+		if (praying != punishTracker.isPraying() && config.debugLogging())
+		{
+			log.debug("Boss overhead {} {} at tick {}",
+				boss == null ? "gone" : Arrays.toString(boss.getOverheadArchiveIds()),
+				boss == null ? "" : Arrays.toString(boss.getOverheadSpriteIds()), tick);
+		}
+
+		punishTracker.tickEnded(tick, praying, this::equippedPunishWeapon);
+	}
+
+	/**
+	 * Whether the boss has an overhead prayer up. Down here that is only ever the one against magic
+	 * and ranged that a punish answers, so any icon at all is the signal, and which one it is
+	 * matters only to the log.
+	 */
+	private boolean isBossPraying()
+	{
+		if (boss == null)
+		{
+			return false;
+		}
+
+		int[] overheads = boss.getOverheadArchiveIds();
+
+		if (overheads == null)
+		{
+			return false;
+		}
+
+		for (int overhead : overheads)
+		{
+			if (overhead >= 0)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/** The weapon in hand as a punish weapon, or null for an empty hand or anything but melee. */
+	private PunishWeapon equippedPunishWeapon()
+	{
+		int itemId = equipped(EquipmentInventorySlot.WEAPON);
+
+		if (itemId <= 0)
+		{
+			return null;
+		}
+
+		String name = itemName(itemId);
+		PunishWeapon weapon = PunishWeapon.forItem(itemId, name);
+
+		if (weapon == PunishWeapon.OTHER && !isMeleeWeapon(itemId))
+		{
+			weapon = null;
+		}
+
+		if (config.debugLogging())
+		{
+			log.debug("Swing read at tick {}: {} (item {} \"{}\")", client.getTickCount(),
+				weapon == null ? "not melee" : weapon, itemId, name);
+		}
+
+		return weapon;
+	}
+
+	/** Whether a weapon's bonuses say melee - see {@link PunishWeapon#isMelee}. */
+	private boolean isMeleeWeapon(int itemId)
+	{
+		ItemStats stats = itemManager.getItemStats(itemId);
+		ItemEquipmentStats bonuses = stats == null ? null : stats.getEquipment();
+
+		return bonuses != null && PunishWeapon.isMelee(bonuses.getAstab(), bonuses.getAslash(),
+			bonuses.getAcrush(), bonuses.getArange(), bonuses.getAmagic());
 	}
 
 	/**
@@ -1375,6 +2081,7 @@ public class DoomMetricsPlugin extends Plugin
 			// Despawns are not delivered across a scene load, so the count has to be rebuilt.
 			bossCount = 0;
 			ticksWithoutBoss = 0;
+			boss = null;
 		}
 
 		// Leaving the world holds the run open rather than ending it, because leaving the world is
@@ -1409,7 +2116,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		if (event.getOverlay() == overlay && CLEAR_OPTION.equals(event.getEntry().getOption()))
 		{
-			lastRun = null;
+			lastRunCleared = true;
 		}
 	}
 
@@ -1426,7 +2133,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		if (event.getInfoBox() == infoBox && CLEAR_OPTION.equals(event.getEntry().getOption()))
 		{
-			lastRun = null;
+			lastRunCleared = true;
 		}
 	}
 
@@ -1456,6 +2163,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		run = new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null);
 		lastRun = null;
+		lastRunCleared = false;
 		resumeCheck = null;
 		runProfile = runHistoryStore.currentProfile();
 		// Give the boss the full grace period to appear, whatever the counter was doing before.
@@ -1463,8 +2171,21 @@ public class DoomMetricsPlugin extends Plugin
 		// A spec fired on the way in belongs to nothing we are counting, and its window must not
 		// be left open to swallow the first heal of the trip.
 		combatTracker.reset();
+		punishTracker.reset();
+		claimRequested = false;
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
+
+		if (partial)
+		{
+			// Whatever is already in the pile dropped before we were watching, on delves we cannot
+			// name. A fresh run starts with an empty pile, so only a joined one needs this.
+			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE))
+				.forEach(run::pileAlreadyHeld);
+			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
+				.forEach(run::pileAlreadyHeld);
+		}
+
 		openSession(startedAt);
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
 	}
@@ -1588,41 +2309,20 @@ public class DoomMetricsPlugin extends Plugin
 
 		lifetimeCombat.addAll(ended);
 		totalsStore.saveCombat(lifetimeCombat);
-		refreshLifetimeCombat();
 	}
 
 	/**
-	 * Posts elapsed time and pace when the delve number is a multiple of the configured interval.
-	 * Shallow delves are skipped, so an interval of 5 reports at delve 10, 15, 20 and so on.
-	 *
-	 * <p>Landing on the target delve is reported whatever the interval says, including when the
-	 * messages are switched off altogether. A target of 52 read against an interval of 5 would
-	 * otherwise pass in silence, and the one delve of a run you asked to be told about is a poor
-	 * one to leave unannounced. The delves in between it are still the interval's business.
+	 * Posts elapsed time and pace for the delve just cleared, when the interval or the target
+	 * says it is due - see {@link ChatAnnouncement#isDue}.
 	 */
-	private void announceClear(int level, DelveRun.Split split)
+	private void announceClear(int level)
 	{
-		int interval = config.chatIntervalDelves();
 		int target = targetDelve();
 
-		// Exactly the target rather than at or past it, so a run we joined already deeper than the
-		// target does not open with an announcement of an arrival nobody watched.
-		boolean reached = level == target;
-		boolean scheduled = interval > 0
-			&& level >= DelveRun.DEEP_DELVE_LEVEL
-			&& level % interval == 0;
-
-		if (!reached && !scheduled)
+		if (ChatAnnouncement.isDue(level, config.chatIntervalDelves(), target))
 		{
-			return;
+			sendChat(ChatAnnouncement.delveCleared(run, level, target, config.paceMode()));
 		}
-
-		sendChat(String.format("%sDelve %d in %s | %s elapsed | %s",
-			reached ? "Target reached | " : "",
-			level,
-			DoomFormat.preciseDuration(split.fight == null ? split.segment : split.fight),
-			DoomFormat.duration(run.clearedElapsed()),
-			DoomFormat.pace(pace(run))));
 	}
 
 	private void endRun(EndReason reason, int diedOnLevel)
@@ -1630,7 +2330,9 @@ public class DoomMetricsPlugin extends Plugin
 		DelveRun ended = run;
 		run = null;
 		resumeCheck = null;
+		claimRequested = false;
 		combatTracker.reset();
+		punishTracker.reset();
 
 		if (ended == null)
 		{
@@ -1650,6 +2352,7 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		lastRun = ended;
+		lastRunCleared = false;
 
 		recordRun(ended, diedOnLevel);
 
@@ -1658,18 +2361,7 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		String elapsed = DoomFormat.duration(ended.clearedElapsed());
-		String pace = DoomFormat.pace(pace(ended));
-
-		if (reason == EndReason.DIED)
-		{
-			sendChat(String.format("Died on delve %d | cleared %d in %s | %s",
-				diedOnLevel, ended.lastLevel(), elapsed, pace));
-		}
-		else
-		{
-			sendChat(String.format("Cleared delve %d | %s | %s", ended.lastLevel(), elapsed, pace));
-		}
+		sendChat(ChatAnnouncement.runEnded(ended, reason, config.paceMode()));
 	}
 
 	/**
@@ -1696,14 +2388,28 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
+		refreshDetail();
+
 		DelveRun display = getDisplayRun();
+		DelveRun detail = detailRun();
 		DoomMetricsPanel.Live live = display == null
 			? null
-			: DoomMetricsPanel.Live.of(display, config.paceMode(), targetDelve());
+			: DoomMetricsPanel.Live.of(display, config.paceMode(), targetDelve(),
+				config.targetPrediction());
+
+		// The same rows for the window, except that it keeps drawing a run the overlay's linger
+		// has taken down - so the head of the window cannot blank out from under a chart that is
+		// still showing the run those figures belong to.
+		DoomMetricsPanel.Live detailLive = detail == display
+			? live
+			: (detail == null ? null : DoomMetricsPanel.Live.of(detail, config.paceMode(),
+				targetDelve(), config.targetPrediction()));
+
 		DoomMetricsPanel.Stats stats = statsSnapshot();
 		boolean showCombat = run != null || sessionAlive(Instant.now());
 		String key = (live == null ? "" : live.key())
-			+ "|" + stats.key() + "|" + combatKey(showCombat);
+			+ "|" + stats.key() + "|" + combatKey(showCombat)
+			+ (detailLive == live ? "" : "|" + (detailLive == null ? "" : detailLive.key()));
 
 		// The timers only move once a second, so most ticks have nothing to redraw. The rates move
 		// less again - neither can change until a delve is cleared or a run ends - and the combat
@@ -1716,7 +2422,7 @@ public class DoomMetricsPlugin extends Plugin
 		lastLiveKey = key;
 
 		// Built only once something has actually moved, so an idle tick allocates nothing to hand
-		// across to a panel that would draw the same eight numbers again.
+		// across to a panel that would draw the same numbers again.
 		CombatTotals combat = showCombat ? combatSnapshot() : null;
 
 		SwingUtilities.invokeLater(() ->
@@ -1724,6 +2430,15 @@ public class DoomMetricsPlugin extends Plugin
 			target.setLive(live);
 			target.setStats(stats);
 			target.setCombat(combat);
+
+			// Held so a window opened between two ticks has a head to draw, rather than sitting
+			// blank until the next figure moves.
+			windowLive = detailLive;
+
+			if (detailWindow != null)
+			{
+				detailWindow.setLive(detailLive);
+			}
 		});
 	}
 
@@ -1769,7 +2484,7 @@ public class DoomMetricsPlugin extends Plugin
 	 * <p>The session figures count the run in progress as it goes, rather than waiting for it to
 	 * end. They are built from the same two numbers the run would be banked with, so what the
 	 * panel shows during a run is what banking it will leave behind, and a sitting holding one run
-	 * reads exactly what that run's Run pace does.
+	 * reads exactly what that run's Full pace does.
 	 *
 	 * <p>The lifetime figures cannot move while a run is in progress - a run joins them only once
 	 * it is banked - so what is shown there is always the character as they stood when this sitting
@@ -1820,7 +2535,7 @@ public class DoomMetricsPlugin extends Plugin
 	private static String tooltip(DelveTotals totals)
 	{
 		return totals.isEmpty()
-			? "Nothing banked yet"
+			? "No delves completed yet"
 			: String.format("%d deep %s in %s of run time",
 				totals.deep, totals.deep == 1 ? "delve" : "delves",
 				DoomFormat.tickDuration(totals.ticks));
@@ -1839,82 +2554,101 @@ public class DoomMetricsPlugin extends Plugin
 		milestones.getRows().forEach((delve, row) -> rows.add(new MilestoneTablePanel.Row(
 			delve, row.kc, row.pbTicks, improvedThisSession.contains(delve))));
 
-		SwingUtilities.invokeLater(() ->
-		{
-			// Held so a window opened later has a table to draw without reaching back into the
-			// model, which by then the client thread may already be writing to again.
-			tableRows = rows;
-			target.setRows(rows);
-
-			if (historyWindow != null)
-			{
-				historyWindow.setRows(rows);
-			}
-		});
+		SwingUtilities.invokeLater(() -> target.setRows(rows));
 	}
 
 	/**
-	 * Opens the history window, or brings it forward if it is already up. Runs on the Swing
+	 * Opens the run detail window, or brings it forward if it is already up. Runs on the Swing
 	 * thread, from the side panel's button.
 	 */
-	private void openHistoryWindow()
+	private void openDetailWindow()
 	{
-		if (historyWindow == null)
+		if (detailWindow == null)
 		{
-			historyWindow = new HistoryWindow(icon, () -> historyWindow = null);
-			historyWindow.setRows(tableRows);
-			historyWindow.setSeries(chartSeries);
-			historyWindow.setLifetimeCombat(windowCombat);
+			detailWindow = new RunDetailWindow(icon, () -> detailWindow = null);
+			detailWindow.setIcons(getIcons());
+			detailWindow.setHideEmpty(config.hideEmptyCounters());
+			// Whatever was last pushed across, so a window opened mid-delve shows the run it is
+			// in the middle of rather than filling in on the next clear.
+			detailWindow.setDetail(windowDetail);
+			detailWindow.setLive(windowLive);
 		}
 
-		historyWindow.open(SwingUtilities.getWindowAncestor(panel));
-
-		// Re-read every time rather than trusting what is already drawn: the profile may have
-		// changed, or another client may have written runs since this one last looked.
-		loadHistory();
+		detailWindow.open(SwingUtilities.getWindowAncestor(panel));
 	}
 
-	private void closeHistoryWindow()
+	private void closeDetailWindow()
 	{
-		HistoryWindow window = historyWindow;
+		RunDetailWindow window = detailWindow;
 
 		if (window == null)
 		{
 			return;
 		}
 
-		// Cleared first so the frame's own close callback has nothing left to do.
-		historyWindow = null;
-		chartSeries = RunSeries.empty();
+		// Cleared first so the frame's own close callback has nothing left to do. Only ever
+		// reached on shutdown - a window closed by the reader goes through that callback alone,
+		// and keeps what was pushed to it so reopening shows the run rather than an empty frame.
+		detailWindow = null;
+		windowDetail = RunDetail.empty();
+		windowLive = null;
 		window.dispose();
 	}
 
 	/**
-	 * Reads the whole history off disk and hands the chart every figure it can plot from it.
+	 * The run the detail window is about: the one in progress, or the last one that ended.
 	 *
-	 * <p>Reduced to per-metric lists here, on the executor thread, rather than each time the
-	 * dropdown moves - switching metric should not cost a pass over a lifetime of runs.
+	 * <p>Unlike {@link #getDisplayRun} this ignores the linger setting and Clear. Both are there so
+	 * an overlay nobody asked for does not sit over the game world for the rest of the evening; a
+	 * window is only on screen because it was opened, and a reader who opens it half an hour after
+	 * a run wants the run rather than an empty frame.
 	 */
-	private void loadHistory()
+	private DelveRun detailRun()
 	{
-		runHistoryStore.load(records ->
+		return run != null ? run : lastRun;
+	}
+
+	/**
+	 * Takes the current run apart and pushes it to the window, if anything about it has changed.
+	 *
+	 * <p>Called on every tick, and almost always does nothing: what a snapshot holds only moves when
+	 * a delve is killed, when something is counted in the wait after a kill, and when that wait ends
+	 * - see {@link RunDetail#keyFor}. A run four hundred delves deep is therefore taken apart a few
+	 * times a delve, not once per tick and not once per heal.
+	 */
+	private void refreshDetail()
+	{
+		DelveRun target = detailRun();
+		String key = RunDetail.keyFor(target);
+
+		if (key.equals(lastDetailKey))
 		{
-			RunSeries series = RunSeries.of(records);
+			return;
+		}
 
-			SwingUtilities.invokeLater(() ->
+		lastDetailKey = key;
+
+		// Built on the client thread, which owns the run, and immutable once built - so the Swing
+		// thread never reads a tally this thread is still adding to.
+		RunDetail detail = RunDetail.of(target);
+
+		SwingUtilities.invokeLater(() ->
+		{
+			windowDetail = detail;
+
+			if (detailWindow != null)
 			{
-				chartSeries = series;
-
-				if (historyWindow != null)
-				{
-					historyWindow.setSeries(series);
-				}
-			});
+				detailWindow.setDetail(detail);
+			}
 		});
 	}
 
 	/**
-	 * Writes a finished run to the history file, and adds it to the chart if it is on screen.
+	 * Writes a finished run to the history file.
+	 *
+	 * <p>Nothing reads it back: what the plugin shows is this session's runs, which are in memory.
+	 * It is still written, because the record is cheap to keep and impossible to recover once a
+	 * run is over - see {@link RunHistoryStore}.
 	 *
 	 * <p>Only runs that ended in a way we saw are recorded. An {@link EndReason#ABANDONED} run has
 	 * an ending we are guessing at, and its depth would be whatever the player happened to have
@@ -1932,28 +2666,12 @@ public class DoomMetricsPlugin extends Plugin
 		record.diedOn = Math.max(0, diedOnLevel);
 		record.partial = ended.isPartial();
 		record.loot = ended.getLoot();
-		// Left out entirely for the many runs that attribute nothing, rather than written as eight
-		// zeroes on every line of the file.
+		// Left out entirely for the many runs that attribute nothing, rather than written as a row
+		// of zeroes on every line of the file.
 		record.combat = ended.getCombat().isEmpty() ? null : ended.getCombat().copy();
 
 		runHistoryStore.append(record,
 			runProfile != null ? runProfile : runHistoryStore.currentProfile());
-
-		SwingUtilities.invokeLater(() ->
-		{
-			if (historyWindow == null)
-			{
-				return;
-			}
-
-			chartSeries = chartSeries.plus(record);
-			historyWindow.setSeries(chartSeries);
-		});
-	}
-
-	private Double pace(DelveRun target)
-	{
-		return target.pace(config.paceMode());
 	}
 
 	/**
@@ -1965,24 +2683,17 @@ public class DoomMetricsPlugin extends Plugin
 		return config.showTargetDelve() ? config.targetDelve() : 0;
 	}
 
-	private static boolean isDoomBoss(int npcId)
+	static boolean isDoomBoss(int npcId)
 	{
 		return npcId == NpcID.DOM_BOSS || npcId == NpcID.DOM_BOSS_SHIELDED
 			|| npcId == NpcID.DOM_BOSS_BURROWED;
 	}
 
-	private void sendChat(String message)
+	private void sendChat(ChatAnnouncement announcement)
 	{
-		String formatted = new ChatMessageBuilder()
-			.append(ChatColorType.HIGHLIGHT)
-			.append("[Doom] ")
-			.append(ChatColorType.NORMAL)
-			.append(message)
-			.build();
-
 		chatMessageManager.queue(QueuedMessage.builder()
-			.type(ChatMessageType.GAMEMESSAGE)
-			.runeLiteFormattedMessage(formatted)
+			.type(ChatAnnouncement.TYPE)
+			.runeLiteFormattedMessage(announcement.formatted())
 			.build());
 	}
 }

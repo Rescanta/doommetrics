@@ -6,12 +6,22 @@
 <!--
 	The plugin hub's hard rules, as a build failure.
 
-	Every rule here mirrors a restriction in AGENTS.md that would get the plugin
-	rejected from the hub, not merely criticised in review. This is a rejection
-	gate, not a style guide - formatting is deliberately left alone.
+	Every rule here mirrors a restriction that would get the plugin rejected from
+	the hub, not merely criticised in review: either one in AGENTS.md, which
+	reviewers enforce, or one on the hub packager's disallowed API list, which
+	fails the hub build outright. That list is
+	package/src/main/resources/net/runelite/pluginhub/packager/disallowed-apis.txt
+	in https://github.com/runelite/plugin-hub-tooling - check it again when the
+	packager changes. This is a rejection gate, not a style guide - formatting is
+	deliberately left alone.
 
-	Only src/main is checked. The preview harness under src/test is a developer
-	tool that never ships, and it legitimately uses reflection and System.exit.
+	These are text patterns, not type checks, so they match comments too, and
+	the few that can only be told apart by what they are called on assume the
+	usual field name for it.
+
+	Only src/main is checked. That is all the hub builds into the plugin jar, and
+	the tests and preview harness under src/test legitimately construct a Gson
+	and call System.exit.
 
 	To allow a line that a rule catches wrongly, bracket it with
 	// CHECKSTYLE:OFF and // CHECKSTYLE:ON, and say why.
@@ -24,9 +34,12 @@
 
 	<!-- Forbidden language features -->
 
+	<!-- Reflection, and method handles, which reach members the same way under another name.
+	     InvocationTargetException lives in java.lang.reflect but is only what
+	     SwingUtilities.invokeAndWait wraps a failure in - catching it reflects on nothing. -->
 	<module name="RegexpSingleline">
 		<property name="id" value="noReflection"/>
-		<property name="format" value="\bjava\.lang\.reflect\b|\bClass\.forName\s*\(|\.setAccessible\s*\(|\.getDeclared(Field|Method|Constructor)s?\s*\(|\.getMethod\s*\("/>
+		<property name="format" value="\bjava\.lang\.reflect\.(?!InvocationTargetException\b)|\bjava\.lang\.invoke\b|\bMethodHandles?\b|\bClass\.forName\s*\(|\.setAccessible\s*\(|\.get(Declared)?(Field|Method|Constructor)s?\s*\("/>
 		<property name="message" value="Reflection is forbidden in hub plugins (AGENTS.md: Forbidden Language Features)."/>
 	</module>
 
@@ -88,6 +101,15 @@
 		<property name="message" value="Never execute an OkHttp call synchronously - use enqueue() (AGENTS.md: HTTP and JSON)."/>
 	</module>
 
+	<!-- Hub packager: OkHttpClient.<init>() and OkHttpClient$Builder.<init>(). The injected
+	     client's newBuilder() is the allowed way to customise it. -->
+	<module name="RegexpSingleline">
+		<property name="id" value="noManualOkHttp"/>
+		<property name="format" value="new\s+OkHttpClient\s*(\.\s*Builder\s*)?\(|\bokhttp3\.OkHttpClient\.Builder\b"/>
+		<property name="message" value="Inject OkHttpClient and derive with newBuilder() rather than constructing one - the hub build rejects it (AGENTS.md: HTTP and JSON)."/>
+	</module>
+
+	<!-- Hub packager: Gson.<init>() and GsonBuilder.<init>(). -->
 	<module name="RegexpSingleline">
 		<property name="id" value="noManualGson"/>
 		<property name="format" value="new\s+Gson\s*\(\s*\)|new\s+GsonBuilder\s*\("/>
@@ -102,10 +124,42 @@
 		<property name="message" value="Open URLs with LinkBrowser, not java.awt.Desktop (AGENTS.md: API Usage)."/>
 	</module>
 
+	<!-- Hub packager: everything in net.runelite.api.widgets.WidgetInfo and WidgetID*. -->
 	<module name="RegexpSingleline">
 		<property name="id" value="noWidgetInfo"/>
-		<property name="format" value="\bWidgetInfo\b"/>
-		<property name="message" value="WidgetInfo is deprecated - use net.runelite.api.gameval.InterfaceID component constants (AGENTS.md: API Usage)."/>
+		<property name="format" value="\bWidgetInfo\b|\bWidgetID\w*\b"/>
+		<property name="message" value="WidgetInfo and WidgetID are deprecated and the hub build rejects them - use net.runelite.api.gameval.InterfaceID component constants (AGENTS.md: API Usage)."/>
+	</module>
+
+	<!-- Hub packager: Client.getVar(int). Nothing else in the API is called getVar. -->
+	<module name="RegexpSingleline">
+		<property name="id" value="noGetVar"/>
+		<property name="format" value="\.getVar\s*\("/>
+		<property name="message" value="Client.getVar is deprecated and the hub build rejects it - use getVarbitValue or getVarpValue."/>
+	</module>
+
+	<!-- Hub packager: ChatMessageManager.update(MessageNode), which does nothing. Told apart from
+	     every other update() by the field it is called on. -->
+	<module name="RegexpSingleline">
+		<property name="id" value="noChatMessageManagerUpdate"/>
+		<property name="format" value="\b[Cc]hatMessageManager\s*\.\s*update\s*\("/>
+		<property name="message" value="ChatMessageManager.update does nothing and the hub build rejects it - set the message on the node and call client.refreshChat()."/>
+	</module>
+
+	<!-- Hub packager: ItemManager.getItemStats(int, boolean). The name is ItemManager's alone, so
+	     any two-argument call is the removed overload. -->
+	<module name="RegexpSingleline">
+		<property name="id" value="noGetItemStatsOverload"/>
+		<property name="format" value="\.getItemStats\s*\([^,()]*(\([^()]*\))?[^,()]*,"/>
+		<property name="message" value="ItemManager.getItemStats(int, boolean) is deprecated and the hub build rejects it - use getItemStats(int)."/>
+	</module>
+
+	<!-- Hub packager: the RuneLite account internals - AccountClient, AccountSession and
+	     SessionManager. Caught where one is imported or declared, which using one needs. -->
+	<module name="RegexpSingleline">
+		<property name="id" value="noAccountInternals"/>
+		<property name="format" value="\bnet\.runelite\.client\.account\b|\b(AccountClient|AccountSession|SessionManager)\b"/>
+		<property name="message" value="RuneLite's account and session classes are off limits and the hub build rejects them."/>
 	</module>
 
 	<module name="RegexpSingleline">

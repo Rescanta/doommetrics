@@ -14,7 +14,7 @@ import net.runelite.client.ui.ColorScheme;
 
 /**
  * The lifetime milestone table - delve, kill count, personal best - as a component in its own
- * right, so the side panel and the history window draw the same table rather than two that drift.
+ * right, so anywhere the table is wanted draws this one rather than a second that drifts from it.
  *
  * <p>Runs on the Swing thread. Callers hand it immutable snapshots, never live model objects.
  */

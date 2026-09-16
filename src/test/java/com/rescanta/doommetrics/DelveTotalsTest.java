@@ -47,7 +47,7 @@ public class DelveTotalsTest
 
 	/**
 	 * Time with no deep delve in it is not a rate of zero, it is no rate at all - the same answer
-	 * {@link DelveRun#runPace} gives. The time is still kept, and starts counting the moment a
+	 * {@link DelveRun#fullPace} gives. The time is still kept, and starts counting the moment a
 	 * later run banks something.
 	 */
 	@Test
@@ -81,10 +81,10 @@ public class DelveTotalsTest
 
 	/**
 	 * The whole point of the session figure: one run on its own has to read what that run's own
-	 * Run pace reads, so a player who does a single run sees one number, not two that disagree.
+	 * Full pace reads, so a player who does a single run sees one number, not two that disagree.
 	 */
 	@Test
-	public void oneRunReadsTheSameAsThatRunsRunPace()
+	public void oneRunReadsTheSameAsThatRunsFullPace()
 	{
 		// Delves 1-7 in eight minutes, then twelve deep delves at ninety seconds each.
 		DelveRun run = new DelveRun(Instant.EPOCH, 1, false);
@@ -103,7 +103,7 @@ public class DelveTotalsTest
 		session.add(run.deepCleared(), DoomFormat.toTicks(run.pbElapsed()));
 
 		assertEquals(12, session.deep);
-		assertEquals(run.runPace(), session.kph(), DELTA);
+		assertEquals(run.fullPace(), session.kph(), DELTA);
 	}
 
 	@Test

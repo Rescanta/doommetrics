@@ -3,6 +3,9 @@ package com.rescanta.doommetrics;
 import java.awt.Color;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.ToLongFunction;
 
 /**
  * The single figure an infobox square can hold, and everything needed to draw it: the text, the
@@ -17,7 +20,8 @@ import java.time.Instant;
  *
  * <p>The constant names are what the config stores, so renaming one silently resets the choice of
  * whoever had it picked, the same way {@link CombatMetric#key()} works. The labels may be reworded
- * freely.
+ * freely. The catch-all counters had squares once; a square still saved as one of them fails to
+ * read back and the client falls back to the default, {@link #DELVE}.
  *
  * <p>Public because the config interface returns it - see {@link DisplayStyle} for why that
  * matters.
@@ -28,24 +32,27 @@ public enum InfoBoxFigure
 	RUN_TIMER("Run timer"),
 	PACE("Pace"),
 	TIME_TO_TARGET("Time to target"),
+	TARGET_RUN_TIME("Predicted run time"),
 
 	BLOOD_BARRAGE_HEAL("Blood barrage heal", CombatMetric.BLOOD_BARRAGE_HEAL),
-	OTHER_SPELL_HEAL("Other spell heal", CombatMetric.OTHER_SPELL_HEAL),
 	AGS_HEAL("AGS heal", CombatMetric.AGS_HEAL),
 	BLOWPIPE_HEAL("Blowpipe heal", CombatMetric.BLOWPIPE_HEAL),
-	OTHER_SPEC_HEAL("Other spec heal", CombatMetric.OTHER_SPEC_HEAL),
 	ELDRITCH_PRAYER("Eldritch prayer", CombatMetric.ELDRITCH_PRAYER),
 	ZCB_DAMAGE("ZCB damage", CombatMetric.ZCB_DAMAGE),
-	OTHER_SPEC_DAMAGE("Other spec damage", CombatMetric.OTHER_SPEC_DAMAGE),
+	SCYTHE_PUNISH("Scythe punish", CombatMetric.SCYTHE_PUNISH),
+	NOXIOUS_HALBERD_PUNISH("Noxious halberd punish", CombatMetric.NOXIOUS_HALBERD_PUNISH),
+	CRYSTAL_HALBERD_PUNISH("Crystal halberd punish", CombatMetric.CRYSTAL_HALBERD_PUNISH),
 
 	ALL_SPELL_HEALING("All spell healing", CombatMetric.Group.SPELL_HEAL),
 	ALL_SPEC_HEALING("All spec healing", CombatMetric.Group.SPEC_HEAL),
 	ALL_PRAYER_RESTORED("All prayer restored", CombatMetric.Group.PRAYER),
-	ALL_SPEC_DAMAGE("All spec damage", CombatMetric.Group.DAMAGE);
+	ALL_SPEC_DAMAGE("All spec damage", CombatMetric.Group.DAMAGE),
+	ALL_PUNISH_DAMAGE("All punish damage", CombatMetric.Group.PUNISH);
 
-	// Held rather than fetched for the reason the overlay holds its own copy: values() hands out a
-	// fresh array every call, and a group figure walks it up to three times a frame.
-	private static final CombatMetric[] METRICS = CombatMetric.values();
+	// Held as an array for the reason the overlay holds its own copy: a group figure walks it up to
+	// three times a frame. Only the counters drawn, so a heading sums what its rows show.
+	private static final CombatMetric[] METRICS =
+		CombatMetric.DISPLAYED.toArray(new CombatMetric[0]);
 
 	private final String label;
 
@@ -78,6 +85,16 @@ public enum InfoBoxFigure
 	}
 
 	/**
+	 * Whether the square has anything to hold for this run. Only the time to a target ever has
+	 * nothing: once the target is behind you there is no time left to count down, and a square
+	 * that only says so is one more thing on screen saying nothing.
+	 */
+	boolean shown(DelveRun run, DoomMetricsConfig config)
+	{
+		return this != TIME_TO_TARGET || !run.hasReached(config.targetDelve());
+	}
+
+	/**
 	 * What the square reads, shortened to fit it. Never null and never empty, so a square that is
 	 * on screen always has a figure in it.
 	 */
@@ -92,23 +109,33 @@ public enum InfoBoxFigure
 				return DoomFormat.compactDuration(run.displayElapsed(now));
 
 			case PACE:
-				return DoomFormat.compactPace(run.pace(config.paceMode()));
+				return DoomFormat.compactPace(run.pace(run.paceMode(config.paceMode())));
 
 			case TIME_TO_TARGET:
 			{
-				int target = config.targetDelve();
-
-				if (run.hasReached(target))
-				{
-					return "Done";
-				}
-
-				Duration remaining = run.untilTarget(target, now);
+				Duration remaining = run.untilTarget(config.targetDelve(), now);
 				return remaining == null ? "-" : DoomFormat.compactDuration(remaining);
 			}
 
+			case TARGET_RUN_TIME:
+			{
+				int target = config.targetDelve();
+				Duration total = run.runToTarget(target, now);
+
+				if (total != null)
+				{
+					return DoomFormat.compactDuration(total);
+				}
+
+				return run.hasReached(target) ? "Done" : "-";
+			}
+
 			default:
-				return DoomFormat.compact(amount(run));
+			{
+				// A gain just made reads as the gain for a few seconds, as on the panel.
+				long recent = recent(run, now);
+				return recent > 0 ? "+" + DoomFormat.compact(recent) : DoomFormat.compact(amount(run));
+			}
 		}
 	}
 
@@ -129,11 +156,18 @@ public enum InfoBoxFigure
 				return DoomColors.PLAIN;
 
 			case PACE:
-				return run.pace(config.paceMode()) == null ? DoomColors.DIMMED : DoomColors.PLAIN;
+				return run.pace(run.paceMode(config.paceMode())) == null
+					? DoomColors.DIMMED
+					: DoomColors.PLAIN;
 
 			case TIME_TO_TARGET:
+				return run.untilTarget(config.targetDelve(), now) != null
+					? DoomColors.PLAIN
+					: DoomColors.DIMMED;
+
+			case TARGET_RUN_TIME:
 				return run.hasReached(config.targetDelve())
-					|| run.untilTarget(config.targetDelve(), now) != null
+					|| run.runToTarget(config.targetDelve(), now) != null
 					? DoomColors.PLAIN
 					: DoomColors.DIMMED;
 
@@ -161,61 +195,108 @@ public enum InfoBoxFigure
 					: "Cleared delve " + run.lastLevel();
 
 			case RUN_TIMER:
-			{
-				String elapsed = "Run time</br>" + DoomFormat.duration(run.displayElapsed(now));
-
-				// The panel says this with an asterisk it has the width for; here it is said out.
-				return run.isPartial()
-					? elapsed + "</br>Joined part way through, so the run is at least this long"
-					: elapsed;
-			}
+				return partialNote(run,
+					"Run time</br>" + DoomFormat.duration(run.displayElapsed(now)));
 
 			case PACE:
 			{
-				PaceMode mode = config.paceMode();
+				PaceMode mode = run.paceMode(config.paceMode());
 				Double pace = run.pace(mode);
 
 				return pace == null
-					? mode + "</br>Nothing deep enough to average yet"
+					? mode + (mode == PaceMode.RUN_THROUGHPUT
+						? "</br>No deep delve completed"
+						: "</br>Nothing deep enough to average yet")
 					: mode + "</br>" + DoomFormat.pace(pace);
 			}
 
 			case TIME_TO_TARGET:
 			{
 				int target = config.targetDelve();
+				Duration remaining = run.untilTarget(target, now);
+
+				return "Predicted to delve " + target + "</br>" + (remaining != null
+					? DoomFormat.duration(remaining)
+					: nothingToPredict(run));
+			}
+
+			case TARGET_RUN_TIME:
+			{
+				int target = config.targetDelve();
+				Duration total = run.runToTarget(target, now);
 
 				if (run.hasReached(target))
 				{
-					return "Delve " + target + "</br>Reached";
+					return total == null
+						? "Delve " + target + "</br>Reached before the run was joined"
+						: partialNote(run, "Delve " + target + " reached in</br>"
+							+ DoomFormat.duration(total));
 				}
 
-				Duration remaining = run.untilTarget(target, now);
-
-				if (remaining != null)
-				{
-					return "Predicted to delve " + target + "</br>"
-						+ DoomFormat.duration(remaining);
-				}
-
-				return "Predicted to delve " + target + "</br>" + (run.isFinished()
-					? "The run is over"
-					: "No delve " + DelveRun.PACE_AVERAGE_FROM_LEVEL + " cleared to predict from");
+				return total == null
+					? "Predicted run to delve " + target + "</br>" + nothingToPredict(run)
+					: partialNote(run, "Predicted run to delve " + target + "</br>"
+						+ DoomFormat.duration(total));
 			}
 
 			default:
-				return heading() + "</br>" + DoomFormat.count(amount(run)) + " "
+			{
+				String tooltip = heading() + "</br>" + DoomFormat.count(amount(run)) + " "
 					+ unit().description();
+
+				// A catch-all's label does not say what it catches, and the square has no label.
+				List<String> sources = metric == null ? Collections.emptyList() : metric.sources();
+
+				return sources.isEmpty()
+					? tooltip
+					: tooltip + "</br>Counted from:</br>" + String.join("</br>", sources);
+			}
 		}
+	}
+
+	/**
+	 * A time measured from the start of the run, with a line saying the start is a guess when the
+	 * run was joined part way through. The panel says this with an asterisk it has the width for;
+	 * here it is said out.
+	 */
+	private static String partialNote(DelveRun run, String tooltip)
+	{
+		return run.isPartial()
+			? tooltip + "</br>Joined part way through, so the run is at least this long"
+			: tooltip;
+	}
+
+	/** Why a target has no predicted time, for a target not yet reached. */
+	private static String nothingToPredict(DelveRun run)
+	{
+		return run.isFinished()
+			? "The run is over"
+			: "No delve " + DelveRun.PACE_AVERAGE_FROM_LEVEL + " cleared to predict from";
+	}
+
+	/** The one source this figure counts, or null for a group or a figure that is not a counter. */
+	CombatMetric metric()
+	{
+		return metric;
 	}
 
 	/** The figure itself, for a counter: one source, or every source under one heading. */
 	private long amount(DelveRun run)
 	{
-		CombatTotals combat = run.getCombat();
+		return sum(run.getCombat()::get);
+	}
 
+	/** What the counter has just gained - see {@link RecentGains}. */
+	private long recent(DelveRun run, Instant now)
+	{
+		return sum(each -> run.recentGain(each, now));
+	}
+
+	private long sum(ToLongFunction<CombatMetric> figure)
+	{
 		if (metric != null)
 		{
-			return combat.get(metric);
+			return figure.applyAsLong(metric);
 		}
 
 		long total = 0;
@@ -224,7 +305,7 @@ public enum InfoBoxFigure
 		{
 			if (each.group() == group)
 			{
-				total += combat.get(each);
+				total += figure.applyAsLong(each);
 			}
 		}
 
