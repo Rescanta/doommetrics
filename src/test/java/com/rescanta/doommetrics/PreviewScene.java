@@ -228,6 +228,8 @@ final class PreviewScene
 			landing(12, ItemID.AVERNIC_TREADS, "Avernic treads"),
 			landing(25, ItemID.DOMPET, "Dom"),
 			landing(31, DelveRun.UNKNOWN_UNIQUE, DelveRun.UNKNOWN_UNIQUE_NAME));
+		// Died a few seconds into delve 32, which the game had announced like any other.
+		run.enterLevel(32, now.minusSeconds(15));
 		run.end(EndReason.DIED, now, 32);
 
 		return new PreviewScene("died", "The seconds after a death, when the overlay grows a row "
@@ -329,6 +331,7 @@ final class PreviewScene
 			landing(95, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
 			landing(160, ItemID.DOMPET, "Dom"),
 			landing(301, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+		run.enterLevel(351, now.minusSeconds(15));
 		run.end(EndReason.DIED, now, 351);
 
 		return new PreviewScene("record", "Deeper than the world record: the depth the run detail "
@@ -369,6 +372,13 @@ final class PreviewScene
 
 		for (int level = 1; level <= reached; level++)
 		{
+			// As the game announces each delve before it is fought: a delve's counters are filed
+			// under the delve just killed until the next one starts.
+			if (level > 1)
+			{
+				run.enterLevel(level, at);
+			}
+
 			for (CombatMetric metric : CombatMetric.values())
 			{
 				run.recordCombat(metric, plan[level - 1][metric.ordinal()], at);

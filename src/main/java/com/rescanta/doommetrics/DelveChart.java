@@ -34,8 +34,9 @@ import net.runelite.client.ui.FontManager;
  * delve took.
  *
  * <p>Two plots, stacked, sharing one delve axis. The upper one carries the eight counters, a line
- * each. The lower one carries the clock: the delve's segment and, under it, the fight the game
- * timed, with the band between them - the restocking, the walk in, the drop down the hole - filled.
+ * each. The lower one carries the clock: the delve's full time - its kill and the wait after it -
+ * and, under it, the kill the game timed, with the band between them - the restocking, the specs
+ * fired before going down, the drop down the hole - filled.
  * They are two plots rather than one with two scales, because a second axis is two charts drawn on
  * top of each other and called one, and the alignment between the two scales would be arbitrary.
  * Sharing the x axis is what lets a slow delve be read against a quiet one without inventing a
@@ -67,8 +68,8 @@ class DelveChart extends JPanel
 	private static final Color AXIS_COLOR = new Color(56, 56, 53);
 	private static final Color LABEL_COLOR = ColorScheme.LIGHT_GRAY_COLOR;
 
-	/** The segment a delve took, and the fight the game timed inside it. */
-	private static final Color SEGMENT_COLOR = new Color(0xC3C2B7);
+	/** The full time a delve took, and the kill the game timed inside it. */
+	private static final Color FULL_TIME_COLOR = new Color(0xC3C2B7);
 	private static final Color FIGHT_COLOR = new Color(0x898781);
 
 	/** The time between the two, which is the time not spent fighting. */
@@ -84,9 +85,9 @@ class DelveChart extends JPanel
 	private static final int READOUT_GAP = 12;
 
 	/**
-	 * The two lines on the time strip, named on its legend and in the readout. The full time is the
-	 * whole of a delve's segment, the walk between delves included; the kill time is the one the
-	 * game posts in chat.
+	 * The two lines on the time strip, named on its legend and in the readout. The full time runs
+	 * from a delve starting to the next one starting, the wait after the kill included - see
+	 * {@link RunDetail.Delve#fullTime}; the kill time is the one the game posts in chat.
 	 */
 	private static final String FULL_TIME = "Full time";
 	private static final String KILL_TIME = "Kill time";
@@ -334,7 +335,7 @@ class DelveChart extends JPanel
 				}
 			}
 
-			longest = Math.max(longest, (int) delve.segment.getSeconds());
+			longest = Math.max(longest, (int) delve.fullTime.getSeconds());
 		}
 
 		countStep = Math.max(1, niceStep(highest, COUNT_TICKS));
@@ -580,7 +581,7 @@ class DelveChart extends JPanel
 
 		return new String[][]{
 			delve,
-			{FULL_TIME + " ", DoomFormat.duration(at.segment)},
+			{FULL_TIME + " ", DoomFormat.duration(at.fullTime)},
 			{KILL_TIME + " ", at.fight == null ? "-" : DoomFormat.duration(at.fight)},
 		};
 	}
@@ -643,8 +644,9 @@ class DelveChart extends JPanel
 	// -- the plots --------------------------------------------------------------------------
 
 	/**
-	 * The clock: the segment each delve took, the fight the game timed inside it, and the band
-	 * between them filled - which is the restocking, the walk in and the drop down the hole.
+	 * The clock: the full time each delve took, the kill the game timed inside it, and the band
+	 * between them filled - which is the wait after the kill: the restocking, the specs fired before
+	 * going down, and the drop down the hole.
 	 *
 	 * <p>Drawn in ink rather than in a colour of its own. Every colour on this window already
 	 * names a counter, so one more would be read as one more counter.
@@ -664,7 +666,7 @@ class DelveChart extends JPanel
 		{
 			RunDetail.Delve delve = delves.get(i);
 			int x = xFor(delve.level);
-			int y = yForTime(delve.segment.getSeconds());
+			int y = yForTime(delve.fullTime.getSeconds());
 
 			if (i == 0)
 			{
@@ -683,8 +685,8 @@ class DelveChart extends JPanel
 		{
 			RunDetail.Delve delve = delves.get(i);
 			int x = xFor(delve.level);
-			Duration fight = delve.fight == null ? delve.segment : delve.fight;
-			int y = yForTime(Math.min(fight.getSeconds(), delve.segment.getSeconds()));
+			Duration fight = delve.fight == null ? delve.fullTime : delve.fight;
+			int y = yForTime(Math.min(fight.getSeconds(), delve.fullTime.getSeconds()));
 
 			band.lineTo(x, y);
 
@@ -716,7 +718,7 @@ class DelveChart extends JPanel
 			g2.draw(fights);
 		}
 
-		g2.setColor(SEGMENT_COLOR);
+		g2.setColor(FULL_TIME_COLOR);
 		g2.draw(segments);
 	}
 
@@ -916,7 +918,7 @@ class DelveChart extends JPanel
 		int x = left();
 
 		g2.setStroke(TIME_STROKE);
-		x = timeLegendEntry(g2, metrics, SEGMENT_COLOR, FULL_TIME, x, y);
+		x = timeLegendEntry(g2, metrics, FULL_TIME_COLOR, FULL_TIME, x, y);
 		timeLegendEntry(g2, metrics, FIGHT_COLOR, KILL_TIME, x, y);
 	}
 

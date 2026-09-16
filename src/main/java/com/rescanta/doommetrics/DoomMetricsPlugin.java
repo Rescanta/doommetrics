@@ -962,7 +962,7 @@ public class DoomMetricsPlugin extends Plugin
 		}
 		else
 		{
-			run.enterLevel(level);
+			run.enterLevel(level, Instant.now());
 			claimRequested = false;
 			log.debug("Delve {} started", level);
 		}
@@ -1578,7 +1578,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (config.debugLogging())
 		{
-			log.debug("Counted {} to {} on delve {}", amount, metric.key(), run.currentLevel());
+			log.debug("Counted {} to {} on delve {}", amount, metric.key(), run.dropLevel());
 		}
 	}
 
@@ -2611,9 +2611,10 @@ public class DoomMetricsPlugin extends Plugin
 	/**
 	 * Takes the current run apart and pushes it to the window, if anything about it has changed.
 	 *
-	 * <p>Called on every tick, and almost always does nothing: what a snapshot holds cannot move
-	 * except by banking a delve or ending a run - see {@link RunDetail#keyFor}. A run four hundred
-	 * delves deep is therefore taken apart once per clear, not once per tick and not once per heal.
+	 * <p>Called on every tick, and almost always does nothing: what a snapshot holds only moves when
+	 * a delve is killed, when something is counted in the wait after a kill, and when that wait ends
+	 * - see {@link RunDetail#keyFor}. A run four hundred delves deep is therefore taken apart a few
+	 * times a delve, not once per tick and not once per heal.
 	 */
 	private void refreshDetail()
 	{

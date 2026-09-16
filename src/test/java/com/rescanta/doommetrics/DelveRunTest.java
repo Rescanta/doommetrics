@@ -72,7 +72,7 @@ public class DelveRunTest
 		run.complete(12, at(90), Duration.ofMillis(88_200));
 		assertEquals(13, run.currentLevel());
 
-		run.enterLevel(13);
+		run.enterLevel(13, at(100));
 		assertEquals(13, run.currentLevel());
 	}
 
@@ -244,7 +244,7 @@ public class DelveRunTest
 	public void predictsNothingOnceTheRunIsOver()
 	{
 		DelveRun run = referenceRun();
-		run.enterLevel(21);
+		run.enterLevel(21, at(1690));
 		run.end(EndReason.DIED, at(1700), 21);
 
 		assertNull(run.untilTarget(50, at(1700)));
@@ -318,7 +318,7 @@ public class DelveRunTest
 		assertEquals(Duration.ofSeconds(1230), run.runToTarget(15, at(1680)));
 		assertEquals(Duration.ofSeconds(1230), run.runToTarget(15, at(5000)));
 
-		run.enterLevel(21);
+		run.enterLevel(21, at(1690));
 		run.end(EndReason.DIED, at(1700), 21);
 		assertEquals("the run ending does not take it away",
 			Duration.ofSeconds(1230), run.runToTarget(15, at(1700)));
@@ -351,7 +351,7 @@ public class DelveRunTest
 	public void dyingReportsTheTimeThroughThePreviousDelve()
 	{
 		DelveRun run = referenceRun();
-		run.enterLevel(21);
+		run.enterLevel(21, at(1690));
 		run.end(EndReason.DIED, at(1700), 21);
 
 		// The partial delve 21 contributes nothing: totals and pace stop at delve 20.
@@ -505,7 +505,7 @@ public class DelveRunTest
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
-		run.enterLevel(2);
+		run.enterLevel(2, at(70));
 		run.complete(2, at(120), null);
 
 		assertTrue(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
@@ -525,7 +525,7 @@ public class DelveRunTest
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
-		run.enterLevel(2);
+		run.enterLevel(2, at(70));
 
 		run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 1);
 		run.complete(2, at(120), null);
@@ -545,7 +545,7 @@ public class DelveRunTest
 
 		for (int level = 1; level <= 25; level++)
 		{
-			run.enterLevel(level);
+			run.enterLevel(level, at((level - 1) * 60));
 			run.complete(level, at(level * 60), null);
 
 			int held = level >= 20 ? 2 : level >= 10 ? 1 : 0;
@@ -602,7 +602,7 @@ public class DelveRunTest
 
 		assertFalse(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 1));
 
-		run.enterLevel(15);
+		run.enterLevel(15, at(70));
 		run.complete(15, at(120), null);
 		assertTrue(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 2));
 
@@ -618,7 +618,7 @@ public class DelveRunTest
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
-		run.enterLevel(2);
+		run.enterLevel(2, at(70));
 
 		run.sawInPile(ItemID.DOMPET, "Dom", run.held(ItemID.DOMPET) + 1);
 
@@ -638,7 +638,7 @@ public class DelveRunTest
 
 		for (int level = 1; level <= 10; level++)
 		{
-			run.enterLevel(level);
+			run.enterLevel(level, at((level - 1) * 60));
 			run.complete(level, at(level * 60), null);
 			run.descending();
 
@@ -662,7 +662,7 @@ public class DelveRunTest
 		run.descending();
 		assertTrue(run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
 
-		run.enterLevel(2);
+		run.enterLevel(2, at(70));
 		run.complete(2, at(120), null);
 		run.descending();
 		assertFalse("the cloth off delve 1", run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
@@ -702,7 +702,7 @@ public class DelveRunTest
 		run.descending();
 		assertFalse(run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
 
-		run.enterLevel(15);
+		run.enterLevel(15, at(70));
 		run.complete(15, at(120), null);
 		run.descending();
 		run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
@@ -735,7 +735,7 @@ public class DelveRunTest
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
-		run.enterLevel(2);
+		run.enterLevel(2, at(70));
 		run.complete(2, at(120), null);
 		run.uniqueSignalled();
 
@@ -757,7 +757,7 @@ public class DelveRunTest
 		run.descending();
 		run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth");
 
-		run.enterLevel(2);
+		run.enterLevel(2, at(70));
 		run.complete(2, at(120), null);
 		run.uniqueSignalled();
 		run.descending();

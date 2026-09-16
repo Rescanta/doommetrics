@@ -135,8 +135,8 @@ class RunDetailWindow extends JFrame
 	/**
 	 * @param detail the run to draw, delve by delve
 	 *
-	 * <p>Pushed only when a delve is banked, which is the only moment anything on the chart can
-	 * change - see {@link RunDetail#keyFor}.
+	 * <p>Pushed only when something on the chart has moved: a delve killed, something counted in
+	 * the wait after it, or that wait ending - see {@link RunDetail#keyFor}.
 	 */
 	void setDetail(RunDetail detail)
 	{

@@ -17,7 +17,8 @@ and read a couple of seconds longer than the duration the game reports for the s
 Delve segments are contiguous with no gaps. A delve's time runs from the moment the previous delve
 was cleared, so restocking, eating and dropping down the hole are charged to the delve they
 precede. That makes the segments sum to the total run time. The clock is wall clock and never
-pauses.
+pauses. The run detail window divides the same time at a different point, to show each delve the
+way it is played - see [Run detail](#run-detail).
 
 A run ends when you die, when you claim loot - to your inventory or straight to the bank - or
 leave from the end of delve panel, or when you
@@ -348,11 +349,20 @@ headings the side panel uses.
 The chart's colours are eight hues checked as a set for colour blindness, one for each of the eight
 counters, so no two lines share a colour.
 
-The lower strip is the clock: how long each delve took, and under it the fight the game timed. The
-band between them is everything the delve cost that was not the fight - the restocking, the walk
-in and the drop down the hole. It is a second plot rather than a second scale on the first, because
-seconds and hitpoints have no honest common axis, and lining the two up on one delve axis is the
-whole point of stacking them.
+The lower strip is the clock: each delve's full time, and under it the kill the game timed. A delve
+here is the kill and then getting ready for the next, so its full time runs from the delve starting
+to the next one starting, and the band between the two lines is the wait after the kill - the
+restocking, the specs fired before going down, the drop down the hole. What is counted in that wait
+is on the delve just killed as well: an eldritch spec fired at a leftover volatile earth after
+delve 11 is delve 11's. A delve's column is final once the next delve starts, or once the run ends
+in its wait, a claim included. The delve you die on has no kill, so it is not charted, and what it
+counted is in the overlay and the side panel but not here.
+
+Only the run detail divides a run this way. Pace, predictions and the chat messages charge a wait
+to the delve that follows it, so a delve's time is known the moment it is cleared; over a run the
+two come to the same time. The strip is a second plot rather than a second scale on the first,
+because seconds and hitpoints have no honest common axis, and lining the two up on one delve axis is
+the whole point of stacking them.
 
 **Point at a delve** and a line marks it across both plots while the column beside the counters
 switches from the run's totals to that delve's. Every figure on the chart is therefore also written

@@ -69,6 +69,7 @@ public class RunLegendPanelTest
 		legend.setDetail(RunDetail.of(run));
 		assertEquals(allDrawnBut(), offChart.get());
 
+		run.enterLevel(2, START.plusSeconds(60));
 		run.recordCombat(CombatMetric.ZCB_DAMAGE, 300, START.plusSeconds(90));
 		run.complete(2, START.plusSeconds(120), null);
 		legend.setDetail(RunDetail.of(run));
