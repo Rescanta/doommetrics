@@ -1150,12 +1150,12 @@ class DelveChart extends JPanel
 		String name = drop.quantity > 1 ? drop.quantity + " x " + drop.name : drop.name;
 		return drop.kept
 			? name + " - delve " + drop.level
-			: name + " - delve " + drop.level + ", lost when the run ended unclaimed";
+			: "<html>" + name + " - delve " + drop.level + "<br>" + lostHow(detail) + "</html>";
 	}
 
 	/**
-	 * How a drop that never left with the run was lost, for the line under an unknown unique - the
-	 * one drop where how it went is most of what there is to say.
+	 * How a drop that never left with the run was lost - to a death, or left in the pile - for the
+	 * line under it on the chart and in the drops list alike.
 	 */
 	static String lostHow(RunDetail detail)
 	{
