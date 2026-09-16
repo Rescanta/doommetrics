@@ -193,6 +193,8 @@ public class PreviewShots
 	{
 		DoomMetricsPanel panel = new DoomMetricsPanel(() ->
 		{
+		}, () ->
+		{
 		});
 		panel.setIcons(PreviewIcons.INSTANCE);
 

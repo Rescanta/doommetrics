@@ -16,6 +16,11 @@ import net.runelite.client.config.ConfigManager;
  * numbers, whatever the character has done - so writing it costs the same on the ten thousandth
  * run as on the first.
  *
+ * <p>Written on the client thread as each delve is cleared, which is only fine because a config
+ * write never touches the disk: it changes the value in memory, and the client saves config in
+ * batches on a thread of its own, and once more as it closes. That is why this has none of the
+ * executor {@link RunHistoryStore} writes its file on.
+ *
  * <p>There is no profile to key off while logged out, so every call here tolerates being a no-op -
  * callers check {@link #hasProfile()} before letting an empty read mean anything.
  */

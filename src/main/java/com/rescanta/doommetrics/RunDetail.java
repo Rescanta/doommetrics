@@ -17,9 +17,11 @@ import java.util.List;
  * one starting, and everything counted in that time, the specs fired before going down again
  * included - see {@link DelveRun#fullTime}. Only delves already killed are in here. The delve being
  * fought has no kill yet, and half a delve's counters plotted against whole ones would read as a
- * collapse at the end of every run; nor does a delve died on ever get one, so what it counted is
- * in the run's own tally and not in these. A killed delve's column is final once the next delve
- * starts or the run ends - until then its wait is still going.
+ * collapse at the end of every run. A killed delve's column is final once the next delve starts or
+ * the run ends - until then its wait is still going.
+ *
+ * <p>Nothing counted is left off, though, even where it has no column of its own: see {@link
+ * #columnFor}.
  *
  * <p>Nothing here is written to disk. The window shows the run you are on or the one you just
  * finished, and both of those are in memory already - see the note in {@link RunHistoryStore} for
@@ -159,18 +161,63 @@ final class RunDetail
 		// legend and the chart disagreeing for the length of every delve.
 		CombatTotals totals = new CombatTotals();
 
+		List<CombatTotals> earned = new ArrayList<>(splits.size());
+
+		for (DelveRun.Split split : splits)
+		{
+			earned.add(run.combatOn(split.level).copy());
+		}
+
+		for (int level : run.combatLevels())
+		{
+			int column = columnFor(splits, level, run.isFinished());
+
+			if (column >= 0 && splits.get(column).level != level)
+			{
+				earned.get(column).addAll(run.combatOn(level));
+			}
+		}
+
 		for (int i = 0; i < splits.size(); i++)
 		{
 			DelveRun.Split split = splits.get(i);
-			CombatTotals earned = run.combatOn(split.level).copy();
-			totals.addAll(earned);
-			delves.add(new Delve(split.level, run.fullTime(i), split.fight, earned));
+			totals.addAll(earned.get(i));
+			delves.add(new Delve(split.level, run.fullTime(i), split.fight, earned.get(i)));
 		}
 
 		boolean died = run.isFinished() && run.getEndReason() == EndReason.DIED;
 
 		return new RunDetail(Collections.unmodifiableList(delves), dropsOf(run), totals, true,
 			run.isFinished(), died ? Math.max(0, run.getDiedOnLevel()) : 0);
+	}
+
+	/**
+	 * Which column what was counted on {@code level} is drawn in, or -1 for none.
+	 *
+	 * <p>A cleared delve is its own column. What was counted on a delve that never cleared still
+	 * really happened, so it goes on a neighbour rather than being left off: the next delve cleared
+	 * after it, or the last one when there is none after. That covers the wait a run was picked up
+	 * in, which was counted on a delve cleared before we were watching, and the delve read one short
+	 * when a run is picked up just as a delve starts. The delve died on or walked out of joins the
+	 * last column once the run is over. While the run is still going, the delve being fought is
+	 * left for its own column, which it gets when it is killed.
+	 */
+	private static int columnFor(List<DelveRun.Split> splits, int level, boolean finished)
+	{
+		if (splits.isEmpty())
+		{
+			return -1;
+		}
+
+		for (int i = 0; i < splits.size(); i++)
+		{
+			if (splits.get(i).level >= level)
+			{
+				return i;
+			}
+		}
+
+		return finished ? splits.size() - 1 : -1;
 	}
 
 	/**

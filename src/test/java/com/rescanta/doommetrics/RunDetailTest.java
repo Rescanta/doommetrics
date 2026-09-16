@@ -236,22 +236,60 @@ public class RunDetailTest
 
 	/**
 	 * The delve died on has no kill, so no column: the delve before it ends where the one died on
-	 * started, and what the delve died on counted is in the run's tally alone.
+	 * started, and what the delve died on counted is drawn on it rather than left off.
 	 */
 	@Test
-	public void theDelveDiedOnIsNotCharted()
+	public void theDelveDiedOnJoinsTheLastColumn()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 10, at(30));
 		run.complete(1, at(60), null);
 		run.enterLevel(2, at(80));
 		run.recordCombat(CombatMetric.ZCB_DAMAGE, 40, at(100));
+
+		// Still being fought, so not yet.
+		assertEquals(10, RunDetail.of(run).totals().get(CombatMetric.ZCB_DAMAGE));
+
 		run.end(EndReason.DIED, at(120), 2);
 
 		RunDetail detail = RunDetail.of(run);
 		assertEquals(1, detail.delves().size());
 		assertEquals(Duration.ofSeconds(80), detail.at(1).fullTime);
-		assertEquals(0, detail.totals().get(CombatMetric.ZCB_DAMAGE));
-		assertEquals(40, run.getCombat().get(CombatMetric.ZCB_DAMAGE));
+		assertEquals(50, detail.at(1).combat.get(CombatMetric.ZCB_DAMAGE));
+		assertEquals(50, detail.totals().get(CombatMetric.ZCB_DAMAGE));
+	}
+
+	/**
+	 * Picked up in the wait after delve 3, what was counted there has no delve 3 column, so it is
+	 * drawn on delve 4 - once delve 4 is cleared, and not while it is being fought.
+	 */
+	@Test
+	public void theWaitARunWasPickedUpInJoinsTheNextDelve()
+	{
+		DelveRun run = new DelveRun(START, 3, true);
+		run.recordCombat(CombatMetric.AGS_HEAL, 25, at(5));
+		run.enterLevel(4, at(10));
+		run.recordCombat(CombatMetric.AGS_HEAL, 30, at(50));
+
+		assertTrue(RunDetail.of(run).isEmpty());
+
+		run.complete(4, at(100), null);
+
+		RunDetail detail = RunDetail.of(run);
+		assertEquals(4, detail.shallowest());
+		assertEquals(55, detail.at(4).combat.get(CombatMetric.AGS_HEAL));
+		assertEquals(55, detail.totals().get(CombatMetric.AGS_HEAL));
+	}
+
+	/** Counted on a delve read one short, then that delve cleared: onto the delve that cleared. */
+	@Test
+	public void aDelveReadShortJoinsTheOneThatCleared()
+	{
+		DelveRun run = new DelveRun(START, 11, true);
+		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 12, at(5));
+		run.complete(12, at(60), null);
+
+		assertEquals(12, RunDetail.of(run).at(12).combat.get(CombatMetric.ELDRITCH_PRAYER));
 	}
 
 	/**

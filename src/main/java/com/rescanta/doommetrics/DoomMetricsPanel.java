@@ -12,6 +12,7 @@ import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
@@ -22,8 +23,8 @@ import net.runelite.client.ui.PluginPanel;
 
 /**
  * The side panel: the run in progress on top, the sitting beside the character's lifetime under it,
- * then the sitting's combat figures, the lifetime milestone table, and a button that opens the
- * run detail window.
+ * then the sitting's combat figures, the lifetime milestone table, a button that opens the run
+ * detail window, and one that starts the session over.
  *
  * <p>The run is drawn as two large figures with the rest of it in small type beneath, because
  * there are only two things a player reads while they are being hit - which delve they are on and
@@ -211,8 +212,11 @@ class DoomMetricsPanel extends PluginPanel
 	private final JLabel lifetimePace = PanelStyle.body("-", SwingConstants.RIGHT);
 	private final JLabel lifetimeDeep = PanelStyle.body("-", SwingConstants.RIGHT);
 
-	/** @param onOpenDetail invoked on the Swing thread when the run detail button is pressed */
-	DoomMetricsPanel(Runnable onOpenDetail)
+	/**
+	 * @param onOpenDetail invoked on the Swing thread when the run detail button is pressed
+	 * @param onReset      invoked on the Swing thread once a session reset has been confirmed
+	 */
+	DoomMetricsPanel(Runnable onOpenDetail, Runnable onReset)
 	{
 		setBackground(PanelStyle.BACKGROUND);
 		setLayout(new DynamicGridLayout(0, 1, 0, PanelStyle.SECTION_GAP));
@@ -233,7 +237,11 @@ class DoomMetricsPanel extends PluginPanel
 		add(PanelStyle.section("Session & lifetime", PanelStyle.card(compare())));
 		add(PanelStyle.section("Session combat", combatPanel));
 		add(PanelStyle.section("Milestones", tablePanel));
-		add(detailButton(onOpenDetail));
+		add(button("Open run detail", "Break this run down delve by delve, in a window of its own",
+			onOpenDetail));
+		add(button("Reset session",
+			"Start the session over and drop the run in progress. Lifetime figures are kept.",
+			() -> confirmReset(onReset)));
 
 		setLive(null);
 		setStats(null);
@@ -420,16 +428,33 @@ class DoomMetricsPanel extends PluginPanel
 		return panel;
 	}
 
-	private static JComponent detailButton(Runnable onOpenDetail)
+	/**
+	 * Asks before resetting, because the session it throws away cannot be got back - a whole
+	 * evening's figures are one stray click from gone otherwise.
+	 */
+	private void confirmReset(Runnable onReset)
 	{
-		JButton button = new JButton("Open run detail");
+		int answer = JOptionPane.showConfirmDialog(this,
+			"Reset the session and drop the run in progress?\n"
+				+ "Lifetime figures and milestones are kept.",
+			"Reset session", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+
+		if (answer == JOptionPane.YES_OPTION)
+		{
+			onReset.run();
+		}
+	}
+
+	private static JComponent button(String text, String tooltip, Runnable onPress)
+	{
+		JButton button = new JButton(text);
 		button.setFont(FontManager.getRunescapeBoldFont());
 		button.setForeground(ColorScheme.TEXT_COLOR);
 		button.setBackground(PanelStyle.CARD);
 		button.setBorder(new EmptyBorder(7, 8, 7, 8));
 		button.setFocusPainted(false);
-		button.setToolTipText("Break this run down delve by delve, in a window of its own");
-		button.addActionListener(event -> onOpenDetail.run());
+		button.setToolTipText(tooltip);
+		button.addActionListener(event -> onPress.run());
 
 		// The panel is otherwise all text, so nothing about the button says it can be pressed
 		// until the pointer is over it.
