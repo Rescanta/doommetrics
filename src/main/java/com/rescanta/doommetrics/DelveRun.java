@@ -418,12 +418,6 @@ class DelveRun
 		return held.getOrDefault(dropKey(itemId), 0);
 	}
 
-	/** Places one more of a notable drop than the run has seen. */
-	void landedOne(int itemId, String name)
-	{
-		sawInPile(itemId, name, held(itemId) + 1);
-	}
-
 	/**
 	 * Takes what the pile already holds as having been there before we were watching, so a run
 	 * joined part way through does not place every drop already in it on the first delve we see.

@@ -385,7 +385,7 @@ final class PreviewScene
 				}
 				else if (landing.level == level)
 				{
-					run.landedOne(landing.itemId, landing.name);
+					run.sawInPile(landing.itemId, landing.name, run.held(landing.itemId) + 1);
 				}
 			}
 		}
