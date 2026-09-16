@@ -97,10 +97,25 @@ public class DelveChartTest
 	public void theAveragingWindowWidensThenSettles()
 	{
 		assertEquals(9, DelveChart.windowFor(80));
+		assertEquals("a tenth that comes out even rounds up to the odd window it really spans",
+			11, DelveChart.windowFor(100));
 		assertEquals(15, DelveChart.windowFor(150));
 		assertEquals(25, DelveChart.windowFor(260));
 		assertEquals(25, DelveChart.windowFor(350));
 		assertEquals(25, DelveChart.windowFor(900));
+	}
+
+	/**
+	 * The average is centred, so a window reaches as far either side of its delve. Only an odd one
+	 * spans the number of delves the caption names.
+	 */
+	@Test
+	public void theAveragingWindowIsAlwaysOdd()
+	{
+		for (int delves = 80; delves <= 1000; delves++)
+		{
+			assertEquals("window for " + delves + " delves", 1, DelveChart.windowFor(delves) % 2);
+		}
 	}
 
 	/**
