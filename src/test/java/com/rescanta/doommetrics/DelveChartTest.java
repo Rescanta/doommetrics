@@ -1,5 +1,6 @@
 package com.rescanta.doommetrics;
 
+import java.time.Instant;
 import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -219,5 +220,24 @@ public class DelveChartTest
 	public void noDropsNeedNoRows()
 	{
 		assertEquals(0, DelveChart.stackRows(new int[0], 30, 3).length);
+	}
+
+	/** A drop lost to a death says so, rather than that the run was left without claiming it. */
+	@Test
+	public void aLostDropSaysHowItWasLost()
+	{
+		assertEquals("Lost when you died",
+			DelveChart.lostHow(RunDetail.of(ended(EndReason.DIED, 2))));
+		assertEquals("Lost when the run ended unclaimed",
+			DelveChart.lostHow(RunDetail.of(ended(EndReason.FINISHED, -1))));
+	}
+
+	/** A run that cleared delve 1 and then ended as {@code reason} says. */
+	private static DelveRun ended(EndReason reason, int diedOn)
+	{
+		DelveRun run = new DelveRun(Instant.EPOCH, 1, false);
+		run.complete(1, Instant.EPOCH.plusSeconds(60), null);
+		run.end(reason, Instant.EPOCH.plusSeconds(90), diedOn);
+		return run;
 	}
 }

@@ -135,7 +135,7 @@ class RunDropsPanel extends JPanel
 		{
 			panel.setToolTipText(drop.kept
 				? text
-				: "<html>" + text + "<br>Lost - the run ended without it being claimed</html>");
+				: "<html>" + text + "<br>" + DelveChart.lostHow(detail) + "</html>");
 		}
 
 		return panel;
