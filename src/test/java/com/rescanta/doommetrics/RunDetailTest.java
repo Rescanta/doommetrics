@@ -302,7 +302,7 @@ public class RunDetailTest
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
 		run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-		run.landedOne(ItemID.DOMPET, "Dom");
+		run.sawInPile(ItemID.DOMPET, "Dom", run.held(ItemID.DOMPET) + 1);
 		run.end(EndReason.DIED, at(90), 2);
 
 		List<RunDetail.Drop> drops = RunDetail.of(run).drops();
@@ -316,7 +316,7 @@ public class RunDetailTest
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
-		run.landedOne(ItemID.DOMPET, "Dom");
+		run.sawInPile(ItemID.DOMPET, "Dom", run.held(ItemID.DOMPET) + 1);
 		run.recordLoot(ItemID.DOMPET, "Dom", run.held(ItemID.DOMPET));
 		run.end(EndReason.FINISHED, at(90), -1);
 

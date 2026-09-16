@@ -620,7 +620,7 @@ public class DelveRunTest
 		run.complete(1, at(60), null);
 		run.enterLevel(2);
 
-		run.landedOne(ItemID.DOMPET, "Dom");
+		run.sawInPile(ItemID.DOMPET, "Dom", run.held(ItemID.DOMPET) + 1);
 
 		assertEquals(1, run.getLanded().size());
 		assertEquals(2, run.getLanded().get(0).level);
