@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.runelite.api.gameval.ItemID;
 
 /**
@@ -249,6 +250,13 @@ class DelveRun
 	 */
 	private final Instant pbAnchor;
 
+	/**
+	 * Whether the first delve cleared was watched from its start, and so has a segment that was
+	 * measured. Always so for a run watched from the start; a joined run earns it by being picked up
+	 * no later than the start of its first delve - see {@link #watchedFromDelveStart}.
+	 */
+	private boolean firstClearTimed;
+
 	private Instant lastClearedAt;
 	private int currentLevel;
 	private EndReason endReason;
@@ -268,6 +276,7 @@ class DelveRun
 		this.partial = partial;
 		this.pbAnchor = pbAnchor;
 		this.trustWarnings = !partial;
+		this.firstClearTimed = !partial;
 	}
 
 	/**
@@ -277,12 +286,38 @@ class DelveRun
 	 */
 	void enterLevel(int level, Instant at)
 	{
+		// A joined run picked up in the wait between delves sees the next one start, so from here
+		// on it is timed like any other. A repeat of the delve it was picked up in is not a start.
+		if (partial && splits.isEmpty() && level > currentLevel)
+		{
+			watchedFromDelveStart(at);
+		}
+
 		currentLevel = level;
 		betweenDelves = false;
 		warned.clear();
 		trustWarnings = true;
 		// The first announcement is when the delve began; one sent again is not a new start.
 		delveStarts.putIfAbsent(level, at);
+	}
+
+	/**
+	 * Moves a joined run that has not cleared a delve yet onto the start of the delve it is in,
+	 * because it was seen starting. Its first clear then has a measured segment, and is charged to
+	 * the rates like any other.
+	 *
+	 * @param at when the delve was announced
+	 */
+	void watchedFromDelveStart(Instant at)
+	{
+		if (!splits.isEmpty())
+		{
+			return;
+		}
+
+		startedAt = at;
+		lastClearedAt = at;
+		firstClearTimed = true;
 	}
 
 	/**
@@ -314,6 +349,34 @@ class DelveRun
 		betweenDelves = true;
 		warned.clear();
 		return split;
+	}
+
+	/**
+	 * Whether the delve cleared last has a segment that was actually measured, and so can be
+	 * charged to a rate. Every clear of a run we watched from the start has one; the first clear
+	 * of a run we joined part way through does not, because its segment starts wherever we
+	 * happened to pick the run up - unless we picked it up no later than that delve's start.
+	 */
+	boolean lastClearTimed()
+	{
+		return !splits.isEmpty() && (firstClearTimed || splits.size() > 1);
+	}
+
+	/**
+	 * The ticks the delve cleared last adds to a rate: its segment, rounded so that the clears of a
+	 * run always sum to exactly {@link #clearedElapsed} in ticks. Rounding each segment on its own
+	 * would drift from that by up to half a tick a delve.
+	 */
+	long lastClearTicks()
+	{
+		if (splits.isEmpty())
+		{
+			return 0;
+		}
+
+		Duration through = clearedElapsed();
+		Duration before = through.minus(splits.get(splits.size() - 1).segment);
+		return DoomFormat.toTicks(through) - DoomFormat.toTicks(before);
 	}
 
 	/**
@@ -565,6 +628,12 @@ class DelveRun
 		return totals == null ? EMPTY_COMBAT : totals;
 	}
 
+	/** Every delve something has been counted on, cleared or not. */
+	Set<Integer> combatLevels()
+	{
+		return Collections.unmodifiableSet(combatByDelve.keySet());
+	}
+
 	void end(EndReason reason, Instant at, int diedOnLevel)
 	{
 		this.endReason = reason;
@@ -625,12 +694,19 @@ class DelveRun
 	 *
 	 * <p>A partial run's {@link #startedAt} is the moment we first saw it, which is later than the
 	 * truth and would hand out a personal best nobody earned. The anchor is a moment the run
-	 * provably had not started by - you cannot drop back into the Doom past delve 1, so the run
-	 * began after you logged in, which in turn was after the client started. Measuring from it can
-	 * only ever make the time too long, and a time that is too long simply never wins.
+	 * provably had not started by - the login it happened in, see {@link LoginBound}. Measuring from
+	 * it can only ever make the time too long, and a time that is too long simply never wins.
+	 *
+	 * @return the span, or null for a run joined part way through with no anchor to measure from,
+	 *         whose personal bests cannot be timed at all
 	 */
 	Duration pbElapsed()
 	{
+		if (partial && pbAnchor == null)
+		{
+			return null;
+		}
+
 		Instant from = pbAnchor == null || startedAt.isBefore(pbAnchor) ? startedAt : pbAnchor;
 		return Duration.between(from, lastClearedAt);
 	}

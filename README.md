@@ -265,12 +265,22 @@ Behind the chevron icon, top to bottom:
 - **Current run** - the same rows as the overlay, so the numbers are somewhere other than over the
   game world.
 - **This session** - how long this sitting has been going, its deep pace, how many deep delves it
-  has completed, and the counters you have ticked. A sitting ends after half an hour without a run,
-  which is long enough that banking and walking back never break it and short enough that coming
-  back tomorrow starts you clean.
+  has completed, and the counters you have ticked. A session lasts until you close the client, log
+  in as a different character, or press **Reset session**; logging out and back in carries it on,
+  and its length does not count the time spent logged out. After half an hour without a run the
+  rows go blank so they do not look current, and the next run brings the session back.
 - **Lifetime** - the same rate and delve count over everything this character has ever done.
+  Both columns, and the lifetime combat counters behind them, are added to as each delve is
+  cleared rather than when the run ends, so closing the client mid-run keeps every delve cleared
+  before it. A run picked up part way through leaves its first clear out of the rates, since
+  nobody saw when that delve began.
 - **Milestones** - the lifetime table, below.
 - **Open run detail** - this run, delve by delve, in a window of its own.
+- **Reset session** - starts the session over and drops the run in progress, after asking, letting
+  go of everything the plugin held about both. The dropped run is not written to history, but the
+  delves it already cleared stay in the lifetime figures and milestones. Turning the plugin off
+  lets go of everything it holds in memory, lifetime figures included; what is saved stays saved
+  and is read back when the plugin is next on and a character is logged in.
 
 The counters in the panel are always listed by icon, with the name one hover away.
 

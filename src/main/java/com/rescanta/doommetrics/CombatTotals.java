@@ -8,8 +8,8 @@ import java.util.Map;
  *
  * <p>Used three times over, the same way {@link DelveTotals} is used twice: once against the run in
  * progress, once in memory for the sitting, and once on the RuneScape profile for the character's
- * lifetime. A run is banked into the other two as it ends, so all three are the same sum of the
- * same numbers and a sitting holding one run reads exactly what that run did.
+ * lifetime. Every amount is counted into all three, so they are the same sum of the same numbers
+ * and a sitting holding one run reads exactly what that run did.
  *
  * <p>Both the config value and the history file are written from this, so the shape here is the
  * stored format. Metrics are held in a map keyed by {@link CombatMetric#key()} rather than in
