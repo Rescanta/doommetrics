@@ -164,16 +164,13 @@ public class DoomMetricsPlugin extends Plugin
 	private static final long SLOW_HANDLER_NANOS = Duration.ofMillis(5).toNanos();
 
 	/**
-	 * How long a gap between runs ends the session.
+	 * How long a gap between runs takes the session off the panel.
 	 *
-	 * <p>A session is a sitting, not a login: banking, restocking and walking back are all part of
-	 * the sitting, and a run started straight after the last one carries on the same figure. Half
-	 * an hour is long enough that nothing you do between two runs will break it, and short enough
-	 * that coming back to the game tomorrow starts you clean rather than averaging you against
-	 * yesterday.
-	 *
-	 * <p>This only decides which runs share a session figure. Nothing is lost when one ends - every
-	 * run is banked to the lifetime total as it finishes, whatever session it belonged to.
+	 * <p>Display only. The session itself lasts until the client closes, the character changes, or
+	 * the panel's reset button is pressed - logging out and back in, or stepping away for an hour,
+	 * carries it on. What this decides is whether the session figures are shown while no run is
+	 * going: after half an hour without one the rows go blank rather than sitting there looking
+	 * current, and the next run brings them straight back, the gap and all.
 	 */
 	private static final Duration SESSION_IDLE = Duration.ofMinutes(30);
 
@@ -306,14 +303,20 @@ public class DoomMetricsPlugin extends Plugin
 	/** This character's lifetime deep delve rate, reloaded whenever the profile changes. */
 	private DelveTotals lifetime = new DelveTotals();
 
-	/** The runs of the current sitting. See {@link #SESSION_IDLE}. */
+	/**
+	 * The runs of the current sitting, kept until the client closes, the character changes, or the
+	 * session is reset - see {@link #resetSession()}.
+	 */
 	private DelveTotals session = new DelveTotals();
 
-	/** This character's lifetime healing, prayer and spec damage, banked run by run. */
+	/** This character's lifetime healing, prayer and spec damage, banked clear by clear. */
 	private CombatTotals lifetimeCombat = new CombatTotals();
 
 	/** The same figures for the current sitting, thrown away when the sitting is. */
 	private CombatTotals sessionCombat = new CombatTotals();
+
+	/** Combat counted since the lifetime figures were last written - see {@link #flushCombat}. */
+	private CombatTotals unbankedCombat = new CombatTotals();
 
 	/**
 	 * Works out what caused each heal, prayer restore and spec hitsplat. Fed only while a run is in
@@ -356,15 +359,14 @@ public class DoomMetricsPlugin extends Plugin
 	private Instant sessionEndedAt;
 
 	/**
-	 * When the session's first run started, or null before the session has a run in it at all.
-	 * What the panel's session length is measured from.
+	 * What the panel's session length is measured with, started by the session's first run.
 	 *
-	 * <p>Wall clock rather than summed run time, because it answers a different question from the
-	 * rate under it: the rate is what the time inside runs bought, and the length is how long you
-	 * have been at it - banking, restocking and walking back included, because those are the
-	 * sitting too. Reading the two together is what tells you where an evening went.
+	 * <p>Logged in time rather than summed run time, because it answers a different question from
+	 * the rate under it: the rate is what the time inside runs bought, and the length is how long
+	 * you have been at it - banking, restocking and walking back included, because those are the
+	 * sitting too. Time at the login screen is left out, since the session now outlives a logout.
 	 */
-	private Instant sessionStartedAt;
+	private final SessionClock sessionClock = new SessionClock();
 
 	/** The character the session belongs to, so an alt's runs never join it. */
 	private String sessionProfile;
@@ -397,10 +399,28 @@ public class DoomMetricsPlugin extends Plugin
 	private String runProfile;
 
 	/**
-	 * When this session logged in, if we were watching at the time. Used to bound the start of a
-	 * run we joined part way through - see {@link DelveRun#pbElapsed()}.
+	 * The first login seen since the plugin started, or null if it started logged in and has not
+	 * seen one since. One of the two bounds on the start of a run we joined part way through - see
+	 * {@link LoginBound}.
+	 *
+	 * <p>The first rather than the latest, because a dropped connection can log you back in to the
+	 * delve you were already in, so a later login does not prove a run started after it. Nothing
+	 * that happened before the first one we saw can have been a run we were watching.
 	 */
 	private Instant loginAt;
+
+	/**
+	 * Set from the login screen's LOGGING_IN until the LOGGED_IN it leads to. Every loading screen
+	 * also ends in LOGGED_IN, so this is what tells a login from walking down to the next delve.
+	 */
+	private boolean loggingIn;
+
+	/**
+	 * Set when the plugin starts and on a reset, and cleared once a run starts. While it is set, a
+	 * player found in the cave is picked up as a run joined part way through straight away - see
+	 * {@link #pickUpRun} - rather than waiting on the next delve's chat line.
+	 */
+	private boolean pickUpPending;
 
 	/** What the live section last drew, so an unchanged tick costs nothing. */
 	private String lastLiveKey;
@@ -432,7 +452,8 @@ public class DoomMetricsPlugin extends Plugin
 		overlayManager.add(overlay);
 
 		icon = ImageUtil.loadImageResource(DoomMetricsPlugin.class, "panel_icon.png");
-		panel = new DoomMetricsPanel(this::openDetailWindow);
+		panel = new DoomMetricsPanel(this::openDetailWindow,
+			() -> clientThread.invoke(this::resetSession));
 
 		// Asked for up front, so they are in hand by the time anything is drawn with them.
 		icons = new GameIcons(itemManager, spriteManager,
@@ -484,6 +505,9 @@ public class DoomMetricsPlugin extends Plugin
 		// plugin leaving a frame on screen would go on drawing data it no longer maintains.
 		SwingUtilities.invokeLater(this::closeDetailWindow);
 
+		// Combat counted since the last clear really happened, so it is written out before the
+		// memory holding it is let go.
+		flushCombat();
 		reset();
 	}
 
@@ -540,30 +564,86 @@ public class DoomMetricsPlugin extends Plugin
 		}
 	}
 
+	/**
+	 * Puts the plugin back to how it was before it saw anything, dropping every run, session and
+	 * lifetime figure it holds in memory. Called on start up and on shut down, so a disabled plugin
+	 * holds nothing but its own empty collections. What is saved - the lifetime totals, the
+	 * milestone table and the run history - is left on disk, and read back once a character is
+	 * logged in again.
+	 */
 	private void reset()
+	{
+		forgetRuns();
+
+		lifetime = new DelveTotals();
+		lifetimeCombat = new CombatTotals();
+		milestones.replaceAll(Collections.emptyMap());
+
+		loginAt = null;
+		loggingIn = false;
+		bossCount = 0;
+		boss = null;
+		specEnergy = 0;
+		prayerPoints = 0;
+		hitpoints = 0;
+		prayerRegeneration.reset();
+		hitpointsRegeneration.reset();
+		sessionProfile = null;
+	}
+
+	/**
+	 * Drops everything gathered about runs and the session: the run in progress, the last one and
+	 * what the detail window draws of it, the session figures and clock, and the combat not yet
+	 * written out. What the plugin is merely watching - who is logged in, whether the boss is in the
+	 * scene, the prayer and hitpoints last read - is not data about a run, and is left alone.
+	 */
+	private void forgetRuns()
 	{
 		run = null;
 		lastRun = null;
 		lastRunCleared = false;
 		resumeCheck = null;
 		runProfile = null;
-		loginAt = null;
-		bossCount = 0;
+		claimRequested = false;
+		pickUpPending = true;
 		ticksWithoutBoss = 0;
-		session = new DelveTotals();
-		sessionCombat = new CombatTotals();
 		combatTracker.reset();
 		punishTracker.reset();
-		boss = null;
-		claimRequested = false;
-		specEnergy = 0;
-		prayerPoints = 0;
-		hitpoints = 0;
-		prayerRegeneration.reset();
-		hitpointsRegeneration.reset();
+
+		session = new DelveTotals();
+		sessionCombat = new CombatTotals();
+		unbankedCombat = new CombatTotals();
 		sessionEndedAt = null;
-		sessionStartedAt = null;
-		sessionProfile = null;
+		sessionClock.reset();
+		improvedThisSession.clear();
+
+		// Forgotten too, so the next refresh pushes the emptied figures rather than deciding
+		// nothing has changed.
+		lastLiveKey = null;
+		lastDetailKey = null;
+	}
+
+	/**
+	 * Starts the session over and drops the run in progress, from the panel's reset button.
+	 *
+	 * <p>Everything the plugin holds about runs and the session is let go - see {@link
+	 * #forgetRuns}. The run is thrown away rather than ended: it is not written to the history file
+	 * and nothing is announced. What it already banked to the lifetime figures and the milestone
+	 * table stays, because a delve cleared is a delve cleared - the combat counted since its last
+	 * clear is written out first for the same reason. Those lifetime figures stay in memory as well,
+	 * since the panel is showing them. If the player is still in the cave, the delve they are in is
+	 * picked up on the next tick as a run joined part way through - see {@link #pickUpRun}. That
+	 * run's first clear is left out of the rates, unless it was picked up between delves and saw
+	 * the next one start.
+	 */
+	void resetSession()
+	{
+		log.debug("Session reset from the panel");
+		flushCombat();
+		forgetRuns();
+
+		refreshTable();
+		refreshLive();
 	}
 
 	/**
@@ -674,7 +754,9 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		if (isPetMessage(event.getMessage()))
+		// Tags stripped first: the pet line comes coloured, so the raw message never starts with
+		// the words.
+		if (isPetMessage(Text.removeTags(event.getMessage())))
 		{
 			petClaimed();
 			return;
@@ -697,7 +779,7 @@ public class DoomMetricsPlugin extends Plugin
 		}
 	}
 
-	private static boolean isPetMessage(String message)
+	static boolean isPetMessage(String message)
 	{
 		for (String prefix : PET_MESSAGES)
 		{
@@ -958,7 +1040,14 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		if (level <= 1 || run == null)
 		{
-			startRun(Instant.now(), level, level > 1);
+			Instant now = Instant.now();
+			startRun(now, level, level > 1);
+
+			if (level > 1)
+			{
+				// Joined, but at the delve's own start, so its first clear is timed like the rest.
+				run.watchedFromDelveStart(now);
+			}
 		}
 		else
 		{
@@ -986,6 +1075,8 @@ public class DoomMetricsPlugin extends Plugin
 		log.debug("Delve {} cleared in {} (segment {})",
 			level, DoomFormat.preciseDuration(fight), DoomFormat.duration(split.segment));
 
+		bankClear(split);
+
 		announceClear(level);
 		recordMilestone(level);
 	}
@@ -1002,7 +1093,9 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		int ticks = DoomFormat.toTicks(run.pbElapsed());
+		// A run joined with nothing to bound its start still counts the kill, but offers no time.
+		Duration elapsed = run.pbElapsed();
+		int ticks = elapsed == null ? 0 : DoomFormat.toTicks(elapsed);
 
 		if (milestones.record(level, ticks))
 		{
@@ -1566,7 +1659,10 @@ public class DoomMetricsPlugin extends Plugin
 		return false;
 	}
 
-	/** Credits an attributed amount to the run in progress. The tracker's only way out. */
+	/**
+	 * Credits an attributed amount to the run in progress, and to the session and the lifetime
+	 * buffer alongside it - see {@link #flushCombat}. The tracker's only way out.
+	 */
 	private void recordCombat(CombatMetric metric, long amount)
 	{
 		if (run == null)
@@ -1575,6 +1671,8 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		run.recordCombat(metric, amount, Instant.now());
+		sessionCombat.add(metric, amount);
+		unbankedCombat.add(metric, amount);
 
 		if (config.debugLogging())
 		{
@@ -1786,8 +1884,8 @@ public class DoomMetricsPlugin extends Plugin
 	 *
 	 * <p>Every other figure in the panel is the logged in character's own, and a session rate that
 	 * had quietly summed two players' runs together would belong to neither of them. Only a change
-	 * of character does this - logging the same one back in carries the sitting on, which is the
-	 * point of measuring the gap in wall clock rather than in logins.
+	 * of character does this - logging the same one back in carries the sitting on, however long
+	 * it was away.
 	 */
 	private void startSessionForCurrentCharacter()
 	{
@@ -1807,7 +1905,7 @@ public class DoomMetricsPlugin extends Plugin
 		session = new DelveTotals();
 		sessionCombat = new CombatTotals();
 		sessionEndedAt = null;
-		sessionStartedAt = null;
+		sessionClock.reset();
 	}
 
 	/**
@@ -1891,6 +1989,7 @@ public class DoomMetricsPlugin extends Plugin
 	private void handleGameTick(GameTick event)
 	{
 		checkResume();
+		pickUpRun();
 		trackAbandonedRun();
 		trackPunish();
 		refreshLive();
@@ -2026,6 +2125,35 @@ public class DoomMetricsPlugin extends Plugin
 		endRun(EndReason.FINISHED, -1);
 	}
 
+	/**
+	 * Picks up the run the player is already in when the plugin was turned on or reset, so the
+	 * overlay and the combat counters start now rather than at the next delve's chat line.
+	 *
+	 * <p>DOM_CURRENT_LEVEL_TEMP reads one less than the delve being fought, and is cleared on the
+	 * way out of the cave, so anything above zero is delve 2 or deeper. It reads zero on delve 1
+	 * too, so there the boss being in the scene is what says we are inside. The spawn events for
+	 * NPCs already there are replayed when a plugin starts, so the count is right by the first
+	 * tick. For the few seconds between a delve's chat line and the game moving the varplayer the
+	 * delve is read one short; the clear puts that right.
+	 */
+	private void pickUpRun()
+	{
+		if (!pickUpPending || run != null || resumeCheck != null)
+		{
+			return;
+		}
+
+		int descended = client.getVarpValue(VarPlayerID.DOM_CURRENT_LEVEL_TEMP);
+
+		if (descended <= 0 && bossCount == 0)
+		{
+			return;
+		}
+
+		startRun(Instant.now(), descended + 1, true);
+		refreshLive();
+	}
+
 	private void trackAbandonedRun()
 	{
 		if (bossCount > 0)
@@ -2062,13 +2190,39 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (state == GameState.LOGIN_SCREEN)
 		{
-			loginAt = null;
+			sessionClock.pause(Instant.now());
 		}
-		else if (state == GameState.LOGGED_IN && loginAt == null)
+		else if (state == GameState.CONNECTION_LOST)
 		{
-			// Deliberately not refreshed on a world hop, which never clears this: the earlier of
-			// the two logins is the safer bound. A run held open across a dropped connection is
-			// unaffected either way - it took its anchor when it started, and nothing moves it.
+			// Only noted: whether the wait counts depends on where the drop ends - see the clock.
+			sessionClock.connectionLost(Instant.now());
+		}
+		else if (state == GameState.LOGGED_IN)
+		{
+			// Every login, not just the first: a hop never pauses the clock, so this is a no-op.
+			sessionClock.resume(Instant.now());
+		}
+
+		if (state == GameState.LOGGING_IN)
+		{
+			loggingIn = true;
+		}
+		else if (state == GameState.LOGIN_SCREEN)
+		{
+			loggingIn = false;
+		}
+
+		boolean loggedIn = state == GameState.LOGGED_IN && loggingIn;
+
+		if (state == GameState.LOGGED_IN)
+		{
+			loggingIn = false;
+		}
+
+		if (loggedIn && loginAt == null)
+		{
+			// Only ever the first - see the field. A run held open across a dropped connection is
+			// unaffected either way: it took its anchor when it started, and nothing moves it.
 			loginAt = Instant.now();
 
 			// In case the varp flood landed before the profile was ready.
@@ -2166,6 +2320,7 @@ public class DoomMetricsPlugin extends Plugin
 		lastRunCleared = false;
 		resumeCheck = null;
 		runProfile = runHistoryStore.currentProfile();
+		pickUpPending = false;
 		// Give the boss the full grace period to appear, whatever the counter was doing before.
 		ticksWithoutBoss = 0;
 		// A spec fired on the way in belongs to nothing we are counting, and its window must not
@@ -2191,8 +2346,8 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Puts the run about to start into a session: the one already going if the last run was recent
-	 * enough, or a fresh one if the player has been away longer than {@link #SESSION_IDLE}.
+	 * Puts the run about to start into the session already going, however long ago its last run
+	 * ended, starting the session's clock if this is its first run.
 	 *
 	 * @param startedAt when the run about to start began, which is where a fresh session's length
 	 *                  is measured from. A run we joined part way through dates the sitting from
@@ -2201,25 +2356,16 @@ public class DoomMetricsPlugin extends Plugin
 	private void openSession(Instant startedAt)
 	{
 		startSessionForCurrentCharacter();
-
-		if (sessionEndedAt != null && !sessionAlive(Instant.now()))
-		{
-			log.debug("Session lapsed, starting the session rate over");
-			session = new DelveTotals();
-			sessionCombat = new CombatTotals();
-			sessionStartedAt = null;
-		}
-
-		if (sessionStartedAt == null)
-		{
-			sessionStartedAt = startedAt;
-		}
+		sessionClock.start(startedAt);
 
 		// Cleared either way: a run is in progress, so there is no idle gap to be measuring.
 		sessionEndedAt = null;
 	}
 
-	/** Whether the last run ended recently enough that the session it belonged to is still going. */
+	/**
+	 * Whether the last run ended recently enough for the session to be shown between runs. See
+	 * {@link #SESSION_IDLE} - this only decides what the panel draws, never what the session holds.
+	 */
 	private boolean sessionAlive(Instant now)
 	{
 		return sessionEndedAt != null
@@ -2227,36 +2373,36 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Adds a finished run to the session and lifetime rates.
+	 * Adds the delve just cleared to the session and lifetime rates, and settles the combat figures
+	 * counted since the last clear.
 	 *
-	 * <p>Every run counts, including the ones the history file leaves out. An {@link
-	 * EndReason#ABANDONED} run is one we lost sight of rather than one that did not happen: the
-	 * delves it banked and the time it took to bank them are both real up to the last clear we saw,
-	 * and that pair is exactly what a rate is made of. A partial run is charged the deliberately
-	 * pessimistic span its personal bests are measured over - see {@link DelveRun#pbElapsed()} - so
-	 * joining a trip half way through can only ever drag the rate down, never flatter it.
+	 * <p>Banked a delve at a time rather than a run at a time, so the figures never depend on how a
+	 * run ends: a client closed mid-run keeps every delve cleared before it, and a session reset
+	 * only takes the session with it. Every run counts, including the ones the history file leaves
+	 * out - an {@link EndReason#ABANDONED} run still cleared the delves we watched it clear.
 	 *
-	 * <p>A run that never banked a clear is left out entirely. There is no time to charge for it:
-	 * the span every figure here is built on ends at the last clear, and it has none.
+	 * <p>Each clear is charged its segment, the time since the clear before it, so a run's charge
+	 * sums to the span from its start to its last clear - the span every other figure here is built
+	 * on. The one exception is the first clear of a run we joined part way into a delve: its segment
+	 * starts wherever we happened to pick the run up, which is a guess, so that delve is left out
+	 * of the rates rather than charged a time nobody measured. A run joined between delves, or on
+	 * a delve's chat line, saw that delve start, and is charged like any other. The run's own pace
+	 * leaves out the same delve - see {@link DelveRun#fullPace} - so what the overlay and the chat
+	 * say of a joined run is what it adds here.
 	 */
-	private void bankRun(DelveRun ended)
+	private void bankClear(DelveRun.Split split)
 	{
-		// Whatever came of the run, the sitting's idle clock restarts from the moment it ended.
-		sessionEndedAt = ended.getEndedAt();
+		flushCombat();
 
-		// Ahead of every other test here, and deliberately so. The combat figures are counts of
-		// things that provably happened, not a rate with a denominator, so none of the reasons a
-		// run can fail to contribute to a rate apply: a run that cleared nothing still healed you,
-		// and a trip we only saw half of still healed you for the half we saw.
-		bankCombat(ended.getCombat());
-
-		if (ended.lastLevel() == 0)
+		if (!run.lastClearTimed())
 		{
+			log.debug("Not banking delve {} to the rates - the run was joined part way into it",
+				split.level);
 			return;
 		}
 
-		int deep = ended.deepCleared();
-		long ticks = DoomFormat.toTicks(ended.pbElapsed());
+		int deep = split.level >= DelveRun.DEEP_DELVE_LEVEL ? 1 : 0;
+		long ticks = run.lastClearTicks();
 
 		if (ticks <= 0)
 		{
@@ -2265,50 +2411,61 @@ public class DoomMetricsPlugin extends Plugin
 
 		session.add(deep, ticks);
 
-		// The lifetime figure can only be written to the character that is logged in, and a run
-		// held open across a lost connection can outlive the login that made it. Rather than file
-		// somebody else's delves against this character, such a run is left in the session figure
-		// alone - and the session is started over for the new character on its way past anyway.
-		if (!totalsStore.hasProfile()
-			|| (runProfile != null && !runProfile.equals(runHistoryStore.currentProfile())))
+		if (!lifetimeBelongsToRun())
 		{
-			log.debug("Not banking the run to a lifetime total - it belongs to another character");
+			log.debug("Not banking delve {} to a lifetime total - it belongs to another character",
+				split.level);
 			return;
 		}
 
 		lifetime.add(deep, ticks);
 		totalsStore.save(lifetime);
 
-		log.debug("Banked {} deep delves in {} ticks (session {}/{}, lifetime {}/{})",
-			deep, ticks, session.deep, session.ticks, lifetime.deep, lifetime.ticks);
+		log.debug("Banked delve {}: {} deep in {} ticks (session {}/{}, lifetime {}/{})",
+			split.level, deep, ticks, session.deep, session.ticks, lifetime.deep, lifetime.ticks);
 	}
 
 	/**
-	 * Adds a finished run's combat figures to the sitting and to the character's lifetime.
+	 * Writes the combat figures counted since the last write to the character's lifetime.
 	 *
-	 * <p>The lifetime copy is guarded the same way the delve rate's is: a run held open across a
-	 * dropped connection can outlive the login that made it, and filing one character's healing
-	 * against another's lifetime would be worse than not filing it at all. Such a run stays in the
-	 * sitting's figure alone, and the sitting is started over for the new character anyway.
+	 * <p>They reach the session and the in-memory buffer as they are counted - see {@link
+	 * #recordCombat} - but a heal is far too frequent a thing to write config on, so the buffer is
+	 * written out on each clear, when the run ends, on a reset, and when the plugin is turned off.
+	 * Closing the client does not turn plugins off, so heals since the last clear are lost if the
+	 * client closes mid-delve, the same way the delve itself is.
+	 *
+	 * <p>Guarded the same way the delve rate is: a run held open across a dropped connection can
+	 * outlive the login that made it, and filing one character's healing against another's
+	 * lifetime would be worse than not filing it at all.
 	 */
-	private void bankCombat(CombatTotals ended)
+	private void flushCombat()
 	{
-		if (ended == null || ended.isEmpty())
+		if (unbankedCombat.isEmpty())
 		{
 			return;
 		}
 
-		sessionCombat.addAll(ended);
+		CombatTotals pending = unbankedCombat;
+		unbankedCombat = new CombatTotals();
 
-		if (!totalsStore.hasProfile()
-			|| (runProfile != null && !runProfile.equals(runHistoryStore.currentProfile())))
+		if (!lifetimeBelongsToRun())
 		{
 			log.debug("Not banking combat totals to a lifetime - they belong to another character");
 			return;
 		}
 
-		lifetimeCombat.addAll(ended);
+		lifetimeCombat.addAll(pending);
 		totalsStore.saveCombat(lifetimeCombat);
+	}
+
+	/**
+	 * Whether the logged in character is the one the run was started on, and so the one whose
+	 * lifetime figures it may be written to.
+	 */
+	private boolean lifetimeBelongsToRun()
+	{
+		return totalsStore.hasProfile()
+			&& (runProfile == null || runProfile.equals(runHistoryStore.currentProfile()));
 	}
 
 	/**
@@ -2342,9 +2499,11 @@ public class DoomMetricsPlugin extends Plugin
 		ended.end(reason, Instant.now(), diedOnLevel);
 		log.debug("Doom run ended: {} after {} delves", reason, ended.lastLevel());
 
-		// Ahead of the abandoned check: a run we lost sight of still banked the delves we watched
-		// it bank, even though its ending is too uncertain to write down as history.
-		bankRun(ended);
+		// The delves are already banked, clear by clear; what is left is the combat counted since
+		// the last one, and the sitting's idle clock, which restarts from the moment the run ended.
+		// Ahead of the abandoned check: a run we lost sight of still healed you.
+		flushCombat();
+		sessionEndedAt = ended.getEndedAt();
 
 		if (reason == EndReason.ABANDONED)
 		{
@@ -2365,18 +2524,15 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * The latest moment a run we joined part way through can be proven not to have started before.
-	 *
-	 * <p>The login is the tight answer, but the case this exists for - the plugin switched off for
-	 * part of a trip and back on - is exactly the case where we were not watching to see one. The
-	 * client cannot have started after the login did, so its own uptime is a looser bound that is
-	 * still always on the safe side.
+	 * A moment a run we joined part way through can be proven not to have started before, or null
+	 * when there is none - see {@link LoginBound}.
 	 */
 	private Instant sessionAnchor()
 	{
-		return loginAt != null
-			? loginAt
-			: Instant.now().minusMillis((long) client.getGameCycle() * 20L);
+		int ticks = client.getGameState() == GameState.LOGGED_IN ? client.getTickCount() : -1;
+		Instant anchor = LoginBound.of(Instant.now(), ticks, loginAt);
+		log.debug("Joined run bounded by login at {} (seen login {}, {} ticks)", anchor, loginAt, ticks);
+		return anchor;
 	}
 
 	private void refreshLive()
@@ -2443,12 +2599,12 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * The sitting's combat figures, the run in progress counted as it goes rather than only once it
-	 * ends - so what the panel shows during a run is what banking it will leave behind.
+	 * The sitting's combat figures, the run in progress included - every amount reaches the session
+	 * the moment it is counted.
 	 */
 	private CombatTotals combatSnapshot()
 	{
-		return run == null ? sessionCombat.copy() : sessionCombat.plus(run.getCombat());
+		return sessionCombat.copy();
 	}
 
 	/**
@@ -2470,9 +2626,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
-			long amount = sessionCombat.get(metric)
-				+ (run == null ? 0 : run.getCombat().get(metric));
-			key.append(amount).append(',');
+			key.append(sessionCombat.get(metric)).append(',');
 		}
 
 		return key.toString();
@@ -2481,30 +2635,16 @@ public class DoomMetricsPlugin extends Plugin
 	/**
 	 * The sitting's figures and the character's, as strings for the panel to draw.
 	 *
-	 * <p>The session figures count the run in progress as it goes, rather than waiting for it to
-	 * end. They are built from the same two numbers the run would be banked with, so what the
-	 * panel shows during a run is what banking it will leave behind, and a sitting holding one run
-	 * reads exactly what that run's Full pace does.
-	 *
-	 * <p>The lifetime figures cannot move while a run is in progress - a run joins them only once
-	 * it is banked - so what is shown there is always the character as they stood when this sitting
-	 * began, and the session block beside it is what is being added to them.
+	 * <p>Both move clear by clear as a run goes - see {@link #bankClear} - so a sitting holding one
+	 * run reads what that run's Full pace does, and what is shown mid-run is already saved.
 	 */
 	private DoomMetricsPanel.Stats statsSnapshot()
 	{
 		Instant now = Instant.now();
-		DelveTotals live;
 
-		if (run != null)
-		{
-			live = session.plus(run.deepCleared(), DoomFormat.toTicks(run.pbElapsed()));
-		}
-		else
-		{
-			// Between sittings there is no session to report on, so the rows go blank rather than
-			// leaving this morning's figures up as though they were still being earned.
-			live = sessionAlive(now) ? session : null;
-		}
+		// Long enough without a run and the rows go blank rather than looking current. The session
+		// is still held, and the next run puts it back on show.
+		DelveTotals live = run != null || sessionAlive(now) ? session : null;
 
 		return new DoomMetricsPanel.Stats(
 			live == null ? null : sessionLength(now),
@@ -2519,16 +2659,14 @@ public class DoomMetricsPlugin extends Plugin
 	/**
 	 * How long this sitting has been going, or null before it has a run in it.
 	 *
-	 * <p>Keeps counting between runs, because the gap between two runs is part of the sitting the
-	 * same way the runs are. It stops when the sitting does: once the gap passes {@link
-	 * #SESSION_IDLE} the whole session block goes blank rather than showing a clock still running
-	 * on an evening that has ended.
+	 * <p>Keeps counting between runs while logged in, because the gap between two runs is part of
+	 * the sitting the same way the runs are, and stands still while logged out - see {@link
+	 * SessionClock}.
 	 */
 	private String sessionLength(Instant now)
 	{
-		return sessionStartedAt == null
-			? null
-			: DoomFormat.duration(Duration.between(sessionStartedAt, now));
+		Duration elapsed = sessionClock.elapsed(now);
+		return elapsed == null ? null : DoomFormat.duration(elapsed);
 	}
 
 	/** What a rate is made of, so the figure above it can be checked rather than taken on trust. */
@@ -2581,18 +2719,18 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		RunDetailWindow window = detailWindow;
 
-		if (window == null)
-		{
-			return;
-		}
-
-		// Cleared first so the frame's own close callback has nothing left to do. Only ever
+		// Cleared first so the frame's own close callback has nothing left to do, and cleared
+		// whether or not a window is up, so a plugin switched off holds no run to draw. Only ever
 		// reached on shutdown - a window closed by the reader goes through that callback alone,
 		// and keeps what was pushed to it so reopening shows the run rather than an empty frame.
 		detailWindow = null;
 		windowDetail = RunDetail.empty();
 		windowLive = null;
-		window.dispose();
+
+		if (window != null)
+		{
+			window.dispose();
+		}
 	}
 
 	/**

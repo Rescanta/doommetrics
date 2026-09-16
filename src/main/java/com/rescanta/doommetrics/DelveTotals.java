@@ -24,10 +24,11 @@ class DelveTotals
 	/**
 	 * The run time those delves were banked in, in game ticks.
 	 *
-	 * <p>Each run contributes the span from its start through to its last clear, which is the same
-	 * span every other figure in this plugin is built on. That charges the shallow delves and the
-	 * restocking between delves against the rate, because both are real time spent and a rate that
-	 * ignored them would flatter you.
+	 * <p>Added a delve at a time, each clear bringing its segment, so each run contributes the span
+	 * from its start through to its last clear, which is the same span every other figure in this
+	 * plugin is built on. That charges the shallow delves and the restocking between delves against
+	 * the rate, because both are real time spent and a rate that ignored them would flatter you. A
+	 * run joined part way into a delve leaves that first, unmeasured, clear out.
 	 *
 	 * <p>Ticks rather than millis because a tick is the finest distinction the game itself draws,
 	 * and it keeps a lifetime of runs to a number that stays small on disk.
@@ -38,15 +39,6 @@ class DelveTotals
 	{
 		this.deep += deep;
 		this.ticks += ticks;
-	}
-
-	/** This total with one more run's worth added, leaving this one untouched. */
-	DelveTotals plus(int deep, long ticks)
-	{
-		DelveTotals sum = new DelveTotals();
-		sum.deep = this.deep + deep;
-		sum.ticks = this.ticks + ticks;
-		return sum;
 	}
 
 	/**
