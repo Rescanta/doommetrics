@@ -768,6 +768,31 @@ public class DelveRunTest
 		assertEquals(DelveRun.UNKNOWN_UNIQUE, landed.get(1).itemId);
 	}
 
+	/**
+	 * Whichever form of the eye the warning, the pile and the claim name, it is one eye: placed
+	 * once, and kept by a claim naming the other form.
+	 */
+	@Test
+	public void bothFormsOfTheEyeAreOneDrop()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.descending();
+
+		assertTrue(run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak"));
+		assertFalse(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)", 1));
+
+		assertEquals(1, run.getLanded().size());
+		assertEquals(1, run.held(ItemID.EYE_OF_AYAK));
+		assertEquals(1, run.held(ItemID.EYE_OF_AYAK_UNCHARGED));
+
+		run.recordLoot(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)", 1);
+		run.end(EndReason.FINISHED, at(90), -1);
+
+		assertEquals(1, run.claimed(ItemID.EYE_OF_AYAK));
+		assertTrue(RunDetail.of(run).drops().get(0).kept);
+	}
+
 	@Test
 	public void anUnnamedDropIsNotPlaced()
 	{
