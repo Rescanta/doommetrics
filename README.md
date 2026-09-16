@@ -53,8 +53,8 @@ Full pace starts low and climbs as the shallow delves amortise (13.8/hr at delve
 delve 15, 27.9/hr at delve 20). Deep pace stays flat as long as your delve times do.
 
 Both are built on the contiguous segments, so the time you spend restocking counts against you.
-A delve fought in 1:28 after a two minute restock costs 3:28 of pace. The fight length the game
-reported is shown separately in the chat message.
+A delve fought in 1:28 after a two minute restock costs 3:28 of pace. The fight length on its own is
+what the game posts in chat, and what the run detail's time strip draws as the kill time.
 
 ## Overlay
 
@@ -91,16 +91,18 @@ Set **Display** to `Infobox` and the panel comes down, replaced by a single info
 icon with one figure over it, sat in the infobox bar with everything else you have up there.
 
 A square holds one number, so **Infobox figure** picks which. It can be the delve you are on, the
-run timer, the pace, the time left to your target delve, any of the eight counters, or any of the
-five counter headings with its sources summed. The figures are shortened to fit: `1.2k` for a
-counter past a thousand, `1h23` for a run past the hour and `10h` past ten of them, and `40.1` for
-a pace. What was dropped to make them fit is in the tooltip - the unit, the full precision, and
-whether the run is one the plugin saw the start of.
+run timer, the pace, the time left to your target delve or the predicted time of the whole run to
+it, any of the eight counters, or any of the five counter headings with its sources summed. The
+figures are shortened to fit: `1.2k` for a counter past a thousand, `1h23` for a run past the hour
+and `10h` past ten of them, and `40.1` for a pace. What was dropped to make them fit is in the
+tooltip - the unit, the full precision, and whether the run is one the plugin saw the start of.
 
-**Time to target** is the panel's `Predicted` row in a square, counting down to the delve set under
-**Target delve**. It reads that setting whether or not **Show target delve** is switched on, so the
-delve you are aiming for is set in one place whichever of the two is drawing it. It shows `Done`
-once the target is behind you, and a dimmed `-` until this run has cleared a delve 9 to average.
+**Time to target** is the panel's `To go` row in a square, counting down to the delve set under
+**Target delve**, and **Predicted run time** is its `Total` row. Both read that setting whether or
+not **Show target delve** is switched on, so the delve you are aiming for is set in one place
+whichever is drawing it, and both show a dimmed `-` until this run has cleared a delve 9 to
+average. Once the target is behind you Time to target has nothing left to count down and its square
+comes down, while Predicted run time keeps the time the run took to get there.
 
 Counters keep the colours they have on the panel, red for hitpoints, blue for prayer and yellow
 for damage, and one still at zero is drawn grey - so a spec you expected to be firing is visibly
@@ -114,8 +116,10 @@ run detail still fill up.
 
 ## The delve you are aiming for
 
-Switch on **Show target delve** and the overlay and the side panel gain two rows: the delve you set
-as a target, and how much longer this run has to go to reach it.
+Switch on **Show target delve** and the overlay and the side panel gain the delve you set as a
+target and a prediction for it. **Prediction** picks which: `Full run`, the default, shows `Total` -
+what the whole run will have taken when it lands on the target; `Remaining` shows `To go` - how much
+longer this run has to go; `Both` shows the two.
 
 ```
 Doom Metrics
@@ -123,14 +127,19 @@ Delve             14
 Time           21:40
 Deep pace    40.0/hr
 Target            50
-Predicted      54:00
+Total        1:15:40
 ```
 
 The prediction is what your delve 9+ average says the delves between here and there will take, so
-it reads `-` until this run has cleared a delve 9, and `Reached` once the target is behind you. The
-delve in progress is charged against it as it goes, so the figure counts down second by second
-rather than sitting still between clears, and it never drops below what the delves still to come
-must take.
+it reads `-` until this run has cleared a delve 9. The delve in progress is charged against it as it
+goes, so `To go` counts down second by second rather than sitting still between clears, and it never
+drops below what the delves still to come must take. `Total` is the time so far with `To go` added,
+so it holds still while a delve keeps to the average and climbs while one overruns it.
+
+Once the target is behind you the row reads `Target reached`, `To go` is dropped, and `Total` keeps
+the time the run actually took to get there. A run the plugin joined part way through shows
+`Total*`, since its start is a guess, and `Reached` in place of a time if the target was cleared
+before it was joined.
 
 Two things a flat average cannot know are left in on purpose, because every other figure here is a
 flat average too: delves 1-8 are quicker than the mean, so a target set during delves 1-8 reads
@@ -231,14 +240,19 @@ A message is posted whenever the delve number is a multiple of the configured in
 shallow delves - so the default of 5 reports at delve 10, 15, 20 and so on.
 
 ```
-[Doom] Delve 20 in 1:30.0 | 28:00 elapsed | 27.9/hr
-[Doom] Target reached | Delve 50 in 1:31.2 | 1:14:20 elapsed | 38.4/hr
-[Doom] Cleared delve 20 | 28:00 | 27.9/hr
-[Doom] Died on delve 21 | cleared 20 in 28:00 | 27.9/hr
+Doom delve 20 cleared, run time: 28:00, deep pace: 40.0/hr.
+Doom target delve 50 reached! Run time: 1:14:20, deep pace: 38.4/hr.
+Doom run over: cleared delve 20 in 28:00, full pace: 27.9/hr.
+Doom run over (died): cleared delve 20 in 28:00, full pace: 27.9/hr.
 ```
 
-The first figure is the fight itself as the game timed it; the elapsed figure is the whole run.
-Set the interval to 0 to turn the messages off.
+They are worded the way the game words its own delve messages, with the figures in the chat's
+highlight colour. The run time is the whole run; the fight on its own is in the game's message just
+above. The pace is the one **Pace** is set to, and is named after it - except at the end of a run,
+which always gives its full pace, since a run that is over is not adding deep delves at any speed.
+
+Set the interval to 0 to turn the delve messages off. Reaching the target is announced whatever the
+interval says, and the end of a run has its own **Announce run end** setting.
 
 A pace of `-` means there is nothing to average yet - Deep pace needs a delve 9 or deeper.
 
@@ -317,8 +331,8 @@ Counters                  |/     \__/‾‾\__/‾‾\__\
              This run    0 |__Eldritch__________
 Spell healing               |
  ■ Blood barrage    806     | 2:00
-Spec healing                | ▁▂▃▃▄▄▅▅▆▆▇▇  Delve time
- ■ Ancient godsword  58     | ▁▁▂▂▃▃▄▄▅▅▆▆  Fight
+Spec healing                | ▁▂▃▃▄▄▅▅▆▆▇▇  Full time
+ ■ Ancient godsword  58     | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
  ■ Blowpipe          47   0:00
  ...                        1     5    10    15
                                     Delve
@@ -355,13 +369,16 @@ it.
 
 The eye, avernic treads, mokhaiotl cloth and the pet are drawn as their icons in a lane over the
 counters, each above the delve it came off, and listed under **Drops** beside the chart. A drop is
-placed when the loot pile is seen holding more of it than before - not when the game warns you
-about it, which it does on every descend for as long as the drop sits unclaimed. So an eye off
-delve 10 is on delve 10 alone, and a second eye off delve 20 is on delve 20 alone.
+placed when the run first learns there is one more of it than before: from the loot pile, from the
+"Your loot contains" warning the game puts up as you try to descend - one per copy, every try - or,
+for the pet, from the line the game posts as you claim. Only a count going up places anything, so an
+eye off delve 10 is on delve 10 alone however many times you are warned about it, and a second eye
+off delve 20 is on delve 20 alone.
 
 A drop you did not walk out with - still in the pile when you died, or left behind - stays where
-it dropped, faded. The pet is yours the moment it rolls, so it never fades. Drops close enough
-together to overlap are stacked, and pointing at an icon or a row in the list names it.
+it dropped, faded. The pet is no exception: the game only hands it over with the claim, so a death
+loses it with the rest of the pile. Drops close enough together to overlap are stacked, and
+pointing at an icon or a row in the list names it, and says how a lost one was lost.
 
 ### Long runs
 
@@ -393,7 +410,7 @@ rather than the whole file.
 | Setting | Default | Notes |
 |---|---|---|
 | Pace | Deep pace | Which figure the overlay and chat show |
-| Chat every N delves | 5 | 0 disables the messages |
+| Chat every N delves | 5 | 0 turns the delve messages off; reaching the target is still announced |
 | Announce run end | on | Summary on claim, leave or death |
 | Hide plugin name | off | Leaves the Doom Metrics title off the top of the overlay |
 | Display | Panel | The panel of rows, one infobox square, or nothing drawn over the game |
