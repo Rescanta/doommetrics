@@ -277,6 +277,10 @@ final class RunDetail
 	 * <p>The drops are the one thing that can move between clears: the pile a delve's drop lands
 	 * in can arrive after the clear that banked the delve, and a claim decides which drops were
 	 * kept. Both are rare enough that counting them into the key costs nothing.
+	 *
+	 * <p>The run's identity leads, because none of the rest says which run it is: a run that ends
+	 * unseen and is replaced by a new one at the same depth, with nothing banked and no drops,
+	 * would otherwise keep the old run's snapshot on screen.
 	 */
 	static String keyFor(DelveRun run)
 	{
@@ -285,7 +289,7 @@ final class RunDetail
 			return "";
 		}
 
-		return run.lastLevel() + "|" + run.isFinished() + "|" + run.getDiedOnLevel() + "|"
-			+ run.lootChanges();
+		return System.identityHashCode(run) + "|" + run.lastLevel() + "|" + run.isFinished() + "|"
+			+ run.getDiedOnLevel() + "|" + run.lootChanges();
 	}
 }

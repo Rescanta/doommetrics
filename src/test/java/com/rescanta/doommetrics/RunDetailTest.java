@@ -227,6 +227,16 @@ public class RunDetailTest
 		assertNotEquals("a run ending changes how it is drawn", banked, RunDetail.keyFor(run));
 	}
 
+	/** Two runs that look alike so far are still two runs, and the window has to see the swap. */
+	@Test
+	public void aDifferentRunInTheSameStateHasADifferentKey()
+	{
+		DelveRun first = new DelveRun(START, 1, false);
+		DelveRun second = new DelveRun(START, 1, false);
+
+		assertNotEquals(RunDetail.keyFor(first), RunDetail.keyFor(second));
+	}
+
 	@Test
 	public void noRunHasAKeyOfItsOwn()
 	{
