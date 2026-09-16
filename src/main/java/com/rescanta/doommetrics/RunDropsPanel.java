@@ -3,6 +3,7 @@ package com.rescanta.doommetrics;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.util.List;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -73,25 +74,49 @@ class RunDropsPanel extends JPanel
 		}
 
 		this.delve = delve;
-		rebuild();
+
+		// Only the highlight moves, so only the backgrounds change. Building the rows again would
+		// fade every lost drop's icon afresh and lay the sidebar out anew for each delve the
+		// pointer crosses. The rows are the drops, one each and in order - see rebuild.
+		List<RunDetail.Drop> drops = detail.drops();
+
+		for (int i = 0; i < drops.size() && i < getComponentCount(); i++)
+		{
+			getComponent(i).setBackground(background(drops.get(i), i));
+		}
 	}
 
-	/** Rebuilt whole rather than updated, because it is a handful of rows at the very most. */
+	/**
+	 * Rebuilt whole rather than updated when the drops or their icons change, because it is a
+	 * handful of rows at the very most. Pointing at a delve only recolours them - see
+	 * {@link #setDelve}.
+	 */
 	private void rebuild()
 	{
 		removeAll();
-		int striped = 0;
+		List<RunDetail.Drop> drops = detail.drops();
 
-		for (RunDetail.Drop drop : detail.drops())
+		for (int i = 0; i < drops.size(); i++)
 		{
-			add(row(drop, striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE));
+			add(row(drops.get(i), i));
 		}
 
 		revalidate();
 		repaint();
 	}
 
-	private JPanel row(RunDetail.Drop drop, Color stripe)
+	/** A row's colour: lit while the delve it came off is pointed at, and striped otherwise. */
+	private Color background(RunDetail.Drop drop, int index)
+	{
+		if (drop.level == delve)
+		{
+			return HOVERED;
+		}
+
+		return index % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE;
+	}
+
+	private JPanel row(RunDetail.Drop drop, int index)
 	{
 		String text = drop.quantity > 1 ? drop.quantity + " x " + drop.name : drop.name;
 		Color ink = drop.kept ? ColorScheme.TEXT_COLOR : ColorScheme.MEDIUM_GRAY_COLOR;
@@ -120,7 +145,7 @@ class RunDropsPanel extends JPanel
 		where.setBorder(PanelStyle.CELL_PADDING);
 
 		JPanel panel = new JPanel(new BorderLayout(4, 0));
-		panel.setBackground(drop.level == delve ? HOVERED : stripe);
+		panel.setBackground(background(drop, index));
 		panel.setBorder(new EmptyBorder(0, 5, 0, 0));
 		panel.add(name, BorderLayout.CENTER);
 		panel.add(where, BorderLayout.EAST);
