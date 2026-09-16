@@ -394,6 +394,15 @@ public class DoomMetricsPlugin extends Plugin
 	private int bossCount;
 	private int ticksWithoutBoss;
 
+	/**
+	 * Set when "Claim and leave" is clicked, and cleared by anything that shows the run carrying on.
+	 * Only while it is set is the claimed loot filling in taken as the claim - see
+	 * {@link #handleItemContainerChanged} - so a copy of it sent for any other reason cannot end a
+	 * run. The claim script and the buttons that take the claimed loot still close the run out on
+	 * their own.
+	 */
+	private boolean claimRequested;
+
 	@Provides
 	DoomMetricsConfig provideConfig(ConfigManager configManager)
 	{
@@ -523,6 +532,7 @@ public class DoomMetricsPlugin extends Plugin
 		combatTracker.reset();
 		punishTracker.reset();
 		boss = null;
+		claimRequested = false;
 		specEnergy = 0;
 		prayerPoints = 0;
 		hitpoints = 0;
@@ -838,8 +848,10 @@ public class DoomMetricsPlugin extends Plugin
 		});
 
 		// The claimed loot, filled in as the claim is confirmed - the surest sign the claim went
-		// through. Empty is the same copy being cleared as the loot is taken, long after.
-		if (containerId == InventoryID.DOM_LOOTPILE && !isEmpty(event.getItemContainer()))
+		// through. Empty is the same copy being cleared as the loot is taken, long after. Only once
+		// "Claim and leave" has been clicked, so a copy sent for any other reason cannot end the run.
+		if (containerId == InventoryID.DOM_LOOTPILE && claimRequested
+			&& !isEmpty(event.getItemContainer()))
 		{
 			finishClaim();
 		}
@@ -896,6 +908,7 @@ public class DoomMetricsPlugin extends Plugin
 		else
 		{
 			run.enterLevel(level);
+			claimRequested = false;
 			log.debug("Delve {} started", level);
 		}
 	}
@@ -977,12 +990,19 @@ public class DoomMetricsPlugin extends Plugin
 				&& WidgetUtil.componentToInterface(widgetId) != InterfaceID.OBJECTBOX))
 		{
 			run.descending();
+			claimRequested = false;
 			return;
 		}
 
 		// "Claim and leave" is not the claim: it asks for a Confirm first, and backing out of that
-		// carries on the run. The claim closes the run out when it lands - see finishClaim.
-		//
+		// carries on the run. The claim closes the run out when it lands - see finishClaim. The
+		// click does say a claim may be on its way, which is what the claimed loot is read against.
+		if (widgetId == InterfaceID.DomEndLevelUi.BTN_CLAIM)
+		{
+			claimRequested = true;
+			return;
+		}
+
 		// Taking the claimed loot to the inventory or the bank, and leaving, all come after the
 		// claim on the same screen, so a run still open by then has had its claim missed.
 		boolean claimed = widgetId == InterfaceID.DomEndLevelUi.BTN_INV_ALL
@@ -2096,6 +2116,7 @@ public class DoomMetricsPlugin extends Plugin
 		// be left open to swallow the first heal of the trip.
 		combatTracker.reset();
 		punishTracker.reset();
+		claimRequested = false;
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
 
@@ -2253,6 +2274,7 @@ public class DoomMetricsPlugin extends Plugin
 		DelveRun ended = run;
 		run = null;
 		resumeCheck = null;
+		claimRequested = false;
 		combatTracker.reset();
 		punishTracker.reset();
 
