@@ -1,7 +1,9 @@
 package com.rescanta.doommetrics;
 
 import java.time.Instant;
-import java.util.EnumSet;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.assertEquals;
@@ -13,7 +15,7 @@ public class RunLegendPanelTest
 	private static final Instant START = Instant.now().minusSeconds(600);
 
 	private final RunLegendPanel legend = new RunLegendPanel();
-	private final AtomicReference<Set<CombatMetric>> offChart = new AtomicReference<>();
+	private final AtomicReference<Set<CombatSeries>> offChart = new AtomicReference<>();
 
 	@Test
 	public void countersTheRunCountedNothingOnStartOff()
@@ -24,7 +26,7 @@ public class RunLegendPanelTest
 		assertEquals(allDrawnBut(CombatMetric.ZCB_DAMAGE), offChart.get());
 
 		legend.setHideEmpty(false);
-		assertEquals("every line is on", EnumSet.noneOf(CombatMetric.class), offChart.get());
+		assertEquals("every line is on", Collections.emptySet(), offChart.get());
 	}
 
 	@Test
@@ -39,7 +41,7 @@ public class RunLegendPanelTest
 		legend.setDetail(RunDetail.of(run));
 
 		assertEquals("the legend only tells the chart about lines it draws",
-			EnumSet.noneOf(CombatMetric.class), offChart.get());
+			Collections.emptySet(), offChart.get());
 	}
 
 	@Test
@@ -98,7 +100,7 @@ public class RunLegendPanelTest
 	@Test
 	public void aLineClickedOffIsNoLongerBroughtForward()
 	{
-		AtomicReference<CombatMetric> forward = new AtomicReference<>();
+		AtomicReference<CombatSeries> forward = new AtomicReference<>();
 		legend.setToggleListener(offChart::set);
 		legend.setEmphasisListener(forward::set);
 		legend.setDetail(RunDetail.of(crossbowOnly()));
@@ -108,6 +110,61 @@ public class RunLegendPanelTest
 
 		legend.toggle(CombatMetric.ZCB_DAMAGE);
 		assertEquals(CombatMetric.ZCB_DAMAGE, forward.get());
+	}
+
+	/**
+	 * Grouped, the chart is told about headings rather than counters: the lines are the headings,
+	 * and a heading is empty only when everything under it is.
+	 */
+	@Test
+	public void groupingMakesTheHeadingsTheLines()
+	{
+		legend.setToggleListener(offChart::set);
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+		legend.setGrouped(true);
+
+		assertEquals(allGroupsBut(CombatMetric.Group.DAMAGE), offChart.get());
+	}
+
+	/**
+	 * A heading's line counts what no counter under it names, so a run that only ever punished
+	 * with a weapon the plugin does not name has a punish line grouped and none separately.
+	 */
+	@Test
+	public void aHeadingIsOnTheChartForCountersWithNoLineOfTheirOwn()
+	{
+		legend.setToggleListener(offChart::set);
+
+		DelveRun run = new DelveRun(START, 1, false);
+		run.recordCombat(CombatMetric.OTHER_MELEE_PUNISH, 141, START.plusSeconds(30));
+		run.complete(1, START.plusSeconds(60), null);
+		legend.setDetail(RunDetail.of(run));
+
+		assertEquals("no counter counted anything", allDrawnBut(), offChart.get());
+
+		legend.setGrouped(true);
+		assertEquals(allGroupsBut(CombatMetric.Group.PUNISH), offChart.get());
+	}
+
+	/** Which lines are off is asked of the way being read, so switching back finds it as it was. */
+	@Test
+	public void aLineClickedOffStaysOffItsOwnWayOfReading()
+	{
+		legend.setToggleListener(offChart::set);
+		legend.setHideEmpty(false);
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+
+		legend.toggle(CombatMetric.ZCB_DAMAGE);
+
+		legend.setGrouped(true);
+		assertEquals("a counter clicked off is not a heading clicked off",
+			Collections.emptySet(), offChart.get());
+
+		legend.toggle(CombatMetric.Group.PUNISH);
+		legend.setGrouped(false);
+
+		assertEquals("the counter clicked off is still the only line off",
+			Collections.singleton(CombatMetric.ZCB_DAMAGE), offChart.get());
 	}
 
 	/** Two delves, with the crossbow's spec on the first and nothing else counted. */
@@ -120,13 +177,25 @@ public class RunLegendPanelTest
 		return run;
 	}
 
-	private static Set<CombatMetric> allDrawnBut(CombatMetric... on)
+	private static Set<CombatSeries> allDrawnBut(CombatMetric... on)
 	{
-		Set<CombatMetric> off = EnumSet.copyOf(CombatMetric.DISPLAYED);
+		Set<CombatSeries> off = new HashSet<>(CombatMetric.DISPLAYED);
 
 		for (CombatMetric metric : on)
 		{
 			off.remove(metric);
+		}
+
+		return off;
+	}
+
+	private static Set<CombatSeries> allGroupsBut(CombatMetric.Group... on)
+	{
+		Set<CombatSeries> off = new HashSet<>(Arrays.asList(CombatMetric.Group.values()));
+
+		for (CombatMetric.Group group : on)
+		{
+			off.remove(group);
 		}
 
 		return off;

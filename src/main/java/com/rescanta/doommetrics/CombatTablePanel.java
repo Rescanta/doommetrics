@@ -2,7 +2,6 @@ package com.rescanta.doommetrics;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -12,7 +11,6 @@ import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
-import net.runelite.client.ui.FontManager;
 
 /**
  * A {@link CombatTotals} laid out as a table: what healed you, what restored your prayer and what
@@ -21,6 +19,11 @@ import net.runelite.client.ui.FontManager;
  * <p>A component in its own right so the figures are laid out in one place: the side panel draws
  * the sitting's tally with it, and anything else that has a {@link CombatTotals} to show can draw
  * that one the same way rather than growing a second table that drifts from this.
+ *
+ * <p>Every heading carries its group's total: what all of its counters came to, including the
+ * catch-alls that have no row - see {@link CombatMetric.Group#amount}. A column of sources answers
+ * which of them did the work and never answers how much work there was, which is the figure anyone
+ * comparing one sitting with another is after.
  *
  * <p>Every row is built once and only ever retexted. The rows never change: eight metrics under
  * five headings, whether or not any of them has fired. A metric that has counted nothing reads zero
@@ -38,6 +41,9 @@ class CombatTablePanel extends JPanel
 {
 	/** The rows, in declaration order, so an update is a setText and a fill per metric. */
 	private final MeterRow[] rows = new MeterRow[CombatMetric.values().length];
+
+	/** The headings, by group, so each can be handed its total the same way. */
+	private final GroupHeading[] headings = new GroupHeading[CombatMetric.Group.values().length];
 
 	/** The pictures drawn beside the rows' names, or none while they are still on their way. */
 	private Icons icons = Icons.NONE;
@@ -60,7 +66,9 @@ class CombatTablePanel extends JPanel
 			if (metric.group() != heading)
 			{
 				heading = metric.group();
-				add(heading(heading));
+				GroupHeading row = new GroupHeading(heading);
+				headings[heading.ordinal()] = row;
+				add(row);
 
 				// Restarted under each heading so the stripes read as a block per group rather
 				// than as one run of alternating rows the headings happen to interrupt.
@@ -100,46 +108,26 @@ class CombatTablePanel extends JPanel
 	 */
 	void setTotals(CombatTotals totals)
 	{
+		// An empty tally rather than a null one from here down: every figure below reads the same
+		// zero out of it, and the headings' tooltips have something to ask for their breakdown.
+		CombatTotals counted = totals == null ? new CombatTotals() : totals;
 		long[] largest = new long[CombatMetric.Unit.values().length];
 
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
-			long amount = totals == null ? 0 : totals.get(metric);
+			long amount = counted.get(metric);
 			largest[metric.unit().ordinal()] = Math.max(largest[metric.unit().ordinal()], amount);
 		}
 
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
-			long amount = totals == null ? 0 : totals.get(metric);
-			rows[metric.ordinal()].set(amount, largest[metric.unit().ordinal()]);
+			rows[metric.ordinal()].set(counted.get(metric), largest[metric.unit().ordinal()]);
 		}
-	}
 
-	/**
-	 * A group's name, over the rows it covers.
-	 *
-	 * <p>The group's colour is spent on a stripe down the side rather than on the words. A heading
-	 * set in its own colour reads as loudly as the name of the section it sits inside, and a panel
-	 * where a group of three rows shouts as loudly as the block containing it has no hierarchy at
-	 * all. The stripe says which unit the block is counted in - the same thing the colour was
-	 * saying - without competing with anything.
-	 */
-	private static JPanel heading(CombatMetric.Group group)
-	{
-		JPanel tab = new JPanel();
-		tab.setBackground(group.unit().color());
-		tab.setPreferredSize(new Dimension(3, 0));
-
-		JLabel text = PanelStyle.label(group.heading(), SwingConstants.LEFT,
-			FontManager.getRunescapeSmallFont(), ColorScheme.LIGHT_GRAY_COLOR);
-		text.setBorder(new EmptyBorder(2, 5, 2, 5));
-
-		JPanel panel = new JPanel(new BorderLayout());
-		panel.setBackground(PanelStyle.BACKGROUND);
-		panel.setBorder(new EmptyBorder(4, 0, 1, 0));
-		panel.add(tab, BorderLayout.WEST);
-		panel.add(text, BorderLayout.CENTER);
-		return panel;
+		for (CombatMetric.Group group : CombatMetric.Group.values())
+		{
+			headings[group.ordinal()].set(counted);
+		}
 	}
 
 	/**
