@@ -168,7 +168,10 @@ class CombatTablePanel extends JPanel
 			value.setBorder(PanelStyle.CELL_PADDING);
 
 			setBackground(stripe);
-			add(label, BorderLayout.WEST);
+			// The name in the middle and the figure on the edge, so a row too narrow for both
+			// takes it out of the name - which the row's tooltip still spells out - rather than
+			// clipping digits off a lifetime figure, which nothing else says.
+			add(label, BorderLayout.CENTER);
 			add(value, BorderLayout.EAST);
 
 			// On the row rather than the label, so the gap beside a short name answers too, and so

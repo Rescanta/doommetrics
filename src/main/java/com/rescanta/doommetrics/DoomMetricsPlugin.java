@@ -2619,11 +2619,15 @@ public class DoomMetricsPlugin extends Plugin
 		// across to a panel that would draw the same numbers again.
 		CombatTotals combat = showCombat ? combatSnapshot() : null;
 
+		// Handed over whether or not a sitting is going: the lifetime tab is the one left worth
+		// reading between runs, and a delve banked while the panel sits idle still moves it.
+		CombatTotals lifetimeShown = lifetimeCombat.copy();
+
 		SwingUtilities.invokeLater(() ->
 		{
 			target.setLive(live);
 			target.setStats(stats);
-			target.setCombat(combat);
+			target.setCombat(combat, lifetimeShown);
 
 			// Held so a window opened between two ticks has a head to draw, rather than sitting
 			// blank until the next figure moves.
@@ -2646,25 +2650,23 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Enough of the sitting's tally to tell one repaint from the next, read straight out of the two
-	 * tallies rather than out of a snapshot of them - the point is to decide whether a snapshot is
+	 * Enough of both tallies the panel can draw to tell one repaint from the next, read straight
+	 * out of them rather than out of a snapshot - the point is to decide whether a snapshot is
 	 * worth taking.
 	 *
-	 * <p>Empty between sittings, which is also what the panel is shown: there is nothing being
-	 * earned, and leaving this morning's numbers up would say otherwise.
+	 * <p>The sitting's reads as zeroes between sittings, which is also what the panel is shown:
+	 * there is nothing being earned, and leaving this morning's numbers up would say otherwise.
+	 * The character's is always in the key, because the lifetime tab is drawn between sittings
+	 * too and a delve banked into it has to reach the panel.
 	 */
 	private String combatKey(boolean showCombat)
 	{
-		if (!showCombat)
-		{
-			return "";
-		}
-
 		StringBuilder key = new StringBuilder();
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
-			key.append(sessionCombat.get(metric)).append(',');
+			key.append(showCombat ? sessionCombat.get(metric) : 0).append(',')
+				.append(lifetimeCombat.get(metric)).append(',');
 		}
 
 		return key.toString();
