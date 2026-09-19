@@ -294,7 +294,7 @@ public class PreviewWindow
 		plugin.run = scene.run;
 		panel.setLive(scene.live(config));
 		panel.setStats(scene.stats);
-		panel.setCombat(scene.panelCombat());
+		panel.setCombat(scene.panelCombat(), scene.lifetime);
 
 		if (detail != null)
 		{

@@ -71,6 +71,9 @@ final class PanelStyle
 	/** How strongly a meter is tinted. Low enough that the figure over it stays legible. */
 	private static final int METER_ALPHA = 52;
 
+	/** Between a picture and the name beside it. */
+	private static final int ICON_TEXT_GAP = 4;
+
 	/**
 	 * The two figures worth reading at a glance, at a size you can read without stopping.
 	 *
@@ -172,24 +175,23 @@ final class PanelStyle
 	}
 
 	/**
-	 * Puts a picture on {@code label} in place of its words, or puts the words back when there is
-	 * no picture to show - one still on its way from the game, or none at all.
+	 * Puts a picture on {@code label} beside its words, or leaves the words on their own while
+	 * there is no picture to draw - one still on its way from the game, or none at all.
+	 *
+	 * <p>Both, rather than the picture in place of the name. An inventory sprite trimmed to a line
+	 * of text high is a few pixels of a dark weapon on a dark row, and half the counters are long
+	 * thin polearms that come out of that as the same smudge. The picture is what the eye finds a
+	 * row by; the name is what settles which row it found.
 	 *
 	 * <p>The name never goes on the label's own tooltip. A tooltip gives the label mouse listeners
 	 * of its own, and a row that answers clicks and hovers would stop hearing them over its name.
 	 * The row carries the name in its tooltip instead.
 	 */
-	static void nameOrIcon(JLabel label, String name, BufferedImage icon)
+	static void nameAndIcon(JLabel label, String name, BufferedImage icon)
 	{
-		if (icon == null)
-		{
-			label.setIcon(null);
-			label.setText(name);
-			return;
-		}
-
-		label.setIcon(new ImageIcon(icon));
-		label.setText("");
+		label.setText(name);
+		label.setIcon(icon == null ? null : new ImageIcon(icon));
+		label.setIconTextGap(icon == null ? 0 : ICON_TEXT_GAP);
 	}
 
 	/** A unit's colour as a meter fill: the same hue, thin enough to read a figure over. */

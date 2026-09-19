@@ -110,6 +110,11 @@ public class PreviewShots
 		written.add(shot(overlay(deep, PreviewRender.Backdrop.GLARE),
 			directory.resolve("backdrop-glare.png")));
 
+		// The combat table's other tab, which nothing but a click reaches and so no scene above
+		// shows. Worth its own picture for the tab strip and for the meters, which are filled
+		// against the largest figure in the tally on show rather than across both.
+		written.add(shot(panel(deep, true), directory.resolve("combat-lifetime.png")));
+
 		// The counters drawn as icons, separate and combined, and the squares that take one.
 		PreviewConfig iconic = new PreviewConfig();
 		iconic.adopt(deep.config);
@@ -191,16 +196,22 @@ public class PreviewShots
 
 	private static BufferedImage panel(PreviewScene scene)
 	{
+		return panel(scene, false);
+	}
+
+	private static BufferedImage panel(PreviewScene scene, boolean lifetimeCombat)
+	{
 		DoomMetricsPanel panel = new DoomMetricsPanel(() ->
 		{
 		}, () ->
 		{
 		});
 		panel.setIcons(PreviewIcons.INSTANCE);
+		panel.showLifetime(lifetimeCombat);
 
 		panel.setLive(scene.live(scene.config));
 		panel.setStats(scene.stats);
-		panel.setCombat(scene.panelCombat());
+		panel.setCombat(scene.panelCombat(), scene.lifetime);
 		panel.setRows(scene.rows);
 
 		return PreviewRender.scale(PreviewRender.component(panel), ZOOM);
