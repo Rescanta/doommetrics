@@ -51,9 +51,13 @@ import net.runelite.client.eventbus.Subscribe;
  * is claimed or the run ends, so it says the pile holds a unique rather than that this delve
  * dropped one.
  *
- * <p>Still open: the sound. It plays on the delve that drops the unique and not on the ones after
- * it, so it is the one thing that could place a second unique in a run the glow has already
- * spoken for - if the game is what plays it, rather than another plugin watching the same drop.
+ * <p>The sound is answered too, and the answer is no. A delve that dropped a cloth was captured
+ * against twenty-nine that dropped nothing, and its sounds - both the ones aimed at the player and
+ * the ones placed in the world - were a subset of what every other clear played: the boss's death,
+ * the shockwaves, and the player's own specs. Nothing was played on the unique's clear and on no
+ * other, and nor was any graphic, varbit or object bar the glowing hole itself. So there is no
+ * second signal to be had here, and a second unique in a run the glow has already spoken for
+ * cannot be placed by listening for one.
  *
  * <p>Only on the event bus while the debug logging setting is on - the plugin puts it there and
  * takes it off again as the setting changes - and only writing in the stretches where a drop can be
