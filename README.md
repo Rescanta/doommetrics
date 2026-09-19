@@ -272,10 +272,16 @@ Behind the chevron icon, top to bottom:
   and its length does not count the time spent logged out. After half an hour without a run the
   rows go blank so they do not look current, and the next run brings the session back.
 - **Lifetime** - the same rate and delve count over everything this character has ever done.
-  Both columns, and the lifetime combat counters behind them, are added to as each delve is
+  Both columns, and the lifetime combat counters under them, are added to as each delve is
   cleared rather than when the run ends, so closing the client mid-run keeps every delve cleared
   before it. A run picked up part way into a delve leaves that clear out of the rates, since
   nobody saw when that delve began.
+- **Combat** - what your gear gave back, a row per source under the heading it belongs to, with a
+  meter behind each figure filled against the largest figure counted in the same unit. The
+  **Session** and **Lifetime** tabs put the same rows on this sitting's tally and on the
+  character's; the meters refill against whichever is on show, so each tab says which source is
+  carrying it on its own terms. The lifetime tab is worth reading between runs - it is the one
+  figure here that does not go quiet when a sitting ends.
 - **Milestones** - the lifetime table, below.
 - **Open run detail** - this run, delve by delve, in a window of its own.
 - **Reset session** - starts the session over and drops the run in progress, after asking, letting
