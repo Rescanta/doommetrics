@@ -18,7 +18,7 @@ import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.IntConsumer;
@@ -34,7 +34,9 @@ import net.runelite.client.ui.FontManager;
  * delve took.
  *
  * <p>Two plots, stacked, sharing one delve axis. The upper one carries the eight counters, a line
- * each. The lower one carries the clock: the delve's full time - its kill and the wait after it -
+ * each - or, grouped, the five headings they sit under, which is the same figures added up and is
+ * what a run long enough to fill the plot is read by - see {@link #setGrouped}. The lower one
+ * carries the clock: the delve's full time - its kill and the wait after it -
  * and, under it, the kill the game timed, with the band between them - the restocking, the specs
  * fired before going down, the drop down the hole - filled.
  * They are two plots rather than one with two scales, because a second axis is two charts drawn on
@@ -192,11 +194,17 @@ class DelveChart extends JPanel
 
 	private RunDetail detail = RunDetail.empty();
 
+	/**
+	 * The lines on the upper plot: one per counter, or one per heading once the reader groups
+	 * them - see {@link #setGrouped}.
+	 */
+	private List<CombatSeries> series = CombatSeries.drawn(false);
+
 	/** Counters the reader has switched off. Never repainted for the ones left on - see below. */
-	private Set<CombatMetric> hidden = EnumSet.noneOf(CombatMetric.class);
+	private Set<CombatSeries> hidden = new HashSet<>();
 
 	/** The counter being pointed at in the legend, brought forward, or null for none. */
-	private CombatMetric emphasis;
+	private CombatSeries emphasis;
 
 	/** The delve under the pointer, or 0 when the pointer is off the plot. */
 	private int hovered;
@@ -288,13 +296,31 @@ class DelveChart extends JPanel
 	}
 
 	/**
+	 * @param grouped whether the plot carries one line per heading rather than one per counter
+	 *
+	 * <p>Five lines instead of eight, and each of them a figure the reader was going to add up
+	 * anyway: whether the healing held up on the delves that went badly is a question about the
+	 * healing, not about which of three sources did it. The lines it folds together share a unit,
+	 * so the sum is a number and not an average of apples - see {@link CombatMetric.Group#unit}.
+	 *
+	 * <p>The heading's line counts the sources with no counter of their own as well, so grouping
+	 * is also the only way to see a punish thrown with a weapon this plugin does not name.
+	 */
+	void setGrouped(boolean grouped)
+	{
+		series = CombatSeries.drawn(grouped);
+		rescale();
+		repaint();
+	}
+
+	/**
 	 * @param hidden the counters to leave off the plot
 	 *
 	 * <p>Hiding one never restyles the rest: a colour belongs to a counter for as long as the
 	 * window is open, so a reader who has learned that the violet line is the Zaryte crossbow is
 	 * not told otherwise by switching the barrage off.
 	 */
-	void setHidden(Set<CombatMetric> hidden)
+	void setHidden(Set<CombatSeries> hidden)
 	{
 		this.hidden = hidden;
 		rescale();
@@ -302,7 +328,7 @@ class DelveChart extends JPanel
 	}
 
 	/** @param emphasis the counter to bring forward, or null to draw all of them level */
-	void setEmphasis(CombatMetric emphasis)
+	void setEmphasis(CombatSeries emphasis)
 	{
 		if (this.emphasis == emphasis)
 		{
@@ -327,11 +353,11 @@ class DelveChart extends JPanel
 
 		for (RunDetail.Delve delve : detail.delves())
 		{
-			for (CombatMetric metric : CombatMetric.DISPLAYED)
+			for (CombatSeries line : series)
 			{
-				if (!hidden.contains(metric))
+				if (!hidden.contains(line))
 				{
-					highest = (int) Math.max(highest, delve.combat.get(metric));
+					highest = (int) Math.max(highest, line.amount(delve.combat));
 				}
 			}
 
@@ -728,23 +754,23 @@ class DelveChart extends JPanel
 	 */
 	private void drawCounters(Graphics2D g2)
 	{
-		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		for (CombatSeries line : series)
 		{
-			if (metric != emphasis)
+			if (line != emphasis)
 			{
-				drawCounter(g2, metric);
+				drawCounter(g2, line);
 			}
 		}
 
-		if (emphasis != null)
+		if (emphasis != null && series.contains(emphasis))
 		{
 			drawCounter(g2, emphasis);
 		}
 	}
 
-	private void drawCounter(Graphics2D g2, CombatMetric metric)
+	private void drawCounter(Graphics2D g2, CombatSeries line)
 	{
-		if (hidden.contains(metric))
+		if (hidden.contains(line))
 		{
 			return;
 		}
@@ -754,12 +780,12 @@ class DelveChart extends JPanel
 
 		for (int i = 0; i < delves.size(); i++)
 		{
-			values[i] = delves.get(i).combat.get(metric);
+			values[i] = line.amount(delves.get(i).combat);
 		}
 
-		boolean front = emphasis == null || emphasis == metric;
-		Color color = front ? metric.seriesColor() : dim(metric.seriesColor());
-		Stroke stroke = emphasis == metric ? EMPHASIS_STROKE : SERIES_STROKE;
+		boolean front = emphasis == null || emphasis == line;
+		Color color = front ? line.seriesColor() : dim(line.seriesColor());
+		Stroke stroke = emphasis == line ? EMPHASIS_STROKE : SERIES_STROKE;
 
 		if (window > 0)
 		{

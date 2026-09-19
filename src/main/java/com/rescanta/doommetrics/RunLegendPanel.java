@@ -8,8 +8,11 @@ import java.awt.Graphics;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.util.EnumSet;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import javax.swing.JLabel;
@@ -18,7 +21,6 @@ import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
-import net.runelite.client.ui.FontManager;
 
 /**
  * The chart's legend and its table of figures, which are the same thing.
@@ -32,6 +34,11 @@ import net.runelite.client.ui.FontManager;
  * <p>The column reads the whole run by default, and the delve under the pointer while there is one.
  * That is the crosshair's other half - see {@link DelveChart#drawCrosshair} for why the per-delve
  * figures are not in a tooltip.
+ *
+ * <p>Grouped, the same legend is five rows and the chart five lines: a heading's row is its line,
+ * and the counters under it are added up rather than listed - see {@link #setGrouped}. Which rows
+ * the reader has clicked off is remembered separately for each way of reading, so switching back
+ * finds the chart as it was left.
  *
  * <p>Pointing at a row brings its line forward on the plot and pushes the others back;
  * clicking one takes its line off. Neither ever changes another row's colour: a colour belongs to
@@ -52,19 +59,33 @@ class RunLegendPanel extends JPanel
 	/** How much of a switched-off counter's icon is drawn, as its name is drawn in grey. */
 	private static final float OFF_ALPHA = 0.35f;
 
-	private final Row[] rows = new Row[CombatMetric.values().length];
+	/**
+	 * Every row either way of reading can want, built once at the start and only ever retexted -
+	 * the rows of the way not being read are simply not laid out.
+	 */
+	private final Map<CombatSeries, Row> rows = new HashMap<>();
+
+	/** The headings over the counters, on show only while the counters are listed separately. */
+	private final Map<CombatMetric.Group, GroupHeading> headings =
+		new EnumMap<>(CombatMetric.Group.class);
+
 	private final JLabel heading = PanelStyle.caption("This run", SwingConstants.RIGHT);
+	private final JPanel top = new JPanel(new BorderLayout());
+
 	/** Counters the reader has clicked off. */
-	private final Set<CombatMetric> clickedOff = EnumSet.noneOf(CombatMetric.class);
+	private final Set<CombatSeries> clickedOff = new HashSet<>();
 
 	/** Counters the reader has clicked on while they were still at 0, overriding the default. */
-	private final Set<CombatMetric> clickedOn = EnumSet.noneOf(CombatMetric.class);
+	private final Set<CombatSeries> clickedOn = new HashSet<>();
 
 	/** Counters whose lines are off the chart, clicked off or empty, as the chart was last told. */
-	private Set<CombatMetric> hidden = EnumSet.noneOf(CombatMetric.class);
+	private Set<CombatSeries> hidden = new HashSet<>();
 
 	/** Whether a counter the run has not counted anything on starts switched off. */
 	private boolean hideEmpty = true;
+
+	/** Whether the counters are folded into their headings - see {@link #setGrouped}. */
+	private boolean grouped;
 
 	private RunDetail detail = RunDetail.empty();
 
@@ -74,11 +95,11 @@ class RunLegendPanel extends JPanel
 	/** The delve being read out, or 0 for the whole run. */
 	private int delve;
 
-	private Consumer<Set<CombatMetric>> onHiddenChanged = set ->
+	private Consumer<Set<CombatSeries>> onHiddenChanged = set ->
 	{
 	};
 
-	private Consumer<CombatMetric> onEmphasis = metric ->
+	private Consumer<CombatSeries> onEmphasis = metric ->
 	{
 	};
 
@@ -87,29 +108,29 @@ class RunLegendPanel extends JPanel
 		super(new DynamicGridLayout(0, 1, 0, 1));
 		setBackground(PanelStyle.BACKGROUND);
 		build();
+		layOut();
 		setDetail(RunDetail.empty());
 	}
 
 	/** @param onHiddenChanged handed the counters switched off, whenever that set changes */
-	void setToggleListener(Consumer<Set<CombatMetric>> onHiddenChanged)
+	void setToggleListener(Consumer<Set<CombatSeries>> onHiddenChanged)
 	{
 		this.onHiddenChanged = onHiddenChanged;
-		onHiddenChanged.accept(EnumSet.copyOf(hidden));
+		onHiddenChanged.accept(new HashSet<>(hidden));
 	}
 
 	/** @param onEmphasis handed the counter being pointed at, or null when none is */
-	void setEmphasisListener(Consumer<CombatMetric> onEmphasis)
+	void setEmphasisListener(Consumer<CombatSeries> onEmphasis)
 	{
 		this.onEmphasis = onEmphasis;
 	}
 
+	/** Builds every row and heading, both ways of reading the run, once. */
 	private void build()
 	{
-		JPanel top = new JPanel(new BorderLayout());
 		top.setBackground(PanelStyle.BACKGROUND);
 		top.setBorder(new EmptyBorder(0, 5, 3, 5));
 		top.add(heading, BorderLayout.EAST);
-		add(top);
 
 		CombatMetric.Group group = null;
 		int striped = 0;
@@ -119,37 +140,57 @@ class RunLegendPanel extends JPanel
 			if (metric.group() != group)
 			{
 				group = metric.group();
-				add(groupHeading(group));
+				headings.put(group, new GroupHeading(group));
 				striped = 0;
 			}
 
-			Row row = new Row(metric, striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE);
-			rows[metric.ordinal()] = row;
-			add(row);
+			rows.put(metric, new Row(metric,
+				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE, false));
+		}
+
+		striped = 0;
+
+		for (CombatMetric.Group each : CombatMetric.Group.values())
+		{
+			// A heading's own row carries the unit stripe the heading was carrying, in the place
+			// the heading had it: grouped, the row is the heading, and what it is counted in is
+			// the one thing its colour no longer says.
+			rows.put(each, new Row(each,
+				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE, true));
 		}
 	}
 
-	/**
-	 * A group's name over the rows it covers, with the unit's colour as a stripe down the side -
-	 * the same shape {@link CombatTablePanel} uses, and the thing that keeps the unit legible now
-	 * that the row colours are spent on telling the lines apart.
-	 */
-	private static JPanel groupHeading(CombatMetric.Group group)
+	/** Puts up the rows for the way the run is being read, which is all that changes between them. */
+	private void layOut()
 	{
-		JPanel tab = new JPanel();
-		tab.setBackground(group.unit().color());
-		tab.setPreferredSize(new Dimension(3, 0));
+		removeAll();
+		add(top);
 
-		JLabel text = PanelStyle.label(group.heading(), SwingConstants.LEFT,
-			FontManager.getRunescapeSmallFont(), ColorScheme.LIGHT_GRAY_COLOR);
-		text.setBorder(new EmptyBorder(2, 5, 2, 5));
+		if (grouped)
+		{
+			for (CombatMetric.Group group : CombatMetric.Group.values())
+			{
+				add(rows.get(group));
+			}
+		}
+		else
+		{
+			CombatMetric.Group group = null;
 
-		JPanel panel = new JPanel(new BorderLayout());
-		panel.setBackground(PanelStyle.BACKGROUND);
-		panel.setBorder(new EmptyBorder(4, 0, 1, 0));
-		panel.add(tab, BorderLayout.WEST);
-		panel.add(text, BorderLayout.CENTER);
-		return panel;
+			for (CombatMetric metric : CombatMetric.DISPLAYED)
+			{
+				if (metric.group() != group)
+				{
+					group = metric.group();
+					add(headings.get(group));
+				}
+
+				add(rows.get(metric));
+			}
+		}
+
+		revalidate();
+		repaint();
 	}
 
 	/**
@@ -160,9 +201,9 @@ class RunLegendPanel extends JPanel
 	{
 		this.icons = icons;
 
-		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		for (Row row : rows.values())
 		{
-			rows[metric.ordinal()].showName();
+			row.showName();
 		}
 	}
 
@@ -175,6 +216,26 @@ class RunLegendPanel extends JPanel
 		}
 
 		this.hideEmpty = hideEmpty;
+		refresh();
+	}
+
+	/**
+	 * @param grouped whether the counters are folded into their headings: five rows and five
+	 *                lines rather than eight of each
+	 *
+	 * <p>What a grouped row adds up is everything under its heading, the counters with no row of
+	 * their own included - so a punish thrown with a weapon the plugin does not name is in the
+	 * punish figure here and nowhere else.
+	 */
+	void setGrouped(boolean grouped)
+	{
+		if (this.grouped == grouped)
+		{
+			return;
+		}
+
+		this.grouped = grouped;
+		layOut();
 		refresh();
 	}
 
@@ -197,6 +258,12 @@ class RunLegendPanel extends JPanel
 		refresh();
 	}
 
+	/** The lines on show: one per counter, or one per heading once they are grouped. */
+	private List<CombatSeries> series()
+	{
+		return CombatSeries.drawn(grouped);
+	}
+
 	/**
 	 * Redraws every figure.
 	 *
@@ -211,20 +278,29 @@ class RunLegendPanel extends JPanel
 		CombatTotals totals = totals();
 		long[] largest = new long[CombatMetric.Unit.values().length];
 
-		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		for (CombatSeries line : series())
 		{
-			if (!hidden.contains(metric))
+			if (!hidden.contains(line))
 			{
-				long amount = totals.get(metric);
-				largest[metric.unit().ordinal()] =
-					Math.max(largest[metric.unit().ordinal()], amount);
+				long amount = line.amount(totals);
+				largest[line.unit().ordinal()] = Math.max(largest[line.unit().ordinal()], amount);
 			}
 		}
 
-		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		for (CombatSeries line : series())
 		{
-			rows[metric.ordinal()].set(totals.get(metric), largest[metric.unit().ordinal()],
-				hidden.contains(metric));
+			rows.get(line).set(line.amount(totals), largest[line.unit().ordinal()],
+				hidden.contains(line));
+		}
+
+		if (!grouped)
+		{
+			// The headings total the whole group, the counters with no row included, so a heading
+			// and the rows under it need not add up - see GroupHeading.
+			for (GroupHeading each : headings.values())
+			{
+				each.set(totals);
+			}
 		}
 
 		heading.setText(delve > 0 ? "Delve " + delve : "This run");
@@ -240,20 +316,21 @@ class RunLegendPanel extends JPanel
 	private void updateHidden()
 	{
 		CombatTotals run = detail.totals();
-		Set<CombatMetric> off = EnumSet.copyOf(clickedOff);
+		Set<CombatSeries> off = new HashSet<>();
 
-		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		for (CombatSeries line : series())
 		{
-			if (hideEmpty && run.get(metric) <= 0 && !clickedOn.contains(metric))
+			if (clickedOff.contains(line)
+				|| (hideEmpty && line.amount(run) <= 0 && !clickedOn.contains(line)))
 			{
-				off.add(metric);
+				off.add(line);
 			}
 		}
 
 		if (!off.equals(hidden))
 		{
 			hidden = off;
-			onHiddenChanged.accept(EnumSet.copyOf(off));
+			onHiddenChanged.accept(new HashSet<>(off));
 		}
 	}
 
@@ -269,17 +346,17 @@ class RunLegendPanel extends JPanel
 		return at == null ? new CombatTotals() : at.combat;
 	}
 
-	void toggle(CombatMetric metric)
+	void toggle(CombatSeries line)
 	{
-		if (hidden.contains(metric))
+		if (hidden.contains(line))
 		{
-			clickedOff.remove(metric);
-			clickedOn.add(metric);
+			clickedOff.remove(line);
+			clickedOn.add(line);
 		}
 		else
 		{
-			clickedOn.remove(metric);
-			clickedOff.add(metric);
+			clickedOn.remove(line);
+			clickedOff.add(line);
 		}
 
 		refresh();
@@ -287,7 +364,7 @@ class RunLegendPanel extends JPanel
 		// A click lands on the row under the pointer, whose line is the one brought forward. Taken
 		// off, it would leave every other line pushed back behind a line no longer drawn; put back
 		// on, it comes forward as it would have had the pointer just arrived.
-		onEmphasis.accept(hidden.contains(metric) ? null : metric);
+		onEmphasis.accept(hidden.contains(line) ? null : line);
 	}
 
 	/**
@@ -299,10 +376,16 @@ class RunLegendPanel extends JPanel
 	 */
 	private final class Row extends JPanel
 	{
-		private final CombatMetric metric;
+		/** How wide the unit's stripe down a grouped row is - the width a heading gave it. */
+		private static final int UNIT_STRIPE = 3;
+
+		private final CombatSeries series;
 		private final Color stripe;
 		private final JLabel name;
 		private final JLabel value = PanelStyle.body("0", SwingConstants.RIGHT);
+
+		/** Whether the unit's colour is drawn down the side, as a heading draws it. */
+		private final boolean unitStripe;
 
 		/** Which specs feed a catch-all, as tooltip lines, or empty for a row its name explains. */
 		private final String sources;
@@ -314,14 +397,15 @@ class RunLegendPanel extends JPanel
 		private BufferedImage shownIcon;
 		private boolean shownOff;
 
-		private Row(CombatMetric metric, Color stripe)
+		private Row(CombatSeries series, Color stripe, boolean unitStripe)
 		{
 			super(new BorderLayout(4, 0));
-			this.metric = metric;
+			this.series = series;
 			this.stripe = stripe;
-			this.name = PanelStyle.body(metric.label(), SwingConstants.LEFT);
+			this.unitStripe = unitStripe;
+			this.name = PanelStyle.body(series.label(), SwingConstants.LEFT);
 
-			List<String> from = metric.sources();
+			List<String> from = series.sources();
 			this.sources = from.isEmpty() ? "" : "<br><br>Counted from:<br>" + String.join("<br>", from);
 
 			name.setBorder(new EmptyBorder(3, 3, 3, 0));
@@ -340,13 +424,13 @@ class RunLegendPanel extends JPanel
 				@Override
 				public void mousePressed(MouseEvent event)
 				{
-					toggle(Row.this.metric);
+					toggle(Row.this.series);
 				}
 
 				@Override
 				public void mouseEntered(MouseEvent event)
 				{
-					onEmphasis.accept(off ? null : Row.this.metric);
+					onEmphasis.accept(off ? null : Row.this.series);
 				}
 
 				@Override
@@ -376,10 +460,10 @@ class RunLegendPanel extends JPanel
 			// Led by the name, which is the only place it is written when an icon stands in for it.
 			String tooltip = off
 				? "Click to put this line back on the chart"
-				: DoomFormat.count(amount) + " " + metric.unit().description()
+				: DoomFormat.count(amount) + " " + series.unit().description()
 					+ " - click to take this line off the chart";
 
-			setToolTipText("<html>" + metric.label() + "<br>" + tooltip + sources + "</html>");
+			setToolTipText("<html>" + series.label() + "<br>" + tooltip + sources + "</html>");
 
 			fill = off || amount <= 0 || largest <= 0 ? 0 : (double) amount / largest;
 			showName();
@@ -389,7 +473,7 @@ class RunLegendPanel extends JPanel
 		/** The name and the picture beside it, the picture faded while the line is off as the words are. */
 		private void showName()
 		{
-			BufferedImage icon = icons.smallCounter(metric);
+			BufferedImage icon = series.icon(icons);
 
 			if (icon == shownIcon && off == shownOff)
 			{
@@ -398,7 +482,7 @@ class RunLegendPanel extends JPanel
 
 			shownIcon = icon;
 			shownOff = off;
-			PanelStyle.nameAndIcon(name, metric.label(),
+			PanelStyle.nameAndIcon(name, series.label(),
 				icon == null || !off ? icon : IconArt.fade(icon, OFF_ALPHA));
 		}
 
@@ -408,14 +492,20 @@ class RunLegendPanel extends JPanel
 			g.setColor(stripe);
 			g.fillRect(0, 0, getWidth(), getHeight());
 
-			if (fill <= 0)
+			if (fill > 0)
 			{
-				return;
+				Color color = series.seriesColor();
+				g.setColor(PanelStyle.meterFill(color));
+				g.fillRect(0, 0, (int) (getWidth() * PanelStyle.METER_WIDTH * fill), getHeight());
 			}
 
-			Color color = metric.seriesColor();
-			g.setColor(PanelStyle.meterFill(color));
-			g.fillRect(0, 0, (int) (getWidth() * PanelStyle.METER_WIDTH * fill), getHeight());
+			if (unitStripe)
+			{
+				// Over the meter rather than under it: the meter runs the width of the row, and a
+				// stripe the fill washes over says nothing.
+				g.setColor(series.unit().color());
+				g.fillRect(0, 0, UNIT_STRIPE, getHeight());
+			}
 		}
 
 		/**
@@ -433,7 +523,7 @@ class RunLegendPanel extends JPanel
 			protected void paintComponent(Graphics g)
 			{
 				int y = (getHeight() - SWATCH) / 2;
-				g.setColor(metric.seriesColor());
+				g.setColor(series.seriesColor());
 
 				if (off)
 				{

@@ -178,10 +178,10 @@ the run, and has no line of its own anywhere: there is no counter to tick for "s
 weapon", so a row for it would be a row nobody asked for.
 
 A **heading's figure is the whole group**, those included. The headings in the side panel's table,
-a combined overlay line and a heading's infobox square all read what the group counted rather than
-what its rows name, so punishing with an ancient godsword - which has no counter of its own - shows
-up in the punish total and in no other figure. Where the two differ, the heading's tooltip says by
-how much and what it was counted under.
+a combined overlay line, a heading's infobox square and a grouped run detail line all read what the
+group counted rather than what its rows name, so punishing with an ancient godsword - which has no
+counter of its own - shows up in the punish total and in no other figure. Where the two differ, the
+heading's tooltip says by how much and what it was counted under.
 
 **Punish damage** is what a melee punish hit for. When the boss prays against magic and ranged,
 the melee swing that answers it lands with full accuracy and brings strength-bonus hitsplats in
@@ -360,12 +360,12 @@ Delve      Time       Counted per delve
 Deep pace  58.1/hr        |  __       /  \_/  \
                        70 | /  \_ Barrage      \
 Counters                  |/     \__/‾‾\__/‾‾\__\
-             This run   0 |__Eldritch__________
-Spell healing     930     |
- ■ Blood barrage  806     | 2:00
-Spec healing      105     | ▁▂▃▃▄▄▅▅▆▆▇▇  Full time
- ■ Ancient godsword 58    | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
- ■ Blowpipe        47   0:00
+  Sources | Grouped     0 |__Eldritch__________
+             This run     |
+Spell healing     930     | 2:00
+ ■ Blood barrage  806     | ▁▂▃▃▄▄▅▅▆▆▇▇  Full time
+Spec healing      105     | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
+ ■ Ancient godsword 58  0:00
  ...                      1     5    10    15
                                   Delve
 ```
@@ -377,7 +377,18 @@ legend, under the heading it is listed beneath - hitpoints, prayer points or dam
 headings the side panel uses.
 
 The chart's colours are eight hues checked as a set for colour blindness, one for each of the eight
-counters, so no two lines share a colour.
+counters, so no two lines share a colour. Grouped, the five headings take the first five of the same
+hues, for the same reason: only neighbouring slots were checked against each other, so a set drawn
+together has to be a run of them from the first.
+
+**Sources** and **Grouped**, on the Counters heading, pick how the run is read. Sources is a line
+per counter; Grouped is a line per heading, the counters under it added up, which is how a run long
+enough to fill the plot stays legible - five lines instead of eight, and each of them the figure you
+were going to add up anyway. A grouped line counts what no counter names as well, so it is the only
+place on the chart a punish thrown with an unnamed weapon appears. Which lines you have clicked off
+is remembered for each of the two, so switching back finds the chart as you left it. This is a
+setting of the window rather than of the plugin: the overlay's own **Group counters** is untouched
+by it.
 
 The lower strip is the clock: each delve's full time, and under it the kill the game timed. A delve
 here is the kill and then getting ready for the next, so its full time runs from the delve starting

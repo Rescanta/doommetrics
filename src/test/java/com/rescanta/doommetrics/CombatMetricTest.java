@@ -52,6 +52,23 @@ public class CombatMetricTest
 	}
 
 	/**
+	 * Grouped, the headings are the lines, and they take the same palette from the same end - see
+	 * {@link CombatMetric.Group#seriesColor}. A group added or moved fails this until they do.
+	 */
+	@Test
+	public void theHeadingsTakeThePaletteFromTheFirstSlotToo()
+	{
+		CombatMetric.Group[] groups = CombatMetric.Group.values();
+		assertTrue("more headings than the palette has slots", groups.length <= PALETTE.length);
+
+		for (int i = 0; i < groups.length; i++)
+		{
+			assertEquals(groups[i] + " should have palette slot " + (i + 1),
+				PALETTE[i], groups[i].seriesColor().getRGB() & 0xFFFFFF);
+		}
+	}
+
+	/**
 	 * A heading's figure is only a figure because everything under it is counted in the same
 	 * thing. Two units in one group would make it hitpoints plus damage.
 	 */
