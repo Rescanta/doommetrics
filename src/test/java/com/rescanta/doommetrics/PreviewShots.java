@@ -28,6 +28,9 @@ public class PreviewShots
 	/** How much the small game font is blown up by, so a saved image can be read at all. */
 	private static final int ZOOM = 2;
 
+	/** A run detail window too short for its sidebar, so the scrollbar is up. */
+	private static final int SHORT_WINDOW = 470;
+
 	/** How many squares a row of the figure grid holds, keeping it about as wide as it is tall. */
 	private static final int GRID_COLUMNS = 5;
 
@@ -114,6 +117,10 @@ public class PreviewShots
 		// shows. Worth its own picture for the tab strip and for the meters, which are filled
 		// against the largest figure in the tally on show rather than across both.
 		written.add(shot(panel(deep, true), directory.resolve("combat-lifetime.png")));
+
+		// The sidebar at a height too short to hold it, which is the one state a scrollbar is up
+		// in - and so the one state the lane kept clear for it can be seen doing its job.
+		written.add(shot(detail(deep, SHORT_WINDOW), directory.resolve("detail-short.png")));
 
 		// The counters drawn as icons, separate and combined, and the squares that take one.
 		PreviewConfig iconic = new PreviewConfig();
@@ -228,8 +235,13 @@ public class PreviewShots
 			: drawn, ZOOM);
 	}
 
-	/** The run detail window at the size it opens at. Left unscaled: it is large enough to read. */
 	private static BufferedImage detail(PreviewScene scene)
+	{
+		return detail(scene, 600);
+	}
+
+	/** The run detail window at the size it opens at. Left unscaled: it is large enough to read. */
+	private static BufferedImage detail(PreviewScene scene, int height)
 	{
 		RunDetailWindow window = new RunDetailWindow(null, () ->
 		{
@@ -240,7 +252,7 @@ public class PreviewShots
 		window.setLive(scene.live(scene.config));
 		window.setDetail(scene.detail());
 
-		return PreviewRender.window(window, 980, 600);
+		return PreviewRender.window(window, 980, height);
 	}
 
 	private static String shot(BufferedImage image, Path file) throws IOException
