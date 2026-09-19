@@ -1376,7 +1376,7 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		CombatMetric metric = combatTracker.wouldCredit(kind, tick);
+		CombatMetric metric = combatTracker.wouldCredit(kind, amount, tick);
 		log.debug("{} of {} at tick {} -> {}", kind, amount, tick,
 			metric == null ? "nothing open, held for this tick" : metric.key());
 	}
@@ -1508,7 +1508,10 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		int rise = to - from;
 		int tick = client.getTickCount();
-		boolean spare = combatTracker.wouldCredit(kind, tick) == null;
+		// The whole rise, before what came back on its own is taken out of it: no window that takes
+		// a heal or a restore cares what size it is, so this only has to be the effect being asked
+		// about - see SpecEffect#isSized.
+		boolean spare = combatTracker.wouldCredit(kind, rise, tick) == null;
 		int gain = regeneration.without(from, to, natural, tick, period, spare);
 
 		if (gain < rise && config.debugLogging())

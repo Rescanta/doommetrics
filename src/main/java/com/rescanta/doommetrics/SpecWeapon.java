@@ -141,6 +141,12 @@ enum SpecWeapon
 
 	private static final int SACRIFICE_TO = 10;
 
+	/**
+	 * What Blood Sacrifice hits for. Fixed typeless damage, not a roll, which is what lets the
+	 * window insist on it - see {@link #sacrificeDamage()}.
+	 */
+	private static final int SACRIFICE_DAMAGE = 25;
+
 	private final String label;
 	private final List<SpecEffect> effects;
 
@@ -171,14 +177,36 @@ enum SpecWeapon
 		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, 0, RESTORE, budget);
 	}
 
-	/** The Ancient godsword's delayed hit, which lands when the mark on the target expires. */
+	/**
+	 * The Ancient godsword's delayed hit, which lands when the mark on the target expires.
+	 *
+	 * <p>Pinned to the twenty-five it always deals. Three or four ticks is a long time to hold a
+	 * window open with a bow firing into it, and the window took whatever landed first: a trip's
+	 * logs had it credited a 58, a 64 and a string of two-damage burns, each time turning away the
+	 * sacrifice that arrived on the same tick behind them. Insisting on the number costs the
+	 * sacrifices that land on a boss with less life left than that, which die with it anyway.
+	 *
+	 * <p>What it also does is leave the window open where the old one closed. A sacrifice that
+	 * lands on something not worth counting - the shielded boss above all, which is where most of
+	 * these specs are fired - arrives as a zero, and a zero is not twenty-five, so the window waits
+	 * out its last tick. If the shield breaks inside those few ticks and something hits the boss
+	 * itself for exactly twenty-five, that hit is taken for the sacrifice. Letting a zero close the
+	 * window instead would cost far more than it saved: a larva dying in the same ticks is a zero
+	 * too, and those are frequent enough that they were half of what turned the real sacrifices
+	 * away in the first place.
+	 */
 	private static SpecEffect sacrificeDamage()
 	{
 		return new SpecEffect(SpecEffect.Kind.DAMAGE, CombatMetric.OTHER_SPEC_DAMAGE,
-			SACRIFICE_FROM, SACRIFICE_TO, 1);
+			SACRIFICE_FROM, SACRIFICE_TO, 1, SACRIFICE_DAMAGE);
 	}
 
-	/** The heal that follows that hit, a tick behind it at the outside. */
+	/**
+	 * The heal that follows that hit, a tick behind it at the outside.
+	 *
+	 * <p>Not pinned to twenty-five the way the damage is: the heal is capped by how hurt you were,
+	 * so a sacrifice taken at four hitpoints down gives back four.
+	 */
 	private static SpecEffect sacrificeHeal()
 	{
 		return new SpecEffect(SpecEffect.Kind.HEAL, CombatMetric.AGS_HEAL,
