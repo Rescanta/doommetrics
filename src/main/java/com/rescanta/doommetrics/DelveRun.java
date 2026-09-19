@@ -62,6 +62,12 @@ class DelveRun
 	static final String UNKNOWN_UNIQUE_NAME = "Unknown unique";
 
 	/**
+	 * Handed back in place of a delve by the calls that write a drop down, when they wrote nothing.
+	 * No delve is numbered below 1, so it cannot be mistaken for one.
+	 */
+	static final int NOT_RECORDED = -1;
+
+	/**
 	 * The id a notable drop is counted under.
 	 *
 	 * <p>The eye has two forms, and the warning, the pile and the claim each name it from a
@@ -182,9 +188,27 @@ class DelveRun
 	/**
 	 * Whether a warning can be trusted to be about a drop this run saw land. Not until a run joined
 	 * part way through has gone down a delve under our eyes: the first warnings it gets are about
-	 * whatever was already in the pile, from delves nobody watched.
+	 * whatever was already in the pile, from delves nobody watched. An untrusted warning still
+	 * names what the glow put up - see {@link #nameUnknown} - it just places nothing of its own.
 	 */
 	private boolean trustWarnings;
+
+	/**
+	 * Whether the pet in the pile is one the hole glowed for, which decides whether it explains a
+	 * glow - see {@link #knowsOfGlowInPile}.
+	 *
+	 * <p>The three tradables light the hole whenever the pile holds one. The pet only lights it the
+	 * first a character is ever given: every duplicate after that drops into the pile, warns on
+	 * every descend like the rest, and leaves the hole plain. So which of the two this one is
+	 * cannot be read off the item, and is not something a client can look up.
+	 *
+	 * <p>It can be read off the glow, though. A pet that took over a mark the glow left is a pet
+	 * the hole glowed for; a pet that arrived with no mark outstanding is one it did not - see
+	 * {@link #nameUnknown}. Presumed false, which is the common case by far and the safe way round:
+	 * a pet wrongly taken as lighting the hole silently switches the marking off for the rest of
+	 * the run.
+	 */
+	private boolean petGlows;
 
 	/**
 	 * Bumped whenever a drop lands or a claim is read, so the detail window can tell that something
@@ -424,25 +448,34 @@ class DelveRun
 	 * a new drop places it, and the other finds nothing left to place. A reading holding fewer is a
 	 * pile being emptied, and changes nothing either - a drop that landed stays where it landed.
 	 *
-	 * @return true if this placed a drop
+	 * @return the delve the drop was written down on, or {@link #NOT_RECORDED} if this recorded
+	 *         nothing. Not always the delve we are standing on: a drop the glow had already marked
+	 *         keeps the delve the glow put it on - see {@link #nameUnknown}.
 	 */
-	boolean sawInPile(int itemId, String name, int quantity)
+	int sawInPile(int itemId, String name, int quantity)
 	{
 		int key = dropKey(itemId);
 		int before = held.getOrDefault(key, 0);
 
 		if (name == null || quantity <= before)
 		{
-			return false;
+			return NOT_RECORDED;
 		}
 
 		held.put(key, quantity);
-		int level = dropLevel();
-		// A unique the game only signalled is this one, now that it has a name.
-		landed.removeIf(drop -> drop.itemId == UNKNOWN_UNIQUE && drop.level == level);
-		landed.add(new Landed(level, key, name, quantity - before, quantity));
+
+		// A unique the game only signalled is this one, now that it has a name - see
+		// nameUnknown. Anything else is a drop landing where we stand.
+		int named = nameUnknown(key, name, quantity - before, quantity);
+
+		if (named != NOT_RECORDED)
+		{
+			return named;
+		}
+
+		landed.add(new Landed(dropLevel(), key, name, quantity - before, quantity));
 		lootChanges++;
-		return true;
+		return dropLevel();
 	}
 
 	/**
@@ -459,52 +492,129 @@ class DelveRun
 	 * copy, so this try's count for the item is how many the pile holds, and anything over what the
 	 * run already knew about came off the delve just cleared.
 	 *
-	 * @return true if this placed a drop
+	 * @return the delve the drop was written down on, or {@link #NOT_RECORDED} if this recorded
+	 *         nothing - see {@link #sawInPile}
 	 */
-	boolean warnedOf(int itemId, String name)
+	int warnedOf(int itemId, String name)
 	{
 		int count = warned.merge(dropKey(itemId), 1, Integer::sum);
 
 		if (!trustWarnings)
 		{
 			pileAlreadyHeld(itemId, count);
-			return false;
+			// The warning is about a pile we inherited, so it places nothing - but it still names
+			// whatever the glow put up as unknown. Which delve that mark sits on is a joined run's
+			// guess either way, and the item's name is worth more than the question mark.
+			return nameUnknown(dropKey(itemId), name, 1, count);
 		}
 
 		return sawInPile(itemId, name, count);
 	}
 
 	/**
-	 * The game signalled a unique without naming it - the hole glowing and the unique sound - so
-	 * something is in the pile off this delve and nothing yet says what.
+	 * The game signalled a unique without naming it: the cleared delve was left by the hole that
+	 * glows rather than the plain one, so the pile holds something and nothing yet says what.
 	 *
-	 * <p>Placed as an unknown unique, which turns into the real drop if a warning, the loot screen or
-	 * the claim names it later - see {@link #sawInPile}. One that is never named was lost with the
-	 * run, because every way of keeping it would have named it. A second signal for the same delve
-	 * places nothing more: the glow says a unique dropped, not how many.
+	 * <p>Placed as an unknown unique, which turns into the real drop once a warning, the loot
+	 * screen or the claim names it - see {@link #sawInPile}. One that is never named was lost with
+	 * the run, because every way of walking out with it would have named it.
 	 *
-	 * <p>Nothing calls this yet. No event the game sends has been tied to the glow - the logs so far
-	 * hold no delve that glowed to tie one to - so it waits on a log from {@link LootDiagnostics}
-	 * that catches one. Until then an unknown unique is only ever drawn by the tests and the
-	 * preview harness.
+	 * <p>Placed only while the run knows of nothing in the pile that lights the hole, and only one
+	 * at a time. What the glow says is that the pile holds something worth glowing for, not that
+	 * this delve dropped it - a hole left glowing by a drop five delves back is the same hole - so
+	 * a signal over a drop already known about says nothing new. That leaves the rare second unique
+	 * of a run to the warning, the loot screen and the claim, which name it outright.
+	 *
+	 * <p>A duplicate pet is in the pile without lighting anything, and is not counted against a
+	 * later glow - see {@link #knowsOfGlowInPile}.
+	 *
+	 * <p>A run joined part way through marks the glow like any other, on the delve it was cleared
+	 * by. The drop may well have come off a delve nobody watched - the hole was already glowing
+	 * when we picked the run up - but the delve it was cleared by is the only one a joined run can
+	 * name, and a mark saying there is a unique down there is worth more than silence. Nothing is
+	 * placed when the pile was there to be read as the run was picked up, since then the run knows
+	 * what is in it - see {@link #pileAlreadyHeld}.
 	 *
 	 * @return true if this placed a drop
 	 */
 	boolean uniqueSignalled()
 	{
-		int level = dropLevel();
-
-		for (Landed drop : landed)
+		if (knowsOfGlowInPile())
 		{
-			if (drop.itemId == UNKNOWN_UNIQUE && drop.level == level)
+			return false;
+		}
+
+		landed.add(new Landed(dropLevel(), UNKNOWN_UNIQUE, UNKNOWN_UNIQUE_NAME, 1, 1));
+		lootChanges++;
+		return true;
+	}
+
+	/**
+	 * Whether the run already knows what the hole is glowing for: something in the pile that lights
+	 * it, named or still only a mark.
+	 *
+	 * <p>Not the same question as whether the pile holds a notable drop. A duplicate pet is notable
+	 * and sits in the pile all run without ever lighting anything, so counting it would take the
+	 * marking away from every player who already owns one - which is most of the ones deep enough
+	 * to care. See {@link #petGlows} for how the two pets are told apart.
+	 */
+	private boolean knowsOfGlowInPile()
+	{
+		for (Map.Entry<Integer, Integer> entry : held.entrySet())
+		{
+			if (entry.getValue() > 0 && (petGlows || entry.getKey() != ItemID.DOMPET))
 			{
-				return false;
+				return true;
 			}
 		}
 
-		landed.add(new Landed(level, UNKNOWN_UNIQUE, UNKNOWN_UNIQUE_NAME, 1, 1));
+		return outstandingUnknown() >= 0;
+	}
+
+	/**
+	 * Turns the unique the glow put up into the drop something has just named, keeping the delve
+	 * the glow put it on rather than taking the one we are on now: the glow said when, and the
+	 * naming says what. The two are the same delve when the naming is a warning on the way down,
+	 * and delves apart when it is a claim at the end of the run.
+	 *
+	 * <p>The mark is spent by the <em>first</em> naming, not by a matching one - the glow never said
+	 * what it meant, so there is nothing to match against. A second unique named while the mark is
+	 * still outstanding therefore lands on the delve we are on, like any other drop.
+	 *
+	 * @return the delve the mark was sitting on, which this drop now keeps, or
+	 *         {@link #NOT_RECORDED} if there was no mark to name
+	 */
+	private int nameUnknown(int key, String name, int quantity, int heldAfter)
+	{
+		int unknown = outstandingUnknown();
+
+		if (unknown < 0)
+		{
+			return NOT_RECORDED;
+		}
+
+		int level = landed.get(unknown).level;
+		landed.set(unknown, new Landed(level, key, name, quantity, heldAfter));
 		lootChanges++;
-		return true;
+
+		// The mark is the hole having glowed, so whatever took it over is something the hole glows
+		// for - which for the pet is the one thing that cannot be read off the item - see petGlows.
+		petGlows |= key == ItemID.DOMPET;
+		return level;
+	}
+
+	/** Where the unique the glow placed and nothing has named sits in {@link #landed}, or -1. */
+	private int outstandingUnknown()
+	{
+		for (int i = 0; i < landed.size(); i++)
+		{
+			if (landed.get(i).itemId == UNKNOWN_UNIQUE)
+			{
+				return i;
+			}
+		}
+
+		return -1;
 	}
 
 	/** How many of a notable drop the pile is known to hold, or 0 for none. */

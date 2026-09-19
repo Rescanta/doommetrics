@@ -221,12 +221,11 @@ final class PreviewScene
 
 	private static PreviewScene died(Instant now)
 	{
-		// The treads and the pet were still waiting on the claim, so they went with the run and are
-		// drawn faded - and so did whatever made the hole glow off the last delve, which no descend
-		// was ever tried with to name.
+		// Whatever made the hole glow off the last delve went with the run: no descend was tried
+		// with it in the pile, and no claim reached it, so nothing ever named it. The run's only
+		// unique, because a glow over one already known about places nothing - see
+		// DelveRun#uniqueSignalled. A named drop lost the same way is the lingering scene.
 		DelveRun run = run(31, now, counters(2),
-			landing(12, ItemID.AVERNIC_TREADS, "Avernic treads"),
-			landing(25, ItemID.DOMPET, "Dom"),
 			landing(31, DelveRun.UNKNOWN_UNIQUE, DelveRun.UNKNOWN_UNIQUE_NAME));
 		// Died a few seconds into delve 32, which the game had announced like any other.
 		run.enterLevel(32, now.minusSeconds(15));
