@@ -1,6 +1,7 @@
 package com.rescanta.doommetrics;
 
 import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -24,7 +25,7 @@ import java.util.stream.Collectors;
  * <p>The four catch-alls - other spells, other spec heals, other spec damage and other melee - are
  * still counted and still saved, but drawn nowhere: see {@link #DISPLAYED}.
  */
-enum CombatMetric
+enum CombatMetric implements CombatSeries
 {
 	// Each counter drawn has a palette slot to itself - see seriesColor. The catch-alls are drawn
 	// nowhere, and their colours are only there because every constant needs one.
@@ -80,28 +81,30 @@ enum CombatMetric
 	 * Which heading a metric sits under, so the panel groups like with like - and, where the
 	 * counters are drawn as one line per heading, the line itself.
 	 */
-	enum Group
+	enum Group implements CombatSeries
 	{
-		SPELL_HEAL("Spell healing", "Spell heals", Unit.HITPOINTS),
-		SPEC_HEAL("Spec healing", "Spec heals", Unit.HITPOINTS),
-		PRAYER("Prayer restored", "Prayer", Unit.PRAYER),
-		DAMAGE("Spec damage", "Spec dmg", Unit.DAMAGE),
+		SPELL_HEAL("Spell healing", "Spell heals", Unit.HITPOINTS, new Color(0x3987E5)),
+		SPEC_HEAL("Spec healing", "Spec heals", Unit.HITPOINTS, new Color(0xD95926)),
+		PRAYER("Prayer restored", "Prayer", Unit.PRAYER, new Color(0x199E70)),
+		DAMAGE("Spec damage", "Spec dmg", Unit.DAMAGE, new Color(0xC98500)),
 
 		/**
 		 * What a melee punish hit for: the swing itself and the strength-bonus hitsplats the boss
 		 * takes on top of it, credited to the weapon that swung - see {@link PunishTracker}.
 		 */
-		PUNISH("Punish damage", "Punish dmg", Unit.DAMAGE);
+		PUNISH("Punish damage", "Punish dmg", Unit.DAMAGE, new Color(0xD55181));
 
 		private final String heading;
 		private final String overlayHeading;
 		private final Unit unit;
+		private final Color series;
 
-		Group(String heading, String overlayHeading, Unit unit)
+		Group(String heading, String overlayHeading, Unit unit, Color series)
 		{
 			this.heading = heading;
 			this.overlayHeading = overlayHeading;
 			this.unit = unit;
+			this.series = series;
 		}
 
 		String heading()
@@ -109,11 +112,40 @@ enum CombatMetric
 			return heading;
 		}
 
+		/** How a heading's line reads in the legend, which is what it reads as a heading. */
+		@Override
+		public String label()
+		{
+			return heading;
+		}
+
+		/**
+		 * The colour a heading's line is drawn in when the chart is grouped.
+		 *
+		 * <p>The first five slots of the palette {@link CombatMetric#seriesColor} documents, in
+		 * declaration order and skipping none, for the reason given there: only slots that sit
+		 * side by side were measured against each other, so a set drawn together has to be a run
+		 * of them from the first. That a heading's hue is one a counter also wears is no
+		 * collision - the two are never on the chart at once, because grouping is what decides
+		 * which of them is drawn.
+		 *
+		 * <p>It does mean a heading's colour says nothing about what it is counted in: prayer's
+		 * line is green here and the eldritch staff's is amber under separate lines. The unit is
+		 * carried by the stripe down the side of the row either way, which is where a reader
+		 * looking for it already looks.
+		 */
+		@Override
+		public Color seriesColor()
+		{
+			return series;
+		}
+
 		/**
 		 * What every counter under this heading came to, the catch-alls included - see
 		 * {@link CombatMetric#DISPLAYED}.
 		 */
-		long amount(CombatTotals totals)
+		@Override
+		public long amount(CombatTotals totals)
 		{
 			long total = 0;
 
@@ -196,6 +228,20 @@ enum CombatMetric
 			return labels;
 		}
 
+		/** What feeds a heading's line: every counter under it, by name. */
+		@Override
+		public List<String> sources()
+		{
+			List<String> named = new ArrayList<>();
+
+			for (CombatMetric metric : metrics())
+			{
+				named.add(metric.label());
+			}
+
+			return named;
+		}
+
 		/**
 		 * How the group reads on the overlay when its metrics are drawn as one line - shorter than
 		 * the panel's heading for the same reason {@link #overlayLabel()} is, and kept honest by
@@ -211,7 +257,8 @@ enum CombatMetric
 		 * is what makes a combined line addable at all - and what lets that line be drawn in the
 		 * same colour as the separate lines it stands in for.
 		 */
-		Unit unit()
+		@Override
+		public Unit unit()
 		{
 			return unit;
 		}
@@ -338,7 +385,8 @@ enum CombatMetric
 	}
 
 	/** How the metric reads in the panel, under its group's heading. */
-	String label()
+	@Override
+	public String label()
 	{
 		return label;
 	}
@@ -373,9 +421,24 @@ enum CombatMetric
 		return group.heading() + ": " + label;
 	}
 
-	Unit unit()
+	@Override
+	public Unit unit()
 	{
 		return unit;
+	}
+
+	/** What this counter came to in a tally. */
+	@Override
+	public long amount(CombatTotals totals)
+	{
+		return totals.get(this);
+	}
+
+	/** The picture of what this counter counts, shrunk to sit beside its name. */
+	@Override
+	public BufferedImage icon(Icons icons)
+	{
+		return icons.smallCounter(this);
 	}
 
 	/**
@@ -389,7 +452,8 @@ enum CombatMetric
 	 * remember to. The catch-all itself comes last, because a figure it feeds counts every spec
 	 * not named, not only the ones that are.
 	 */
-	List<String> sources()
+	@Override
+	public List<String> sources()
 	{
 		List<String> named = new ArrayList<>();
 		boolean anyOther = false;
@@ -452,7 +516,8 @@ enum CombatMetric
 	 * each takes a slot of its own and no two lines share a hue. A counter added later has no slot
 	 * left: a hue generated to make one would be exactly the colour nobody checked.
 	 */
-	Color seriesColor()
+	@Override
+	public Color seriesColor()
 	{
 		return series;
 	}

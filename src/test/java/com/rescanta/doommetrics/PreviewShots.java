@@ -118,9 +118,17 @@ public class PreviewShots
 		// against the largest figure in the tally on show rather than across both.
 		written.add(shot(panel(deep, true), directory.resolve("combat-lifetime.png")));
 
-		// The sidebar at a height too short to hold it, which is the one state a scrollbar is up
-		// in - and so the one state the lane kept clear for it can be seen doing its job.
-		written.add(shot(detail(deep, SHORT_WINDOW), directory.resolve("detail-short.png")));
+		// The run detail window's other way of reading the counters, which a click reaches and no
+		// scene above shows: five lines and five rows instead of eight, and the only view in the
+		// plugin where the sources with no counter of their own are in a figure.
+		written.add(shot(detail(deep, true), directory.resolve("detail-grouped.png")));
+
+		// The sidebar at a height too short to hold it, both ways round: the one state a scrollbar
+		// is up in, and the pair that has to lay the rows out identically whether it is or not.
+		written.add(shot(detail(deep, false, SHORT_WINDOW),
+			directory.resolve("detail-short.png")));
+		written.add(shot(detail(deep, true, SHORT_WINDOW),
+			directory.resolve("detail-short-grouped.png")));
 
 		// The counters drawn as icons, separate and combined, and the squares that take one.
 		PreviewConfig iconic = new PreviewConfig();
@@ -237,17 +245,23 @@ public class PreviewShots
 
 	private static BufferedImage detail(PreviewScene scene)
 	{
-		return detail(scene, 600);
+		return detail(scene, false);
+	}
+
+	private static BufferedImage detail(PreviewScene scene, boolean grouped)
+	{
+		return detail(scene, grouped, 600);
 	}
 
 	/** The run detail window at the size it opens at. Left unscaled: it is large enough to read. */
-	private static BufferedImage detail(PreviewScene scene, int height)
+	private static BufferedImage detail(PreviewScene scene, boolean grouped, int height)
 	{
 		RunDetailWindow window = new RunDetailWindow(null, () ->
 		{
 		});
 		window.setIcons(PreviewIcons.INSTANCE);
 		window.setHideEmpty(scene.config.hideEmptyCounters);
+		window.showGrouped(grouped);
 
 		window.setLive(scene.live(scene.config));
 		window.setDetail(scene.detail());

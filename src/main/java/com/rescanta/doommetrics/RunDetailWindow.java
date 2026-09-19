@@ -18,6 +18,8 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.components.materialtabs.MaterialTab;
+import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
  * A window of its own, outside the side panel and outside the client: one run, taken apart delve
@@ -35,6 +37,12 @@ import net.runelite.client.ui.ColorScheme;
  * <p>The chart wants far more width than a side panel has, and its legend wants a column beside it,
  * so all of it lives here rather than being cramped to fit next to the client.
  *
+ * <p>The counters are read either way from here: separately, a line per source, or grouped, a line
+ * per heading. The tab that picks between them sits on the Counters heading rather than in the
+ * config because it is a question about the run in front of you - which way round this one is
+ * legible - and the answer changes from one run to the next. The overlay's own grouping setting is
+ * left alone by it: that one is about a display that is up while you fight, and this is not.
+ *
  * <p>Swing thread only. The plugin owns the single instance and disposes it on shutdown; closing
  * the window disposes it and tells the plugin to forget it, so the next open builds a fresh one
  * rather than resurrecting a disposed frame.
@@ -50,6 +58,12 @@ class RunDetailWindow extends JFrame
 	private final DelveChart chart = new DelveChart();
 	private final RunLegendPanel legend = new RunLegendPanel();
 	private final RunDropsPanel drops = new RunDropsPanel();
+
+	/** Which way the counters are read, one tab each - see {@link #groupingTabs()}. */
+	private final MaterialTabGroup grouping = new MaterialTabGroup();
+
+	private MaterialTab separateTab;
+	private MaterialTab groupedTab;
 
 	/** The drops, under their heading - only on show for a run that has any. */
 	private final JPanel dropsSection = PanelStyle.section("Drops", drops);
@@ -302,6 +316,52 @@ class RunDetailWindow extends JFrame
 	}
 
 	/**
+	 * The tabs that pick how the counters are read, on the Counters heading.
+	 *
+	 * <p>The same pair the side panel's combat table is read by, for the same reason: two ways of
+	 * looking at one set of figures, only one of them up at a time, and nothing lost by switching.
+	 */
+	private MaterialTabGroup groupingTabs()
+	{
+		separateTab = groupingTab("Sources", false,
+			"A line for each counter, named by what it counts");
+		groupedTab = groupingTab("Grouped", true,
+			"<html>A line for each heading, summing the counters under it."
+				+ "<br>Counts the sources with no line of their own too - a punish thrown"
+				+ "<br>with a weapon this plugin does not name is in the figure here.</html>");
+		grouping.select(separateTab);
+		return grouping;
+	}
+
+	private MaterialTab groupingTab(String name, boolean grouped, String tooltip)
+	{
+		MaterialTab tab = new MaterialTab(name, grouping, null);
+		tab.setToolTipText(tooltip);
+		tab.setOnSelectEvent(() ->
+		{
+			// The chart first: the legend answers by handing over the lines that are off, and
+			// which lines those are depends on which of them the chart is drawing.
+			chart.setGrouped(grouped);
+			legend.setGrouped(grouped);
+			return true;
+		});
+
+		grouping.addTab(tab);
+		return tab;
+	}
+
+	/**
+	 * Puts either way of reading the counters up, for the preview harness - in the plugin nothing
+	 * but a click moves them, and the window opens on the separate lines.
+	 *
+	 * <p>Idempotent: picking the tab already in front does nothing at all.
+	 */
+	void showGrouped(boolean grouped)
+	{
+		grouping.select(grouped ? groupedTab : separateTab);
+	}
+
+	/**
 	 * The run's own figures over its drops and the legend, stacked and scrolled together. Their
 	 * height is eight counters under five headings and a drop or two, so they scroll only when
 	 * the window is made short enough to need it.
@@ -312,7 +372,7 @@ class RunDetailWindow extends JFrame
 		JPanel lower = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
 		lower.setBackground(PanelStyle.BACKGROUND);
 		lower.add(dropsSection, BorderLayout.NORTH);
-		lower.add(PanelStyle.section("Counters", legend), BorderLayout.CENTER);
+		lower.add(PanelStyle.section("Counters", groupingTabs(), legend), BorderLayout.CENTER);
 
 		JPanel stack = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
 		stack.setBackground(PanelStyle.BACKGROUND);
