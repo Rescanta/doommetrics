@@ -278,6 +278,38 @@ public class CombatTrackerTest
 	}
 
 	/**
+	 * Taken from a trip's logs, where it cost the figure a third of itself. A bow firing into the
+	 * three ticks the sacrifice is expected in landed first, took the window, and the sacrifice
+	 * arriving on the same tick behind it found nothing open - so the figure gained a 58 it never
+	 * earned and lost the 25 it had. Blood Sacrifice always hits for 25, so the window says so.
+	 */
+	@Test
+	public void anAutoAttackDoesNotTakeTheBloodSacrificesWindow()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 8863);
+		tracker.damaged(37, 8864);
+
+		tracker.healed(25, 8871);
+		tracker.damaged(58, 8872);
+		tracker.damaged(25, 8872);
+
+		assertEquals(list("otherSpecDamage=37", "agsHeal=25", "otherSpecDamage=25"), recorded);
+	}
+
+	/**
+	 * The sacrifice is pinned to its own damage and nothing else is: a godsword swing rolls like
+	 * any other hit, so the swing's window still takes whatever lands in it.
+	 */
+	@Test
+	public void theSwingItselfIsStillWhateverItRolled()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100);
+		tracker.damaged(46, 101);
+
+		assertEquals(list("otherSpecDamage=46"), recorded);
+	}
+
+	/**
 	 * The heal lands nine ticks out, so the window has to start late as well as end late. Were it
 	 * an ordinary "within N ticks" the godsword would claim the barrage heals landing in between.
 	 */
