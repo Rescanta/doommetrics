@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.awt.Rectangle;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
@@ -12,6 +13,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.Scrollable;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
@@ -41,6 +43,9 @@ class RunDetailWindow extends JFrame
 {
 	/** Wide enough for the sidebar's longest name and its figure, and no wider. */
 	private static final int SIDEBAR_WIDTH = 224;
+
+	/** How far a notch of the wheel scrolls the sidebar. */
+	private static final int SCROLL_UNIT = 16;
 
 	private final DelveChart chart = new DelveChart();
 	private final RunLegendPanel legend = new RunLegendPanel();
@@ -315,8 +320,12 @@ class RunDetailWindow extends JFrame
 		stack.add(lower, BorderLayout.CENTER);
 
 		// The legend is a grid; wrapping it in a BorderLayout stops the viewport stretching its
-		// rows to fill the height.
-		JPanel top = new JPanel(new BorderLayout());
+		// rows to fill the height. Pinning its width stops the opposite: a row wider than the
+		// sidebar - a long heading, a lifetime figure - would otherwise be laid out at the width
+		// it asked for and have its last digits clipped off by the viewport, with no horizontal
+		// scrollbar to reach them by. Held to the width it has, a row squeezes its name instead,
+		// which is what its tooltip is for.
+		JPanel top = new ColumnWidth();
 		top.setBackground(PanelStyle.BACKGROUND);
 		top.add(stack, BorderLayout.NORTH);
 
@@ -325,8 +334,69 @@ class RunDetailWindow extends JFrame
 			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scroller.setBorder(BorderFactory.createEmptyBorder());
 		scroller.getViewport().setBackground(PanelStyle.BACKGROUND);
-		scroller.setPreferredSize(new Dimension(SIDEBAR_WIDTH, 0));
-		scroller.getVerticalScrollBar().setUnitIncrement(16);
+		scroller.getVerticalScrollBar().setUnitIncrement(SCROLL_UNIT);
+
+		// The sidebar plus a lane for the scrollbar, which is kept clear whether or not the bar is
+		// in it. A scrollbar that takes its width out of the rows relays every one of them as it
+		// appears, and it appears on a window short enough that the counters listed one per source
+		// do not fit while the same counters grouped into five do - so switching between the two
+		// moved every figure in the column sideways, twice, for a bar neither of them asked about.
+		// Given a lane of its own it comes and goes in the gap between the sidebar and the chart,
+		// where there was nothing to disturb, and the rows do not move at all.
+		int lane = scroller.getVerticalScrollBar().getPreferredSize().width;
+		scroller.setPreferredSize(new Dimension(SIDEBAR_WIDTH + lane, 0));
 		return scroller;
+	}
+
+	/**
+	 * The sidebar's contents, laid out at the sidebar's width whatever they would rather have and
+	 * whatever the viewport around them is doing - see {@link #sidebar()}.
+	 */
+	private static final class ColumnWidth extends JPanel implements Scrollable
+	{
+		private ColumnWidth()
+		{
+			super(new BorderLayout());
+		}
+
+		@Override
+		public Dimension getPreferredSize()
+		{
+			return new Dimension(SIDEBAR_WIDTH, super.getPreferredSize().height);
+		}
+
+		@Override
+		public Dimension getPreferredScrollableViewportSize()
+		{
+			return getPreferredSize();
+		}
+
+		@Override
+		public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction)
+		{
+			return SCROLL_UNIT;
+		}
+
+		@Override
+		public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction)
+		{
+			return visible.height;
+		}
+
+		/**
+		 * Never. The width is this component's own, so the lane the scrollbar sits in is left
+		 * empty when there is no bar in it rather than being handed to the rows.
+		 */
+		@Override
+		public boolean getScrollableTracksViewportWidth()
+		{
+			return false;
+		}
+
+		@Override
+		public boolean getScrollableTracksViewportHeight()
+		{
+			return false;
+		}
 	}
 }
