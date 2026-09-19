@@ -290,7 +290,9 @@ Behind the chevron icon, top to bottom:
   lets go of everything it holds in memory, lifetime figures included; what is saved stays saved
   and is read back when the plugin is next on and a character is logged in.
 
-The counters in the panel are always listed by icon, with the name one hover away.
+The counters in the panel are listed by name with their icon beside it. An inventory sprite
+shrunk to a line of text cannot tell three polearms apart, so the picture is there to find a row
+by rather than to name it; what feeds each counter is still a hover away.
 
 ## Milestones
 
@@ -391,8 +393,8 @@ to take the line off altogether - which also gives the counters left on the plot
 were sharing with it. A colour belongs to a counter for as long as the window is open, so switching
 one off never repaints the rest. With **Hide counters at 0** on, as it is by default, a counter the run has not
 counted anything on starts switched off, so the chart is not crowded with flat lines along the
-bottom; it comes on by itself once it counts, and a click puts it on sooner. The legend lists each counter by its icon; hovering the row names
-it.
+bottom; it comes on by itself once it counts, and a click puts it on sooner. The legend lists each counter by name with its icon beside it, as the side panel does; hovering
+the row says what feeds it.
 
 ### Drops
 
