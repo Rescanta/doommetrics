@@ -615,7 +615,7 @@ public class DelveRunTest
 		run.enterLevel(2, at(70));
 		run.complete(2, at(120), null);
 
-		assertTrue(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+		assertEquals(2, run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
 
 		List<DelveRun.Landed> landed = run.getLanded();
 		assertEquals(1, landed.size());
@@ -678,8 +678,9 @@ public class DelveRunTest
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
 
-		assertTrue(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
-		assertFalse(run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+		assertEquals(1, run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+		assertEquals(DelveRun.NOT_RECORDED,
+			run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
 
 		assertEquals(1, run.getLanded().size());
 	}
@@ -692,7 +693,7 @@ public class DelveRunTest
 		run.complete(1, at(60), null);
 		run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 2);
 
-		assertFalse(run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 0));
+		assertEquals(DelveRun.NOT_RECORDED, run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 0));
 
 		List<DelveRun.Landed> landed = run.getLanded();
 		assertEquals(1, landed.size());
@@ -707,11 +708,12 @@ public class DelveRunTest
 		run.pileAlreadyHeld(ItemID.EYE_OF_AYAK_UNCHARGED, 1);
 		run.complete(14, at(60), null);
 
-		assertFalse(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 1));
+		assertEquals(DelveRun.NOT_RECORDED,
+			run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 1));
 
 		run.enterLevel(15, at(70));
 		run.complete(15, at(120), null);
-		assertTrue(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 2));
+		assertEquals(15, run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 2));
 
 		List<DelveRun.Landed> landed = run.getLanded();
 		assertEquals(1, landed.size());
@@ -767,13 +769,15 @@ public class DelveRunTest
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
 		run.descending();
-		assertTrue(run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+		assertEquals(1, run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
 
 		run.enterLevel(2, at(70));
 		run.complete(2, at(120), null);
 		run.descending();
-		assertFalse("the cloth off delve 1", run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
-		assertTrue("a new one off delve 2", run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+		assertEquals("the cloth off delve 1", DelveRun.NOT_RECORDED,
+			run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+		assertEquals("a new one off delve 2", 2,
+			run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
 
 		List<DelveRun.Landed> landed = run.getLanded();
 		assertEquals(2, landed.size());
@@ -791,7 +795,7 @@ public class DelveRunTest
 		run.descending();
 		run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak");
 		run.descending();
-		assertFalse(run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak"));
+		assertEquals(DelveRun.NOT_RECORDED, run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak"));
 
 		assertEquals(1, run.getLanded().size());
 		assertEquals(1, run.held(ItemID.EYE_OF_AYAK));
@@ -807,13 +811,13 @@ public class DelveRunTest
 		DelveRun run = new DelveRun(START, 14, true);
 		run.complete(14, at(60), null);
 		run.descending();
-		assertFalse(run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
+		assertEquals(DelveRun.NOT_RECORDED, run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
 
 		run.enterLevel(15, at(70));
 		run.complete(15, at(120), null);
 		run.descending();
 		run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
-		assertTrue(run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
+		assertEquals(15, run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads"));
 
 		List<DelveRun.Landed> landed = run.getLanded();
 		assertEquals(1, landed.size());
@@ -855,9 +859,12 @@ public class DelveRunTest
 		assertEquals(2, landed.get(0).level);
 	}
 
-	/** A unique already in the pile being warned about says nothing about a new one. */
+	/**
+	 * A hole glowing over a unique the run already knows about says nothing new - it has been
+	 * glowing since that one dropped - so it places nothing.
+	 */
 	@Test
-	public void anOlderUniqueDoesNotNameANewUnknownOne()
+	public void aGlowOverAUniqueAlreadyKnownAboutPlacesNothing()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
@@ -866,13 +873,166 @@ public class DelveRunTest
 
 		run.enterLevel(2, at(70));
 		run.complete(2, at(120), null);
+
+		assertFalse(run.uniqueSignalled());
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(ItemID.MOKHAIOTL_CLOTH, landed.get(0).itemId);
+		assertEquals(1, landed.get(0).level);
+	}
+
+	/**
+	 * A second unique named while the glow's mark is still outstanding takes that mark over. The
+	 * glow never said which of them it meant, so the first named is the guess - what this pins is
+	 * that the mark is spent once and the second drop is placed on its own delve rather than lost.
+	 */
+	@Test
+	public void aSecondUniqueNamedWhileTheGlowIsOutstandingTakesTheMark()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
 		run.uniqueSignalled();
-		run.descending();
-		run.warnedOf(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth");
+
+		run.enterLevel(2, at(70));
+		run.complete(2, at(120), null);
+
+		// The pile read shows both at once: the glow's unique, and one it never spoke for.
+		assertEquals("the first named takes the glow's delve", 1,
+			run.sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1));
+		assertEquals("the second is placed where we stand", 2,
+			run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 1));
 
 		List<DelveRun.Landed> landed = run.getLanded();
 		assertEquals(2, landed.size());
+		assertEquals(ItemID.AVERNIC_TREADS, landed.get(0).itemId);
+		assertEquals(1, landed.get(0).level);
+		assertEquals(ItemID.MOKHAIOTL_CLOTH, landed.get(1).itemId);
+		assertEquals(2, landed.get(1).level);
+	}
+
+	/**
+	 * A duplicate pet drops into the pile and warns on every descend without ever lighting the
+	 * hole, so it is not what a later glow is about. The one after it still gets its mark.
+	 */
+	@Test
+	public void aDuplicatePetInThePileDoesNotSwallowALaterGlow()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		// Delve 1 dropped a pet this character already owns: the hole was left plain, and the
+		// descend warning is the first thing to say anything about it.
+		run.descending();
+		assertEquals(1, run.warnedOf(ItemID.DOMPET, "Dom"));
+
+		run.enterLevel(2, at(70));
+		run.complete(2, at(120), null);
+
+		assertTrue("delve 2 glowed, which the pet cannot account for", run.uniqueSignalled());
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(2, landed.size());
+		assertEquals(ItemID.DOMPET, landed.get(0).itemId);
+		assertEquals(1, landed.get(0).level);
 		assertEquals(DelveRun.UNKNOWN_UNIQUE, landed.get(1).itemId);
+		assertEquals(2, landed.get(1).level);
+	}
+
+	/**
+	 * The first pet a character is given does light the hole, and goes on lighting it while it
+	 * sits in the pile. A glow over that one says nothing the run does not already know.
+	 */
+	@Test
+	public void aPetTheGlowMarkedExplainsTheGlowsAfterIt()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		// Delve 1 glowed and the descend warning named what for: a first pet.
+		assertTrue(run.uniqueSignalled());
+		run.descending();
+		assertEquals("the pet keeps the delve the glow put it on", 1,
+			run.warnedOf(ItemID.DOMPET, "Dom"));
+
+		run.enterLevel(2, at(70));
+		run.complete(2, at(120), null);
+
+		assertFalse(run.uniqueSignalled());
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(ItemID.DOMPET, landed.get(0).itemId);
+		assertEquals(1, landed.get(0).level);
+	}
+
+	/** Named delves later, a drop still sits on the delve the glow put it on. */
+	@Test
+	public void aDropNamedLaterKeepsTheDelveTheGlowPutItOn()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.uniqueSignalled();
+
+		run.enterLevel(2, at(70));
+		run.complete(2, at(120), null);
+		assertEquals("the delve the glow put it on", 1,
+			run.sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 1));
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(ItemID.MOKHAIOTL_CLOTH, landed.get(0).itemId);
+		assertEquals(1, landed.get(0).level);
+	}
+
+	/**
+	 * A run joined part way through marks the glow too. The drop may have come off a delve nobody
+	 * watched, but the delve it was cleared by is the only one such a run can name.
+	 */
+	@Test
+	public void aJoinedRunMarksAGlowingHoleOnTheDelveItWasClearedBy()
+	{
+		DelveRun run = new DelveRun(START, 5, true);
+		run.complete(5, at(60), null);
+
+		assertTrue(run.uniqueSignalled());
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(DelveRun.UNKNOWN_UNIQUE, landed.get(0).itemId);
+		assertEquals(5, landed.get(0).level);
+	}
+
+	/** A pile read as the run was picked up is a pile the run knows about, so the glow adds nothing. */
+	@Test
+	public void aGlowOverAPileReadAsTheRunWasJoinedPlacesNothing()
+	{
+		DelveRun run = new DelveRun(START, 5, true);
+		run.pileAlreadyHeld(ItemID.EYE_OF_AYAK_UNCHARGED, 1);
+		run.complete(5, at(60), null);
+
+		assertFalse(run.uniqueSignalled());
+		assertTrue(run.getLanded().isEmpty());
+	}
+
+	/**
+	 * A warning about a pile a joined run inherited places nothing of its own, but it does name
+	 * the mark the glow put up - which is worth more than a question mark.
+	 */
+	@Test
+	public void anUntrustedWarningNamesTheUnknownWithoutPlacingADrop()
+	{
+		DelveRun run = new DelveRun(START, 5, true);
+		run.complete(5, at(60), null);
+		run.uniqueSignalled();
+
+		run.descending();
+		run.warnedOf(ItemID.AVERNIC_TREADS, "Avernic treads");
+
+		List<DelveRun.Landed> landed = run.getLanded();
+		assertEquals(1, landed.size());
+		assertEquals(ItemID.AVERNIC_TREADS, landed.get(0).itemId);
+		assertEquals(5, landed.get(0).level);
 	}
 
 	/**
@@ -886,8 +1046,9 @@ public class DelveRunTest
 		run.complete(1, at(60), null);
 		run.descending();
 
-		assertTrue(run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak"));
-		assertFalse(run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)", 1));
+		assertEquals(1, run.warnedOf(ItemID.EYE_OF_AYAK, "Eye of ayak"));
+		assertEquals(DelveRun.NOT_RECORDED,
+			run.sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)", 1));
 
 		assertEquals(1, run.getLanded().size());
 		assertEquals(1, run.held(ItemID.EYE_OF_AYAK));
@@ -906,7 +1067,7 @@ public class DelveRunTest
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
 
-		assertFalse(run.sawInPile(ItemID.AVERNIC_TREADS, null, 1));
+		assertEquals(DelveRun.NOT_RECORDED, run.sawInPile(ItemID.AVERNIC_TREADS, null, 1));
 		assertTrue(run.getLanded().isEmpty());
 	}
 }

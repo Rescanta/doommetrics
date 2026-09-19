@@ -398,6 +398,19 @@ for the pet, from the line the game posts as you claim. Only a count going up pl
 eye off delve 10 is on delve 10 alone however many times you are warned about it, and a second eye
 off delve 20 is on delve 20 alone.
 
+A hole left glowing by a unique you have not seen yet is drawn as a gold question mark on the
+delve it was cleared by, and says in the list what it could be. The glow is the only word the game
+gives a client before you investigate the pile, try to descend or claim, so the mark is what stands
+there until one of those names the drop - at which point the real item takes its place, on the
+delve the glow put it on. Only one is ever drawn at a time: the hole goes on glowing for as long as
+a unique sits unclaimed in the pile, so a glow over one you already know about is saying nothing
+new. The pet is the exception: only the first one a character is ever given lights the hole, and
+every duplicate after that lands in the pile without lighting anything, so a pet the hole never
+glowed for is not held against a later glow. A mark still standing when the run ends was a drop the
+run lost, since every way of walking out with it would have named it. A run picked up part way through - the plugin switched on, or the
+client restarted, mid-delve - marks a glowing hole on the delve it was cleared by, which is the
+only delve such a run can name: the drop may well have come off one nobody watched.
+
 A drop you did not walk out with - still in the pile when you died, or left behind - stays where
 it dropped, faded. The pet is no exception: the game only hands it over with the claim, so a death
 loses it with the rest of the pile. Drops close enough together to overlap are stacked, and

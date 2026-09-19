@@ -44,6 +44,17 @@ import net.runelite.client.eventbus.Subscribe;
  * every descend. What is not known is which of those reach the client as something a plugin can
  * read, and in what order. This logs all of the candidates and decides nothing.
  *
+ * <p>One of them is answered: the hole a cleared delve is left by spawns as
+ * {@code DOM_DESCEND_HOLE_UNIQUE} rather than {@code DOM_DESCEND_HOLE} while the pile holds a
+ * unique, a few ticks after the boss dies and before the player touches anything - which is what
+ * {@link DoomMetricsPlugin#onGameObjectSpawned} reads. The hole then stays that way until the loot
+ * is claimed or the run ends, so it says the pile holds a unique rather than that this delve
+ * dropped one.
+ *
+ * <p>Still open: the sound. It plays on the delve that drops the unique and not on the ones after
+ * it, so it is the one thing that could place a second unique in a run the glow has already
+ * spoken for - if the game is what plays it, rather than another plugin watching the same drop.
+ *
  * <p>Only on the event bus while the debug logging setting is on - the plugin puts it there and
  * takes it off again as the setting changes - and only writing in the stretches where a drop can be
  * shown: from the boss's death to the next delve starting, and for a while after a run ends so the

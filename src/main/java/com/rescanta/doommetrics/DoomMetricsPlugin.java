@@ -35,6 +35,7 @@ import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GraphicChanged;
@@ -51,6 +52,7 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
+import net.runelite.api.gameval.ObjectID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
@@ -812,9 +814,10 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		int pets = Math.max(1, run.held(ItemID.DOMPET));
-		run.sawInPile(ItemID.DOMPET, itemName(ItemID.DOMPET), pets);
+		int delve = run.sawInPile(ItemID.DOMPET, itemName(ItemID.DOMPET), pets);
 		recordLoot(ItemID.DOMPET, pets);
-		log.debug("Pet claimed, from delve {}", run.dropLevel());
+		log.debug("Pet claimed, from delve {}",
+			delve == DelveRun.NOT_RECORDED ? run.dropLevel() : delve);
 	}
 
 	/**
@@ -859,8 +862,9 @@ public class DoomMetricsPlugin extends Plugin
 				return;
 			}
 
-			boolean placed = run.warnedOf(itemId, itemName(itemId));
-			log.debug("Loot warning for item {} on delve {}, placed: {}", itemId, run.dropLevel(), placed);
+			int delve = run.warnedOf(itemId, itemName(itemId));
+			log.debug("Loot warning for item {} while on delve {}, recorded on delve {}",
+				itemId, run.dropLevel(), delve == DelveRun.NOT_RECORDED ? "none" : delve);
 		});
 	}
 
@@ -977,10 +981,13 @@ public class DoomMetricsPlugin extends Plugin
 
 		drops.forEach((itemId, quantity) ->
 		{
-			if (run.sawInPile(itemId, itemName(itemId), quantity))
+			// The delve it was written down on rather than the one we are standing on: a drop the
+			// glow had already marked keeps the glow's delve, and the two are not the same.
+			int delve = run.sawInPile(itemId, itemName(itemId), quantity);
+
+			if (delve != DelveRun.NOT_RECORDED)
 			{
-				log.debug("Item {} landed on delve {}, pile now holds {}",
-					itemId, run.dropLevel(), quantity);
+				log.debug("Item {} recorded on delve {}, pile now holds {}", itemId, delve, quantity);
 			}
 		});
 
@@ -1975,6 +1982,37 @@ public class DoomMetricsPlugin extends Plugin
 		if (event.getNpc() == boss)
 		{
 			boss = null;
+		}
+	}
+
+	/**
+	 * The hole a cleared delve is left by, which comes up as the glowing one while there is a
+	 * unique in the pile - the only sign of a drop the game gives a client that touches nothing.
+	 * Everything else that names a unique waits on the pile being investigated, a descend being
+	 * tried or the loot being claimed, and a player who descends straight past all three would
+	 * otherwise have the drop appear out of nowhere at the end of the run.
+	 *
+	 * <p>Only between delves, which is where a cleared delve's hole belongs. The scene sends every
+	 * object in it again whenever it is rebuilt, so this fires for the same hole more than once -
+	 * which places nothing more, see {@link DelveRun#uniqueSignalled}.
+	 *
+	 * <p>Written without the timing every other handler carries: this runs for every object the
+	 * scene spawns, so what it does before the id fails to match is all it costs the other ten
+	 * thousand.
+	 */
+	@Subscribe
+	public void onGameObjectSpawned(GameObjectSpawned event)
+	{
+		if (event.getGameObject().getId() != ObjectID.DOM_DESCEND_HOLE_UNIQUE || run == null
+			|| !run.isBetweenDelves())
+		{
+			return;
+		}
+
+		if (run.uniqueSignalled())
+		{
+			log.debug("Delve {} was left by the glowing hole: a unique is in the pile",
+				run.dropLevel());
 		}
 	}
 
