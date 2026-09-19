@@ -20,11 +20,13 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.ui.components.materialtabs.MaterialTab;
+import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
  * The side panel: the run in progress on top, the sitting beside the character's lifetime under it,
- * then the sitting's combat figures, the lifetime milestone table, a button that opens the run
- * detail window, and one that starts the session over.
+ * then the combat figures, the lifetime milestone table, a button that opens the run detail window,
+ * and one that starts the session over.
  *
  * <p>The run is drawn as two large figures with the rest of it in small type beneath, because
  * there are only two things a player reads while they are being hit - which delve they are on and
@@ -188,6 +190,19 @@ class DoomMetricsPanel extends PluginPanel
 	private final JPanel runCard = PanelStyle.column(4);
 	private final JPanel runRows = PanelStyle.column(PanelStyle.ROW_GAP);
 	private final CombatTablePanel combatPanel = new CombatTablePanel();
+
+	/** The two tallies the combat table can draw, the tab in front deciding which it does. */
+	private CombatTotals sessionCombat;
+	private CombatTotals lifetimeCombat;
+
+	/** Whether the tab in front is the lifetime one. */
+	private boolean showingLifetime;
+
+	private final MaterialTabGroup combatTabs = new MaterialTabGroup();
+
+	/** The two tabs, kept so {@link #showLifetime} can put either in front. */
+	private MaterialTab sessionTab;
+	private MaterialTab lifetimeTab;
 	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("No delves completed yet.");
 
 	private final JLabel idleLabel = PanelStyle.caption("No run in progress",
@@ -235,7 +250,7 @@ class DoomMetricsPanel extends PluginPanel
 		// The sitting and the character's lifetime above the tables: what is being earned right
 		// now is what a player glances at mid-run, and the rest is what they scroll to.
 		add(PanelStyle.section("Session & lifetime", PanelStyle.card(compare())));
-		add(PanelStyle.section("Session combat", combatPanel));
+		add(PanelStyle.section("Combat", combatSection()));
 		add(PanelStyle.section("Milestones", tablePanel));
 		add(button("Open run detail", "Break this run down delve by delve, in a window of its own",
 			onOpenDetail));
@@ -245,7 +260,7 @@ class DoomMetricsPanel extends PluginPanel
 
 		setLive(null);
 		setStats(null);
-		setCombat(null);
+		setCombat(null, null);
 		setRows(Collections.emptyList());
 	}
 
@@ -330,16 +345,84 @@ class DoomMetricsPanel extends PluginPanel
 	}
 
 	/**
-	 * Repaints the sitting's combat figures, the run in progress included. A null tally reads as
-	 * all zeroes - between sittings there is nothing being earned, and that is not the same as
-	 * leaving this morning's numbers up as though there were.
+	 * Repaints the combat table from both tallies: the sitting's, the run in progress included,
+	 * and the character's lifetime.
+	 *
+	 * <p>A null tally reads as all zeroes. The sitting's is null between sittings - there is
+	 * nothing being earned, and that is not the same as leaving this morning's numbers up as
+	 * though there were. The character's is handed over whatever the sitting is doing: it is not
+	 * the evening's to go quiet with, and it is the figure the panel is opened for when there is
+	 * no run to watch.
 	 */
-	void setCombat(CombatTotals totals)
+	void setCombat(CombatTotals session, CombatTotals lifetime)
 	{
-		combatPanel.setTotals(totals);
+		sessionCombat = session;
+		lifetimeCombat = lifetime;
+		drawCombat();
 	}
 
-	/** @param icons the pictures to draw in place of the counters' names - see {@link Icons} */
+	/** Draws whichever of the two tallies the tab in front is for. */
+	private void drawCombat()
+	{
+		combatPanel.setTotals(showingLifetime ? lifetimeCombat : sessionCombat);
+	}
+
+	/**
+	 * The combat table, under a tab each for the sitting and the character's lifetime.
+	 *
+	 * <p>One table behind two tabs rather than two tables down the panel: the rows are the same
+	 * counters either way, and stacked they would read as sixteen figures where there are eight
+	 * counted twice. Each tab's meters are filled against the largest figure in the tally on show,
+	 * so both answer which source is carrying it - against a lifetime the sitting is a rounding
+	 * error of, one shared scale would leave every row of the evening empty.
+	 */
+	private JComponent combatSection()
+	{
+		combatTabs.setBorder(new EmptyBorder(0, 0, 4, 0));
+
+		sessionTab = combatTab("Session", false,
+			"What this sitting has counted, the run in progress included");
+		lifetimeTab = combatTab("Lifetime", true,
+			"<html>What this character has counted, every sitting added up."
+				+ "<br>Added to as each delve is cleared, so it holds what the run in progress has"
+				+ "<br>banked rather than what it is part way through earning.</html>");
+		combatTabs.select(sessionTab);
+
+		JPanel panel = new JPanel(new BorderLayout());
+		panel.setBackground(PanelStyle.BACKGROUND);
+		panel.add(combatTabs, BorderLayout.NORTH);
+		panel.add(combatPanel, BorderLayout.CENTER);
+		return panel;
+	}
+
+	/** One of the combat section's tabs, which puts its own tally in the table as it is picked. */
+	private MaterialTab combatTab(String name, boolean lifetime, String tooltip)
+	{
+		MaterialTab tab = new MaterialTab(name, combatTabs, null);
+		tab.setToolTipText(tooltip);
+		tab.setOnSelectEvent(() ->
+		{
+			showingLifetime = lifetime;
+			drawCombat();
+			return true;
+		});
+
+		combatTabs.addTab(tab);
+		return tab;
+	}
+
+	/**
+	 * Puts either combat tab in front, for the preview harness - in the plugin nothing but a click
+	 * moves them, and the panel opens on the sitting's.
+	 *
+	 * <p>Idempotent: picking the tab already in front does nothing at all.
+	 */
+	void showLifetime(boolean lifetime)
+	{
+		combatTabs.select(lifetime ? lifetimeTab : sessionTab);
+	}
+
+	/** @param icons the pictures to draw beside the counters' names - see {@link Icons} */
 	void setIcons(Icons icons)
 	{
 		combatPanel.setIcons(icons);

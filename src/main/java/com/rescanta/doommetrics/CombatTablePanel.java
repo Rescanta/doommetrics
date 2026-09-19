@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.image.BufferedImage;
 import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -38,7 +39,7 @@ class CombatTablePanel extends JPanel
 	/** The rows, in declaration order, so an update is a setText and a fill per metric. */
 	private final MeterRow[] rows = new MeterRow[CombatMetric.values().length];
 
-	/** What each row's name is drawn as - a picture where there is one, the words otherwise. */
+	/** The pictures drawn beside the rows' names, or none while they are still on their way. */
 	private Icons icons = Icons.NONE;
 
 	CombatTablePanel()
@@ -74,8 +75,8 @@ class CombatTablePanel extends JPanel
 	}
 
 	/**
-	 * @param icons the pictures to draw in place of the counters' names. Handed over again as they
-	 *              arrive from the game, and a name stays in words until its picture has.
+	 * @param icons the pictures to draw beside the counters' names. Handed over again as they
+	 *              arrive from the game, and a row stands on its name alone until its picture has.
 	 */
 	void setIcons(Icons icons)
 	{
@@ -157,6 +158,12 @@ class CombatTablePanel extends JPanel
 		/** How much of the row the meter fills, from nothing to {@link PanelStyle#METER_WIDTH}. */
 		private double fill;
 
+		/**
+		 * What the name was last drawn with, so the pictures arriving one at a time redraw the
+		 * rows waiting on theirs and leave the rows already holding one alone.
+		 */
+		private BufferedImage shownIcon;
+
 		private MeterRow(CombatMetric metric, Color stripe)
 		{
 			super(new BorderLayout());
@@ -168,12 +175,14 @@ class CombatTablePanel extends JPanel
 			value.setBorder(PanelStyle.CELL_PADDING);
 
 			setBackground(stripe);
-			add(label, BorderLayout.WEST);
+			// The name in the middle and the figure on the edge, so a row too narrow for both
+			// takes it out of the name - which the row's tooltip still spells out - rather than
+			// clipping digits off a lifetime figure, which nothing else says.
+			add(label, BorderLayout.CENTER);
 			add(value, BorderLayout.EAST);
 
-			// On the row rather than the label, so the gap beside a short name answers too, and so
-			// the name is there to be read when an icon stands in for it. The figure keeps its own
-			// tooltip, which Swing shows in preference while over it.
+			// On the row rather than the label, so the gap beside a short name answers too. The
+			// figure keeps its own tooltip, which Swing shows in preference while over it.
 			List<String> sources = metric.sources();
 
 			setToolTipText(sources.isEmpty()
@@ -184,7 +193,15 @@ class CombatTablePanel extends JPanel
 
 		private void showName(Icons icons)
 		{
-			PanelStyle.nameOrIcon(label, metric.label(), icons.smallCounter(metric));
+			BufferedImage icon = icons.smallCounter(metric);
+
+			if (icon == shownIcon)
+			{
+				return;
+			}
+
+			shownIcon = icon;
+			PanelStyle.nameAndIcon(label, metric.label(), icon);
 		}
 
 		/**

@@ -35,6 +35,7 @@ import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GraphicChanged;
@@ -51,6 +52,7 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
+import net.runelite.api.gameval.ObjectID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
@@ -812,9 +814,10 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		int pets = Math.max(1, run.held(ItemID.DOMPET));
-		run.sawInPile(ItemID.DOMPET, itemName(ItemID.DOMPET), pets);
+		int delve = run.sawInPile(ItemID.DOMPET, itemName(ItemID.DOMPET), pets);
 		recordLoot(ItemID.DOMPET, pets);
-		log.debug("Pet claimed, from delve {}", run.dropLevel());
+		log.debug("Pet claimed, from delve {}",
+			delve == DelveRun.NOT_RECORDED ? run.dropLevel() : delve);
 	}
 
 	/**
@@ -859,8 +862,9 @@ public class DoomMetricsPlugin extends Plugin
 				return;
 			}
 
-			boolean placed = run.warnedOf(itemId, itemName(itemId));
-			log.debug("Loot warning for item {} on delve {}, placed: {}", itemId, run.dropLevel(), placed);
+			int delve = run.warnedOf(itemId, itemName(itemId));
+			log.debug("Loot warning for item {} while on delve {}, recorded on delve {}",
+				itemId, run.dropLevel(), delve == DelveRun.NOT_RECORDED ? "none" : delve);
 		});
 	}
 
@@ -977,10 +981,13 @@ public class DoomMetricsPlugin extends Plugin
 
 		drops.forEach((itemId, quantity) ->
 		{
-			if (run.sawInPile(itemId, itemName(itemId), quantity))
+			// The delve it was written down on rather than the one we are standing on: a drop the
+			// glow had already marked keeps the glow's delve, and the two are not the same.
+			int delve = run.sawInPile(itemId, itemName(itemId), quantity);
+
+			if (delve != DelveRun.NOT_RECORDED)
 			{
-				log.debug("Item {} landed on delve {}, pile now holds {}",
-					itemId, run.dropLevel(), quantity);
+				log.debug("Item {} recorded on delve {}, pile now holds {}", itemId, delve, quantity);
 			}
 		});
 
@@ -1978,6 +1985,37 @@ public class DoomMetricsPlugin extends Plugin
 		}
 	}
 
+	/**
+	 * The hole a cleared delve is left by, which comes up as the glowing one while there is a
+	 * unique in the pile - the only sign of a drop the game gives a client that touches nothing.
+	 * Everything else that names a unique waits on the pile being investigated, a descend being
+	 * tried or the loot being claimed, and a player who descends straight past all three would
+	 * otherwise have the drop appear out of nowhere at the end of the run.
+	 *
+	 * <p>Only between delves, which is where a cleared delve's hole belongs. The scene sends every
+	 * object in it again whenever it is rebuilt, so this fires for the same hole more than once -
+	 * which places nothing more, see {@link DelveRun#uniqueSignalled}.
+	 *
+	 * <p>Written without the timing every other handler carries: this runs for every object the
+	 * scene spawns, so what it does before the id fails to match is all it costs the other ten
+	 * thousand.
+	 */
+	@Subscribe
+	public void onGameObjectSpawned(GameObjectSpawned event)
+	{
+		if (event.getGameObject().getId() != ObjectID.DOM_DESCEND_HOLE_UNIQUE || run == null
+			|| !run.isBetweenDelves())
+		{
+			return;
+		}
+
+		if (run.uniqueSignalled())
+		{
+			log.debug("Delve {} was left by the glowing hole: a unique is in the pile",
+				run.dropLevel());
+		}
+	}
+
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
@@ -2581,11 +2619,15 @@ public class DoomMetricsPlugin extends Plugin
 		// across to a panel that would draw the same numbers again.
 		CombatTotals combat = showCombat ? combatSnapshot() : null;
 
+		// Handed over whether or not a sitting is going: the lifetime tab is the one left worth
+		// reading between runs, and a delve banked while the panel sits idle still moves it.
+		CombatTotals lifetimeShown = lifetimeCombat.copy();
+
 		SwingUtilities.invokeLater(() ->
 		{
 			target.setLive(live);
 			target.setStats(stats);
-			target.setCombat(combat);
+			target.setCombat(combat, lifetimeShown);
 
 			// Held so a window opened between two ticks has a head to draw, rather than sitting
 			// blank until the next figure moves.
@@ -2608,25 +2650,23 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	/**
-	 * Enough of the sitting's tally to tell one repaint from the next, read straight out of the two
-	 * tallies rather than out of a snapshot of them - the point is to decide whether a snapshot is
+	 * Enough of both tallies the panel can draw to tell one repaint from the next, read straight
+	 * out of them rather than out of a snapshot - the point is to decide whether a snapshot is
 	 * worth taking.
 	 *
-	 * <p>Empty between sittings, which is also what the panel is shown: there is nothing being
-	 * earned, and leaving this morning's numbers up would say otherwise.
+	 * <p>The sitting's reads as zeroes between sittings, which is also what the panel is shown:
+	 * there is nothing being earned, and leaving this morning's numbers up would say otherwise.
+	 * The character's is always in the key, because the lifetime tab is drawn between sittings
+	 * too and a delve banked into it has to reach the panel.
 	 */
 	private String combatKey(boolean showCombat)
 	{
-		if (!showCombat)
-		{
-			return "";
-		}
-
 		StringBuilder key = new StringBuilder();
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
-			key.append(sessionCombat.get(metric)).append(',');
+			key.append(showCombat ? sessionCombat.get(metric) : 0).append(',')
+				.append(lifetimeCombat.get(metric)).append(',');
 		}
 
 		return key.toString();

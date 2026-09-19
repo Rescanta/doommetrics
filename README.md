@@ -272,10 +272,16 @@ Behind the chevron icon, top to bottom:
   and its length does not count the time spent logged out. After half an hour without a run the
   rows go blank so they do not look current, and the next run brings the session back.
 - **Lifetime** - the same rate and delve count over everything this character has ever done.
-  Both columns, and the lifetime combat counters behind them, are added to as each delve is
+  Both columns, and the lifetime combat counters under them, are added to as each delve is
   cleared rather than when the run ends, so closing the client mid-run keeps every delve cleared
   before it. A run picked up part way into a delve leaves that clear out of the rates, since
   nobody saw when that delve began.
+- **Combat** - what your gear gave back, a row per source under the heading it belongs to, with a
+  meter behind each figure filled against the largest figure counted in the same unit. The
+  **Session** and **Lifetime** tabs put the same rows on this sitting's tally and on the
+  character's; the meters refill against whichever is on show, so each tab says which source is
+  carrying it on its own terms. The lifetime tab is worth reading between runs - it is the one
+  figure here that does not go quiet when a sitting ends.
 - **Milestones** - the lifetime table, below.
 - **Open run detail** - this run, delve by delve, in a window of its own.
 - **Reset session** - starts the session over and drops the run in progress, after asking, letting
@@ -284,7 +290,9 @@ Behind the chevron icon, top to bottom:
   lets go of everything it holds in memory, lifetime figures included; what is saved stays saved
   and is read back when the plugin is next on and a character is logged in.
 
-The counters in the panel are always listed by icon, with the name one hover away.
+The counters in the panel are listed by name with their icon beside it. An inventory sprite
+shrunk to a line of text cannot tell three polearms apart, so the picture is there to find a row
+by rather than to name it; what feeds each counter is still a hover away.
 
 ## Milestones
 
@@ -385,8 +393,8 @@ to take the line off altogether - which also gives the counters left on the plot
 were sharing with it. A colour belongs to a counter for as long as the window is open, so switching
 one off never repaints the rest. With **Hide counters at 0** on, as it is by default, a counter the run has not
 counted anything on starts switched off, so the chart is not crowded with flat lines along the
-bottom; it comes on by itself once it counts, and a click puts it on sooner. The legend lists each counter by its icon; hovering the row names
-it.
+bottom; it comes on by itself once it counts, and a click puts it on sooner. The legend lists each counter by name with its icon beside it, as the side panel does; hovering
+the row says what feeds it.
 
 ### Drops
 
@@ -397,6 +405,19 @@ placed when the run first learns there is one more of it than before: from the l
 for the pet, from the line the game posts as you claim. Only a count going up places anything, so an
 eye off delve 10 is on delve 10 alone however many times you are warned about it, and a second eye
 off delve 20 is on delve 20 alone.
+
+A hole left glowing by a unique you have not seen yet is drawn as a gold question mark on the
+delve it was cleared by, and says in the list what it could be. The glow is the only word the game
+gives a client before you investigate the pile, try to descend or claim, so the mark is what stands
+there until one of those names the drop - at which point the real item takes its place, on the
+delve the glow put it on. Only one is ever drawn at a time: the hole goes on glowing for as long as
+a unique sits unclaimed in the pile, so a glow over one you already know about is saying nothing
+new. The pet is the exception: only the first one a character is ever given lights the hole, and
+every duplicate after that lands in the pile without lighting anything, so a pet the hole never
+glowed for is not held against a later glow. A mark still standing when the run ends was a drop the
+run lost, since every way of walking out with it would have named it. A run picked up part way through - the plugin switched on, or the
+client restarted, mid-delve - marks a glowing hole on the delve it was cleared by, which is the
+only delve such a run can name: the drop may well have come off one nobody watched.
 
 A drop you did not walk out with - still in the pile when you died, or left behind - stays where
 it dropped, faded. The pet is no exception: the game only hands it over with the claim, so a death

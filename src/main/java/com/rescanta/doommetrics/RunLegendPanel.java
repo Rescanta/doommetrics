@@ -68,7 +68,7 @@ class RunLegendPanel extends JPanel
 
 	private RunDetail detail = RunDetail.empty();
 
-	/** What each row's name is drawn as - a picture where there is one, the words otherwise. */
+	/** The pictures drawn beside the rows' names, or none while they are still on their way. */
 	private Icons icons = Icons.NONE;
 
 	/** The delve being read out, or 0 for the whole run. */
@@ -153,8 +153,8 @@ class RunLegendPanel extends JPanel
 	}
 
 	/**
-	 * @param icons the pictures to draw in place of the counters' names. Handed over again as they
-	 *              arrive from the game, and a name stays in words until its picture has.
+	 * @param icons the pictures to draw beside the counters' names. Handed over again as they
+	 *              arrive from the game, and a row stands on its name alone until its picture has.
 	 */
 	void setIcons(Icons icons)
 	{
@@ -386,7 +386,7 @@ class RunLegendPanel extends JPanel
 			repaint();
 		}
 
-		/** The name, or the icon standing in for it - faded while the line is off, as the words are. */
+		/** The name and the picture beside it, the picture faded while the line is off as the words are. */
 		private void showName()
 		{
 			BufferedImage icon = icons.smallCounter(metric);
@@ -398,7 +398,7 @@ class RunLegendPanel extends JPanel
 
 			shownIcon = icon;
 			shownOff = off;
-			PanelStyle.nameOrIcon(name, metric.label(),
+			PanelStyle.nameAndIcon(name, metric.label(),
 				icon == null || !off ? icon : IconArt.fade(icon, OFF_ALPHA));
 		}
 
