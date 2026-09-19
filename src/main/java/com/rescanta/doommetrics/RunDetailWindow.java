@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.awt.Rectangle;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
@@ -12,10 +13,13 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.Scrollable;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.components.materialtabs.MaterialTab;
+import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
  * A window of its own, outside the side panel and outside the client: one run, taken apart delve
@@ -33,6 +37,12 @@ import net.runelite.client.ui.ColorScheme;
  * <p>The chart wants far more width than a side panel has, and its legend wants a column beside it,
  * so all of it lives here rather than being cramped to fit next to the client.
  *
+ * <p>The counters are read either way from here: separately, a line per source, or grouped, a line
+ * per heading. The tab that picks between them sits on the Counters heading rather than in the
+ * config because it is a question about the run in front of you - which way round this one is
+ * legible - and the answer changes from one run to the next. The overlay's own grouping setting is
+ * left alone by it: that one is about a display that is up while you fight, and this is not.
+ *
  * <p>Swing thread only. The plugin owns the single instance and disposes it on shutdown; closing
  * the window disposes it and tells the plugin to forget it, so the next open builds a fresh one
  * rather than resurrecting a disposed frame.
@@ -42,9 +52,18 @@ class RunDetailWindow extends JFrame
 	/** Wide enough for the sidebar's longest name and its figure, and no wider. */
 	private static final int SIDEBAR_WIDTH = 224;
 
+	/** How far a notch of the wheel scrolls the sidebar. */
+	private static final int SCROLL_UNIT = 16;
+
 	private final DelveChart chart = new DelveChart();
 	private final RunLegendPanel legend = new RunLegendPanel();
 	private final RunDropsPanel drops = new RunDropsPanel();
+
+	/** Which way the counters are read, one tab each - see {@link #groupingTabs()}. */
+	private final MaterialTabGroup grouping = new MaterialTabGroup();
+
+	private MaterialTab separateTab;
+	private MaterialTab groupedTab;
 
 	/** The drops, under their heading - only on show for a run that has any. */
 	private final JPanel dropsSection = PanelStyle.section("Drops", drops);
@@ -297,6 +316,52 @@ class RunDetailWindow extends JFrame
 	}
 
 	/**
+	 * The tabs that pick how the counters are read, on the Counters heading.
+	 *
+	 * <p>The same pair the side panel's combat table is read by, for the same reason: two ways of
+	 * looking at one set of figures, only one of them up at a time, and nothing lost by switching.
+	 */
+	private MaterialTabGroup groupingTabs()
+	{
+		separateTab = groupingTab("Sources", false,
+			"A line for each counter, named by what it counts");
+		groupedTab = groupingTab("Grouped", true,
+			"<html>A line for each heading, summing the counters under it."
+				+ "<br>Counts the sources with no line of their own too - a punish thrown"
+				+ "<br>with a weapon this plugin does not name is in the figure here.</html>");
+		grouping.select(separateTab);
+		return grouping;
+	}
+
+	private MaterialTab groupingTab(String name, boolean grouped, String tooltip)
+	{
+		MaterialTab tab = new MaterialTab(name, grouping, null);
+		tab.setToolTipText(tooltip);
+		tab.setOnSelectEvent(() ->
+		{
+			// The chart first: the legend answers by handing over the lines that are off, and
+			// which lines those are depends on which of them the chart is drawing.
+			chart.setGrouped(grouped);
+			legend.setGrouped(grouped);
+			return true;
+		});
+
+		grouping.addTab(tab);
+		return tab;
+	}
+
+	/**
+	 * Puts either way of reading the counters up, for the preview harness - in the plugin nothing
+	 * but a click moves them, and the window opens on the separate lines.
+	 *
+	 * <p>Idempotent: picking the tab already in front does nothing at all.
+	 */
+	void showGrouped(boolean grouped)
+	{
+		grouping.select(grouped ? groupedTab : separateTab);
+	}
+
+	/**
 	 * The run's own figures over its drops and the legend, stacked and scrolled together. Their
 	 * height is eight counters under five headings and a drop or two, so they scroll only when
 	 * the window is made short enough to need it.
@@ -307,7 +372,7 @@ class RunDetailWindow extends JFrame
 		JPanel lower = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
 		lower.setBackground(PanelStyle.BACKGROUND);
 		lower.add(dropsSection, BorderLayout.NORTH);
-		lower.add(PanelStyle.section("Counters", legend), BorderLayout.CENTER);
+		lower.add(PanelStyle.section("Counters", groupingTabs(), legend), BorderLayout.CENTER);
 
 		JPanel stack = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
 		stack.setBackground(PanelStyle.BACKGROUND);
@@ -315,8 +380,12 @@ class RunDetailWindow extends JFrame
 		stack.add(lower, BorderLayout.CENTER);
 
 		// The legend is a grid; wrapping it in a BorderLayout stops the viewport stretching its
-		// rows to fill the height.
-		JPanel top = new JPanel(new BorderLayout());
+		// rows to fill the height. Pinning its width stops the opposite: a row wider than the
+		// sidebar - a long heading, a lifetime figure - would otherwise be laid out at the width
+		// it asked for and have its last digits clipped off by the viewport, with no horizontal
+		// scrollbar to reach them by. Held to the width it has, a row squeezes its name instead,
+		// which is what its tooltip is for.
+		JPanel top = new ColumnWidth();
 		top.setBackground(PanelStyle.BACKGROUND);
 		top.add(stack, BorderLayout.NORTH);
 
@@ -325,8 +394,69 @@ class RunDetailWindow extends JFrame
 			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scroller.setBorder(BorderFactory.createEmptyBorder());
 		scroller.getViewport().setBackground(PanelStyle.BACKGROUND);
-		scroller.setPreferredSize(new Dimension(SIDEBAR_WIDTH, 0));
-		scroller.getVerticalScrollBar().setUnitIncrement(16);
+		scroller.getVerticalScrollBar().setUnitIncrement(SCROLL_UNIT);
+
+		// The sidebar plus a lane for the scrollbar, which is kept clear whether or not the bar is
+		// in it. A scrollbar that takes its width out of the rows relays every one of them as it
+		// appears, and it appears on a window short enough that the counters listed one per source
+		// do not fit while the same counters grouped into five do - so switching between the two
+		// moved every figure in the column sideways, twice, for a bar neither of them asked about.
+		// Given a lane of its own it comes and goes in the gap between the sidebar and the chart,
+		// where there was nothing to disturb, and the rows do not move at all.
+		int lane = scroller.getVerticalScrollBar().getPreferredSize().width;
+		scroller.setPreferredSize(new Dimension(SIDEBAR_WIDTH + lane, 0));
 		return scroller;
+	}
+
+	/**
+	 * The sidebar's contents, laid out at the sidebar's width whatever they would rather have and
+	 * whatever the viewport around them is doing - see {@link #sidebar()}.
+	 */
+	private static final class ColumnWidth extends JPanel implements Scrollable
+	{
+		private ColumnWidth()
+		{
+			super(new BorderLayout());
+		}
+
+		@Override
+		public Dimension getPreferredSize()
+		{
+			return new Dimension(SIDEBAR_WIDTH, super.getPreferredSize().height);
+		}
+
+		@Override
+		public Dimension getPreferredScrollableViewportSize()
+		{
+			return getPreferredSize();
+		}
+
+		@Override
+		public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction)
+		{
+			return SCROLL_UNIT;
+		}
+
+		@Override
+		public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction)
+		{
+			return visible.height;
+		}
+
+		/**
+		 * Never. The width is this component's own, so the lane the scrollbar sits in is left
+		 * empty when there is no bar in it rather than being handed to the rows.
+		 */
+		@Override
+		public boolean getScrollableTracksViewportWidth()
+		{
+			return false;
+		}
+
+		@Override
+		public boolean getScrollableTracksViewportHeight()
+		{
+			return false;
+		}
 	}
 }

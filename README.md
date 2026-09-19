@@ -96,7 +96,8 @@ icon with one figure over it, sat in the infobox bar with everything else you ha
 
 A square holds one number, so **Infobox figure** picks which. It can be the delve you are on, the
 run timer, the pace, the time left to your target delve or the predicted time of the whole run to
-it, any of the eight counters, or any of the five counter headings with its sources summed. The
+it, any of the eight counters, or any of the five counter headings with everything under it
+summed - the sources with no counter of their own included. The
 figures are shortened to fit: `1.2k` for a counter past a thousand, `1h23` for a run past the hour
 and `10h` past ten of them, and `40.1` for a pace. What was dropped to make them fit is in the
 tooltip - the unit, the full precision, and whether the run is one the plugin saw the start of.
@@ -173,8 +174,14 @@ the thing worth finding there.
 
 Every counter names one weapon or spell. What falls outside them - other healing spells, other
 specs' heals and damage, and punishes with any other melee weapon - is still tallied and saved with
-the run, but is not drawn anywhere, and is not added into a heading's figure either: a combined
-line or a heading's infobox square adds up the counters listed under it and nothing else.
+the run, and has no line of its own anywhere: there is no counter to tick for "some other melee
+weapon", so a row for it would be a row nobody asked for.
+
+A **heading's figure is the whole group**, those included. The headings in the side panel's table,
+a combined overlay line, a heading's infobox square and a grouped run detail line all read what the
+group counted rather than what its rows name, so punishing with an ancient godsword - which has no
+counter of its own - shows up in the punish total and in no other figure. Where the two differ, the
+heading's tooltip says by how much and what it was counted under.
 
 **Punish damage** is what a melee punish hit for. When the boss prays against magic and ranged,
 the melee swing that answers it lands with full accuracy and brings strength-bonus hitsplats in
@@ -204,7 +211,8 @@ over, so one punish reads as one gain rather than as its hitsplats one at a time
 
 **Group counters** decides how the ticked ones are drawn. `Separate` gives each its own line;
 `Combined` folds them into one line per group, so ticking the ancient godsword and the blowpipe
-gives a single `Spec heals` figure.
+gives a single `Spec heals` figure. A combined line also carries the sources with no tick of their
+own, so it can read higher than the ticked counters under it add up to.
 
 ```
 Separate                       Combined
@@ -277,7 +285,9 @@ Behind the chevron icon, top to bottom:
   before it. A run picked up part way into a delve leaves that clear out of the rates, since
   nobody saw when that delve began.
 - **Combat** - what your gear gave back, a row per source under the heading it belongs to, with a
-  meter behind each figure filled against the largest figure counted in the same unit. The
+  meter behind each figure filled against the largest figure counted in the same unit. Each heading
+  carries its group's total - everything counted under it, including the sources with no row - so
+  the block answers how much sustain there was as well as which source found it. The
   **Session** and **Lifetime** tabs put the same rows on this sitting's tally and on the
   character's; the meters refill against whichever is on show, so each tab says which source is
   carrying it on its own terms. The lifetime tab is worth reading between runs - it is the one
@@ -350,14 +360,14 @@ Delve      Time       Counted per delve
 Deep pace  58.1/hr        |  __       /  \_/  \
                        70 | /  \_ Barrage      \
 Counters                  |/     \__/‾‾\__/‾‾\__\
-             This run    0 |__Eldritch__________
-Spell healing               |
- ■ Blood barrage    806     | 2:00
-Spec healing                | ▁▂▃▃▄▄▅▅▆▆▇▇  Full time
- ■ Ancient godsword  58     | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
- ■ Blowpipe          47   0:00
- ...                        1     5    10    15
-                                    Delve
+  Sources | Grouped     0 |__Eldritch__________
+             This run     |
+Spell healing     930     | 2:00
+ ■ Blood barrage  806     | ▁▂▃▃▄▄▅▅▆▆▇▇  Full time
+Spec healing      105     | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
+ ■ Ancient godsword 58  0:00
+ ...                      1     5    10    15
+                                  Delve
 ```
 
 The upper plot is the counters, a line each, over the delves the run has completed. They share one
@@ -367,7 +377,18 @@ legend, under the heading it is listed beneath - hitpoints, prayer points or dam
 headings the side panel uses.
 
 The chart's colours are eight hues checked as a set for colour blindness, one for each of the eight
-counters, so no two lines share a colour.
+counters, so no two lines share a colour. Grouped, the five headings take the first five of the same
+hues, for the same reason: only neighbouring slots were checked against each other, so a set drawn
+together has to be a run of them from the first.
+
+**Sources** and **Grouped**, on the Counters heading, pick how the run is read. Sources is a line
+per counter; Grouped is a line per heading, the counters under it added up, which is how a run long
+enough to fill the plot stays legible - five lines instead of eight, and each of them the figure you
+were going to add up anyway. A grouped line counts what no counter names as well, so it is the only
+place on the chart a punish thrown with an unnamed weapon appears. Which lines you have clicked off
+is remembered for each of the two, so switching back finds the chart as you left it. This is a
+setting of the window rather than of the plugin: the overlay's own **Group counters** is untouched
+by it.
 
 The lower strip is the clock: each delve's full time, and under it the kill the game timed. A delve
 here is the kill and then getting ready for the next, so its full time runs from the delve starting
@@ -471,7 +492,7 @@ rather than the whole file.
 |---|---|---|
 | Icons for counters | off | Draw each counter as its weapon or spell icon instead of its name, in the overlay and the infobox |
 | Hide counters at 0 | on | Leave a counter off the overlay until it has counted something, and start it switched off on the run detail chart |
-| Group counters | Separate | One line per counter, or one per group |
+| Group counters | Separate | One line per counter, or one per group with everything under it summed |
 | Blood barrage heal | off | Hitpoints healed by blood spells |
 | AGS heal | off | Hitpoints healed by the ancient godsword spec |
 | Blowpipe heal | off | Hitpoints healed by the blowpipe spec |

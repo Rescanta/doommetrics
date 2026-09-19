@@ -147,6 +147,10 @@ class DoomMetricsOverlay extends OverlayPanel
 	 * <p>With icons switched on, each line is led by the icon of what it counts in place of its
 	 * name. A group's line keeps its heading: it sums several sources, and no one icon stands for
 	 * all of them.
+	 *
+	 * <p>A group's line also carries what the counters listed here cannot: the sources with no tick
+	 * of their own, such as a melee weapon punishing without a counter to name it. Separate lines
+	 * leave those out, having nowhere to put them.
 	 */
 	private void addCombatLines(DelveRun run, Instant now)
 	{
@@ -171,23 +175,39 @@ class DoomMetricsOverlay extends OverlayPanel
 
 		for (CombatMetric.Group group : GROUPS)
 		{
-			long total = 0;
-			long recent = 0;
 			boolean shown = false;
 
 			for (CombatMetric metric : METRICS)
 			{
-				if (metric.group() == group && isShown(metric))
-				{
-					total += combat.get(metric);
-					recent += run.recentGain(metric, now);
-					shown = true;
-				}
+				shown |= metric.group() == group && isShown(metric);
 			}
 
-			// Only the sources you ticked are in the figure, so a group with none of them ticked
-			// has no line rather than a zero: nothing was asked for, so nothing is being answered.
-			if (shown && !(hideEmpty && total == 0))
+			// A group with none of its sources ticked has no line rather than a zero: nothing was
+			// asked for, so nothing is being answered.
+			if (!shown)
+			{
+				continue;
+			}
+
+			long total = 0;
+			long recent = 0;
+
+			for (CombatMetric metric : group.metrics())
+			{
+				// The sources you ticked, and the catch-alls, which have no tick to be given: a
+				// punish line that left them out would be missing every weapon without a counter
+				// of its own - an ancient godsword above all - and would read lower than the
+				// damage the run actually punished for with no way to tell why.
+				if (metric.displayed() && !isShown(metric))
+				{
+					continue;
+				}
+
+				total += combat.get(metric);
+				recent += run.recentGain(metric, now);
+			}
+
+			if (!(hideEmpty && total == 0))
 			{
 				addAmount(group.overlayHeading(), null, total, recent, group.unit());
 			}

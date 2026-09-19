@@ -138,6 +138,20 @@ final class PanelStyle
 	 */
 	static JPanel section(String title, Component content)
 	{
+		return section(title, null, content);
+	}
+
+	/**
+	 * The same, with a control of its own on the end of the heading's rule.
+	 *
+	 * <p>Up there rather than over the content because it belongs to the section rather than to
+	 * anything in it - it changes what the whole block is - and because a control inside the card
+	 * would be one more row of it, read as a row, in a block whose rows are all figures.
+	 *
+	 * @param control what the reader can change about this section, or null for a plain heading
+	 */
+	static JPanel section(String title, Component control, Component content)
+	{
 		JLabel heading = label(title, SwingConstants.LEFT, FontManager.getRunescapeBoldFont(),
 			ColorScheme.BRAND_ORANGE);
 
@@ -146,6 +160,11 @@ final class PanelStyle
 		header.setBorder(new EmptyBorder(0, 0, 4, 0));
 		header.add(heading, BorderLayout.WEST);
 		header.add(rule(), BorderLayout.CENTER);
+
+		if (control != null)
+		{
+			header.add(control, BorderLayout.EAST);
+		}
 
 		JPanel wrapper = new JPanel(new BorderLayout());
 		wrapper.setBackground(BACKGROUND);

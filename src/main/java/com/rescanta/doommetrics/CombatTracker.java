@@ -81,9 +81,10 @@ class CombatTracker
 			this.left = effect.budget();
 		}
 
-		private boolean accepts(SpecEffect.Kind kind, int tick)
+		private boolean accepts(SpecEffect.Kind kind, long amount, int tick)
 		{
-			return left > 0 && effect.kind() == kind && effect.covers(tick - openedAt);
+			return left > 0 && effect.kind() == kind && effect.covers(tick - openedAt)
+				&& effect.isSized(amount);
 		}
 
 		private boolean isExpired(int tick)
@@ -209,12 +210,14 @@ class CombatTracker
 	}
 
 	/**
-	 * The metric an effect of {@code kind} arriving now would be credited to, or null if none would
-	 * be. Nothing is spent by asking, so this is for logging what the tracker is about to do.
+	 * The metric an effect of {@code kind} and this size arriving now would be credited to, or null
+	 * if none would be. The size matters because one window only accepts the amount it expects -
+	 * see {@link SpecEffect#isSized}. Nothing is spent by asking, so this is for logging what the
+	 * tracker is about to do.
 	 */
-	CombatMetric wouldCredit(SpecEffect.Kind kind, int tick)
+	CombatMetric wouldCredit(SpecEffect.Kind kind, long amount, int tick)
 	{
-		Pending source = best(kind, tick);
+		Pending source = best(kind, amount, tick);
 		return source == null ? null : source.effect.metric();
 	}
 
@@ -239,7 +242,7 @@ class CombatTracker
 	{
 		prune(tick);
 
-		Pending source = best(kind, tick);
+		Pending source = best(kind, amount, tick);
 
 		if (source == null)
 		{
@@ -276,7 +279,7 @@ class CombatTracker
 		{
 			Held effect = effects.next();
 
-			if (opened.accepts(effect.kind, effect.tick))
+			if (opened.accepts(effect.kind, effect.amount, effect.tick))
 			{
 				effects.remove();
 				opened.left--;
@@ -290,13 +293,13 @@ class CombatTracker
 	 * recently. Windows that start at different delays rarely overlap at all - which is the point
 	 * of them being ranges - so this only decides genuinely simultaneous cases.
 	 */
-	private Pending best(SpecEffect.Kind kind, int tick)
+	private Pending best(SpecEffect.Kind kind, long amount, int tick)
 	{
 		Pending best = null;
 
 		for (Pending candidate : pending)
 		{
-			if (candidate.accepts(kind, tick)
+			if (candidate.accepts(kind, amount, tick)
 				&& (best == null || candidate.openedAt >= best.openedAt))
 			{
 				best = candidate;
