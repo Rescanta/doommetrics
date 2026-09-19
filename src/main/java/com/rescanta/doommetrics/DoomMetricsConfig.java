@@ -253,6 +253,8 @@ public interface DoomMetricsConfig extends Config
 		description = "How the counters ticked below are drawn."
 			+ "<br>Combined sums them into one line per heading,"
 			+ "<br>so ticking the ancient godsword and the blowpipe gives a single Spec healing figure."
+			+ "<br>A combined line also counts the sources with no tick of their own,"
+			+ "<br>such as a melee weapon punishing without a counter listed here."
 			+ "<br>Separate gives each its own line.",
 		position = 52,
 		section = countersSection

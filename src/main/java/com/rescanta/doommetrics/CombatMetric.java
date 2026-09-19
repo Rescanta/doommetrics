@@ -4,7 +4,9 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -61,14 +63,23 @@ enum CombatMetric
 	 *
 	 * <p>Everything but the catch-alls. With a counter for every weapon worth naming, a line for
 	 * "everything else" was one more row to read for a figure nobody played around, so those are
-	 * tallied and saved as before but never shown, and never summed into a heading's figure either:
-	 * a heading reads as the rows under it add up to.
+	 * tallied and saved as before but never shown.
+	 *
+	 * <p>They are summed into their heading's figure all the same - see {@link Group#amount}. A
+	 * heading that left them out would say the punish damage was what the three named weapons did,
+	 * which is wrong for anyone who punishes with a fourth: an ancient godsword is counted, has no
+	 * row of its own and would appear nowhere at all. So a heading totals what the group counted,
+	 * the rows under it name what can be named, and the gap between the two is what the heading's
+	 * tooltip spells out.
 	 */
 	static final List<CombatMetric> DISPLAYED = Collections.unmodifiableList(Arrays.stream(values())
 		.filter(CombatMetric::displayed)
 		.collect(Collectors.toList()));
 
-	/** Which heading a metric sits under, so the panel groups like with like. */
+	/**
+	 * Which heading a metric sits under, so the panel groups like with like - and, where the
+	 * counters are drawn as one line per heading, the line itself.
+	 */
 	enum Group
 	{
 		SPELL_HEAL("Spell healing", "Spell heals", Unit.HITPOINTS),
@@ -99,6 +110,93 @@ enum CombatMetric
 		}
 
 		/**
+		 * What every counter under this heading came to, the catch-alls included - see
+		 * {@link CombatMetric#DISPLAYED}.
+		 */
+		long amount(CombatTotals totals)
+		{
+			long total = 0;
+
+			for (CombatMetric metric : metrics())
+			{
+				total += totals.get(metric);
+			}
+
+			return total;
+		}
+
+		/**
+		 * What this heading's figure counted that no row under it names: the catch-alls. Zero for
+		 * a group whose counters are all drawn, and the figure the heading's tooltip owns up to
+		 * otherwise.
+		 */
+		long unnamed(CombatTotals totals)
+		{
+			long total = 0;
+
+			for (CombatMetric metric : metrics())
+			{
+				if (!metric.displayed())
+				{
+					total += totals.get(metric);
+				}
+			}
+
+			return total;
+		}
+
+		/** Every counter under this heading, in declaration order, the catch-alls last. */
+		List<CombatMetric> metrics()
+		{
+			return Members.BY_GROUP.get(this);
+		}
+
+		/**
+		 * What a heading's figure is, spelled out, and what of it no row under the heading names.
+		 *
+		 * <p>The second line is the whole reason the tooltip exists. A reader who adds the rows up
+		 * and gets less than the heading has found something real - a weapon counted under a
+		 * catch-all - and has no way to tell that from a bug unless the heading says so. It is
+		 * left off entirely when the catch-alls are empty, which for most gear they are.
+		 */
+		String tooltip(CombatTotals totals)
+		{
+			long amount = amount(totals);
+			long unnamed = unnamed(totals);
+
+			StringBuilder text = new StringBuilder("<html>").append(heading).append("<br>");
+
+			text.append(amount > 0
+				? DoomFormat.count(amount) + " " + unit.description()
+				: "Nothing counted yet");
+
+			if (unnamed > 0)
+			{
+				text.append("<br><br>Includes ").append(DoomFormat.count(unnamed))
+					.append(" from ").append(String.join(" and ", unnamedLabels()))
+					.append(",<br>counted but not listed on its own.");
+			}
+
+			return text.append("</html>").toString();
+		}
+
+		/** The names of the catch-alls under this heading - what the tooltip owns up to. */
+		private List<String> unnamedLabels()
+		{
+			List<String> labels = new ArrayList<>();
+
+			for (CombatMetric metric : metrics())
+			{
+				if (!metric.displayed())
+				{
+					labels.add(metric.label());
+				}
+			}
+
+			return labels;
+		}
+
+		/**
 		 * How the group reads on the overlay when its metrics are drawn as one line - shorter than
 		 * the panel's heading for the same reason {@link #overlayLabel()} is, and kept honest by
 		 * the same measure.
@@ -116,6 +214,38 @@ enum CombatMetric
 		Unit unit()
 		{
 			return unit;
+		}
+
+		/**
+		 * The counters under each heading, worked out once on first use.
+		 *
+		 * <p>In a class of its own rather than in a field of the enum, because a static field here
+		 * would be filled while {@link CombatMetric} is still being built - every constant names a
+		 * group in its constructor - and {@code values()} would hand back nothing at all. A nested
+		 * class is not initialised until something asks for it, by which time both enums are whole.
+		 */
+		private static final class Members
+		{
+			private static final Map<Group, List<CombatMetric>> BY_GROUP = byGroup();
+
+			private Members()
+			{
+			}
+
+			private static Map<Group, List<CombatMetric>> byGroup()
+			{
+				Map<Group, List<CombatMetric>> map = new EnumMap<>(Group.class);
+
+				for (Group group : values())
+				{
+					map.put(group, Collections.unmodifiableList(
+						Arrays.stream(CombatMetric.values())
+							.filter(metric -> metric.group == group)
+							.collect(Collectors.toList())));
+				}
+
+				return Collections.unmodifiableMap(map);
+			}
 		}
 	}
 
