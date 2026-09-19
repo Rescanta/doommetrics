@@ -110,9 +110,16 @@ public class DoomMetricsOverlayTest
 			draw(deep).getHeight(), draw(ceiling).getHeight());
 	}
 
-	/** The catch-alls are counted but never drawn, alone or summed into a combined line. */
+	/**
+	 * The catch-alls never get a line of their own, and a combined line always counts them.
+	 *
+	 * <p>The two halves are the same rule read from either end: there is no counter to tick for
+	 * "some other melee weapon", so a separate line for it is a line nobody asked for, while a
+	 * punish figure that left it out would be short by every punish thrown with a weapon this
+	 * plugin does not name.
+	 */
 	@Test
-	public void neverDrawsTheCatchAlls()
+	public void countsTheCatchAllsOnlyIntoACombinedLine()
 	{
 		PreviewConfig config = new PreviewConfig();
 		PreviewPlugin plugin = new PreviewPlugin();
@@ -122,17 +129,21 @@ public class DoomMetricsOverlayTest
 		config.allCounters(true);
 		config.hideEmptyCounters = true;
 
-		BufferedImage before = draw(plugin, config);
+		BufferedImage separate = draw(plugin, config);
+		config.grouping = MetricDisplay.COMBINED;
+		BufferedImage combined = draw(plugin, config);
 
 		run.recordCombat(CombatMetric.OTHER_SPELL_HEAL, 90, now.minusSeconds(60));
 		run.recordCombat(CombatMetric.OTHER_SPEC_HEAL, 90, now.minusSeconds(60));
 		run.recordCombat(CombatMetric.OTHER_SPEC_DAMAGE, 90, now.minusSeconds(60));
 		run.recordCombat(CombatMetric.OTHER_MELEE_PUNISH, 90, now.minusSeconds(60));
 
-		assertEquals("separate", before.getHeight(), draw(plugin, config).getHeight());
+		assertTrue("the four catch-alls should give the four headings they feed a line each",
+			draw(plugin, config).getHeight() > combined.getHeight());
 
-		config.grouping = MetricDisplay.COMBINED;
-		assertEquals("combined", before.getHeight(), draw(plugin, config).getHeight());
+		config.grouping = MetricDisplay.SEPARATE;
+		assertEquals("no catch-all has a line of its own",
+			separate.getHeight(), draw(plugin, config).getHeight());
 	}
 
 	/** A line per counter that has counted something, and none for one still at 0. */

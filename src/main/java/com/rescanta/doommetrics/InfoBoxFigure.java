@@ -49,11 +49,6 @@ public enum InfoBoxFigure
 	ALL_SPEC_DAMAGE("All spec damage", CombatMetric.Group.DAMAGE),
 	ALL_PUNISH_DAMAGE("All punish damage", CombatMetric.Group.PUNISH);
 
-	// Held as an array for the reason the overlay holds its own copy: a group figure walks it up to
-	// three times a frame. Only the counters drawn, so a heading sums what its rows show.
-	private static final CombatMetric[] METRICS =
-		CombatMetric.DISPLAYED.toArray(new CombatMetric[0]);
-
 	private final String label;
 
 	/** The one source this figure counts, or null when it is a group or not a counter at all. */
@@ -301,12 +296,12 @@ public enum InfoBoxFigure
 
 		long total = 0;
 
-		for (CombatMetric each : METRICS)
+		// Every counter under the heading, the ones with no row of their own included - the same
+		// figure the panel's heading and the overlay's combined line carry, so a square set to
+		// All punish damage does not read lower than the table it was set from.
+		for (CombatMetric each : group.metrics())
 		{
-			if (each.group() == group)
-			{
-				total += figure.applyAsLong(each);
-			}
+			total += figure.applyAsLong(each);
 		}
 
 		return total;
