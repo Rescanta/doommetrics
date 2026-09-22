@@ -9,6 +9,9 @@ enum EndReason
 	FINISHED,
 	DIED,
 
-	/** The run went away without us seeing how it finished - plugin restart, or a lost boss. */
+	/**
+	 * The run went away without us seeing how it finished: the boss was lost before any clear, or
+	 * the plugin stopped watching mid-run.
+	 */
 	ABANDONED
 }
