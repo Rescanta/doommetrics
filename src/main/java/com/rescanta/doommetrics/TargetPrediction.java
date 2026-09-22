@@ -10,7 +10,7 @@ import java.time.Instant;
  * <p>The rows are worked out here rather than by the overlay and the side panel each, because both
  * draw them and the one thing they must not do is disagree about which rows a state has.
  *
- * <p>Public because the config interface returns it - see {@link MetricDisplay} for why that
+ * <p>Public because the config interface returns it - see {@link CounterMode} for why that
  * matters.
  */
 public enum TargetPrediction

@@ -9,6 +9,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,10 +36,14 @@ import net.runelite.client.ui.DynamicGridLayout;
  * That is the crosshair's other half - see {@link DelveChart#drawCrosshair} for why the per-delve
  * figures are not in a tooltip.
  *
- * <p>Grouped, the same legend is five rows and the chart five lines: a heading's row is its line,
+ * <p>Grouped, the same legend is three rows and the chart three lines: a heading's row is its line,
  * and the counters under it are added up rather than listed - see {@link #setGrouped}. Which rows
  * the reader has clicked off is remembered separately for each way of reading, so switching back
  * finds the chart as it was left.
+ *
+ * <p>Read separately, a click on a heading folds the rows under it away, leaving the heading and its
+ * total - see {@link #setFolded}. Folding tidies the column and nothing else: the lines stay on the
+ * chart as they were, since which lines are drawn is what clicking a row, or grouping, is for.
  *
  * <p>Pointing at a row brings its line forward on the plot and pushes the others back;
  * clicking one takes its line off. Neither ever changes another row's colour: a colour belongs to
@@ -86,6 +91,13 @@ class RunLegendPanel extends JPanel
 
 	/** Whether the counters are folded into their headings - see {@link #setGrouped}. */
 	private boolean grouped;
+
+	/** The headings whose rows are folded out of the column - see {@link #setFolded}. */
+	private final Set<CombatMetric.Group> folded = EnumSet.noneOf(CombatMetric.Group.class);
+
+	private Consumer<Set<CombatMetric.Group>> onFoldChanged = groups ->
+	{
+	};
 
 	private RunDetail detail = RunDetail.empty();
 
@@ -139,8 +151,11 @@ class RunLegendPanel extends JPanel
 		{
 			if (metric.group() != group)
 			{
-				group = metric.group();
-				headings.put(group, new GroupHeading(group));
+				CombatMetric.Group each = metric.group();
+				GroupHeading heading = new GroupHeading(each);
+				heading.foldable(() -> toggleFold(each));
+				headings.put(each, heading);
+				group = each;
 				striped = 0;
 			}
 
@@ -182,10 +197,15 @@ class RunLegendPanel extends JPanel
 				if (metric.group() != group)
 				{
 					group = metric.group();
-					add(headings.get(group));
+					GroupHeading heading = headings.get(group);
+					heading.setFolded(folded.contains(group));
+					add(heading);
 				}
 
-				add(rows.get(metric));
+				if (!folded.contains(group))
+				{
+					add(rows.get(metric));
+				}
 			}
 		}
 
@@ -220,7 +240,7 @@ class RunLegendPanel extends JPanel
 	}
 
 	/**
-	 * @param grouped whether the counters are folded into their headings: five rows and five
+	 * @param grouped whether the counters are folded into their headings: three rows and three
 	 *                lines rather than eight of each
 	 *
 	 * <p>What a grouped row adds up is everything under its heading, the counters with no row of
@@ -237,6 +257,36 @@ class RunLegendPanel extends JPanel
 		this.grouped = grouped;
 		layOut();
 		refresh();
+	}
+
+	/**
+	 * @param groups the headings to fold down to their totals, as the reader last left them
+	 *
+	 * <p>Tells no listener: this is the column being told what it already was, not a click.
+	 */
+	void setFolded(Set<CombatMetric.Group> groups)
+	{
+		folded.clear();
+		folded.addAll(groups);
+		layOut();
+	}
+
+	/** @param onFoldChanged handed the headings folded down, whenever a click changes them */
+	void setFoldListener(Consumer<Set<CombatMetric.Group>> onFoldChanged)
+	{
+		this.onFoldChanged = onFoldChanged;
+	}
+
+	/** Folds a heading's rows out of the column, or brings them back. */
+	void toggleFold(CombatMetric.Group group)
+	{
+		if (!folded.remove(group))
+		{
+			folded.add(group);
+		}
+
+		layOut();
+		onFoldChanged.accept(EnumSet.copyOf(folded));
 	}
 
 	void setDetail(RunDetail detail)

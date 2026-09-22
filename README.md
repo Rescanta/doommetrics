@@ -96,7 +96,7 @@ icon with one figure over it, sat in the infobox bar with everything else you ha
 
 A square holds one number, so **Infobox figure** picks which. It can be the delve you are on, the
 run timer, the pace, the time left to your target delve or the predicted time of the whole run to
-it, any of the eight counters, or any of the five counter headings with everything under it
+it, any of the eight counters, or any of the three counter headings with everything under it
 summed - the sources with no counter of their own included. The
 figures are shortened to fit: `1.2k` for a counter past a thousand, `1h23` for a run past the hour
 and `10h` past ten of them, and `40.1` for a pace. What was dropped to make them fit is in the
@@ -112,8 +112,8 @@ comes down, while Predicted run time keeps the time the run took to get there.
 Counters keep the colours they have on the panel, red for hitpoints, blue for prayer and yellow
 for damage, and one still at zero is drawn grey - so a spec you expected to be firing is visibly
 not. A counter that has just gained shows the gain for a few seconds, as on the panel - see
-[Counters](#counters). The counter checkboxes have no say here: they choose which lines the panel
-draws, and a square has one line. Right click it and pick **Clear** to dismiss a finished run, as on the panel.
+[Counters](#counters). The Healing, Prayer and Damage settings have no say here: they choose which
+lines the panel draws, and a square has one line. Right click it and pick **Clear** to dismiss a finished run, as on the panel.
 
 **Display** set to `Off` draws nothing over the game at all. Nothing else changes: delves are
 still timed, the counters still count, the chat messages still arrive, and the side panel and the
@@ -155,35 +155,34 @@ messages are switched off altogether.
 
 ## Counters
 
-The plugin can also count what your gear and spellbook gave back. Every counter is off by default;
-tick the ones you want under **Counters** and they appear on the overlay under the pace and in the
-side panel's table. The run detail chart draws all eight whatever the checkboxes say - it is a
-window you opened to look at one run in full, and a counter you had not thought to tick is exactly
-the thing worth finding there.
+The plugin can also count what your gear and spellbook gave back, under three headings - one for
+each thing a figure can be counted in. The side panel's table and the run detail chart always
+carry all eight counters; the overlay draws only what you ask of it under **Counters**, and is off
+for all three headings by default.
 
-| Counter | Group | Counted in |
+| Counter | Heading | Counted in |
 |---|---|---|
-| Blood barrage | Spell healing | hitpoints healed |
-| Ancient godsword | Spec healing | hitpoints healed |
-| Blowpipe | Spec healing | hitpoints healed |
+| Blood barrage | Healing | hitpoints healed |
+| Ancient godsword | Healing | hitpoints healed |
+| Blowpipe | Healing | hitpoints healed |
 | Eldritch staff | Prayer restored | prayer points restored |
-| Zaryte crossbow | Spec damage | damage dealt |
-| Scythe of vitur | Punish damage | damage dealt |
-| Noxious halberd | Punish damage | damage dealt |
-| Crystal halberd | Punish damage | damage dealt |
+| Zaryte crossbow | Spec & punish damage | damage dealt |
+| Scythe of vitur | Spec & punish damage | damage dealt |
+| Noxious halberd | Spec & punish damage | damage dealt |
+| Crystal halberd | Spec & punish damage | damage dealt |
 
 Every counter names one weapon or spell. What falls outside them - other healing spells, other
 specs' heals and damage, and punishes with any other melee weapon - is still tallied and saved with
-the run, and has no line of its own anywhere: there is no counter to tick for "some other melee
-weapon", so a row for it would be a row nobody asked for.
+the run, and has no line of its own anywhere: there is no counter for "some other melee weapon",
+so a row for it would be a row nobody asked for.
 
 A **heading's figure is the whole group**, those included. The headings in the side panel's table,
-a combined overlay line, a heading's infobox square and a grouped run detail line all read what the
+a total overlay line, a heading's infobox square and a grouped run detail line all read what the
 group counted rather than what its rows name, so punishing with an ancient godsword - which has no
-counter of its own - shows up in the punish total and in no other figure. Where the two differ, the
+counter of its own - shows up in the damage total and in no other figure. Where the two differ, the
 heading's tooltip says by how much and what it was counted under.
 
-**Punish damage** is what a melee punish hit for. When the boss prays against magic and ranged,
+**Punish damage**, under the damage heading, is what a melee punish hit for. When the boss prays against magic and ranged,
 the melee swing that answers it lands with full accuracy and brings strength-bonus hitsplats in
 behind it, and the swing and those hitsplats are both counted, under the weapon that swung. The
 scythe and both halberds have a row each; a punish with any other melee weapon is tallied but not
@@ -199,36 +198,49 @@ punish is over is taken for part of it.
 Each figure is drawn in the colour of what it is counted in - hitpoints red, prayer blue, damage
 yellow - so which lines are which is legible without reading the labels.
 
-A counter that has not counted anything yet is left off the overlay, so you can tick everything
-your gear might use and only see the lines that are firing; each one appears the first time it
-counts. Untick **Hide counters at 0** to draw every ticked counter from the start, grey at zero -
-the overlay then never resizes mid-delve, and a spec you expected to be firing is visibly not.
+A counter that has not counted anything yet is left off the overlay, so a heading drawn counter by
+counter only shows the gear you are actually using; each line appears the first time it counts.
+Untick **Hide counters at 0** to draw every counter from the start, grey at zero - the overlay
+then never resizes mid-delve, and a spec you expected to be firing is visibly not.
 
 A counter that has just gained shows the gain for five ticks before going back to the run's
 total. A scythe punish that hits for 30 and brings 67 in strength-bonus hitsplats turns `500` into
 `+97`, then `597`. Anything landing while a gain is on show adds to it and starts the five ticks
 over, so one punish reads as one gain rather than as its hitsplats one at a time.
 
-**Group counters** decides how the ticked ones are drawn. `Separate` gives each its own line;
-`Combined` folds them into one line per group, so ticking the ancient godsword and the blowpipe
-gives a single `Spec heals` figure. A combined line also carries the sources with no tick of their
-own, so it can read higher than the ticked counters under it add up to.
+**Healing**, **Prayer** and **Damage** each pick how their heading is drawn on the overlay:
+`Off` draws nothing, `Total` draws one line with everything counted under the heading, and `Each`
+draws a line per counter. They are set one heading at a time, so healing can be a single figure
+while damage is broken down by weapon:
 
 ```
-Separate                       Combined
-Barrage        1,204           Spell heals    1,204
-AGS              316           Spec heals       316
-Eldritch         180           Prayer           180
-ZCB           12,470           Spec dmg      12,470
-Scythe         1,836           Punish dmg     1,836
+Each                    Total                   Healing Total, Damage Each
+Barrage        1,204    Healing        1,520    Healing        1,520
+AGS              316    Prayer           180    ZCB           12,470
+Eldritch         180    Damage        14,306    Scythe         1,836
+ZCB           12,470
+Scythe         1,836
 ```
 
-**Icons for counters** draws each separate counter as the icon of what it counts instead of its
-name: the blood barrage spell, the zaryte crossbow, the scythe and so on, as the game draws them.
-An icon is a line of text high,
-so switching it on moves no rows. A combined line keeps its heading, since it sums several
-sources. It is off by default. With it on, the infobox square wears the icon too when it holds a
-single counter; a delve number, a clock or a group total keeps the plugin's own icon.
+A total line also carries the sources with no counter of their own, so it can read higher than
+the counters under it add up to.
+
+**Counter style** picks how a counter's line is led. `Names` spells out what it counts. `Icons`
+draws the icon of what it counts in place of the name - the blood barrage spell, the zaryte
+crossbow, the scythe and so on, as the game draws them. An icon is a line of text high, so
+switching to it moves no rows. `Icon grid` fits two of those to a line, which halves the lines a
+heading drawn counter by counter takes; a figure past 9,999 is shortened to fit its half, as the
+infobox shortens it (`25k`, `+1.2k`). A total line keeps its name and a line of its own in either
+icon style, since it sums several sources and no one icon stands for them.
+
+```
+Healing        1,520
+[eldritch] 180  [zcb] 12k
+[scythe] 1,836  [nox]  632
+```
+
+With either icon style, the infobox square wears the icon too when it holds a single counter; a
+delve number, a clock or a heading total keeps the plugin's own icon.
 
 ### What is not counted
 
@@ -275,7 +287,7 @@ Behind the chevron icon, top to bottom:
 - **Current run** - the same rows as the overlay, so the numbers are somewhere other than over the
   game world.
 - **This session** - how long this sitting has been going, its deep pace, how many deep delves it
-  has completed, and the counters you have ticked. A session lasts until you close the client, log
+  has completed. A session lasts until you close the client, log
   in as a different character, or press **Reset session**; logging out and back in carries it on,
   and its length does not count the time spent logged out. After half an hour without a run the
   rows go blank so they do not look current, and the next run brings the session back.
@@ -291,7 +303,8 @@ Behind the chevron icon, top to bottom:
   **Session** and **Lifetime** tabs put the same rows on this sitting's tally and on the
   character's; the meters refill against whichever is on show, so each tab says which source is
   carrying it on its own terms. The lifetime tab is worth reading between runs - it is the one
-  figure here that does not go quiet when a sitting ends.
+  figure here that does not go quiet when a sitting ends. Click a heading to fold its rows away
+  and leave just its total; the fold is remembered across restarts.
 - **Milestones** - the lifetime table, below.
 - **Open run detail** - this run, delve by delve, in a window of its own.
 - **Reset session** - starts the session over and drops the run in progress, after asking, letting
@@ -362,10 +375,10 @@ Deep pace  58.1/hr        |  __       /  \_/  \
 Counters                  |/     \__/‾‾\__/‾‾\__\
   Sources | Grouped     0 |__Eldritch__________
              This run     |
-Spell healing     930     | 2:00
+Healing         1,035     | 2:00
  ■ Blood barrage  806     | ▁▂▃▃▄▄▅▅▆▆▇▇  Full time
-Spec healing      105     | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
- ■ Ancient godsword 58  0:00
+ ■ Ancient godsword 58    | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
+ ■ Blowpipe        47   0:00
  ...                      1     5    10    15
                                   Delve
 ```
@@ -373,22 +386,27 @@ Spec healing      105     | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
 The upper plot is the counters, a line each, over the delves the run has completed. They share one
 scale because none of them clears a few hundred on a single delve, so a barrage heal and a Zaryte
 spec are like sizes and can be read against each other. Which unit a line is counted in is on the
-legend, under the heading it is listed beneath - hitpoints, prayer points or damage, the same five
+legend, under the heading it is listed beneath - hitpoints, prayer points or damage, the same three
 headings the side panel uses.
 
 The chart's colours are eight hues checked as a set for colour blindness, one for each of the eight
-counters, so no two lines share a colour. Grouped, the five headings take the first five of the same
-hues, for the same reason: only neighbouring slots were checked against each other, so a set drawn
+counters, so no two lines share a colour. Grouped, the three headings take the first three of the
+same hues, for the same reason: only neighbouring slots were checked against each other, so a set drawn
 together has to be a run of them from the first.
 
 **Sources** and **Grouped**, on the Counters heading, pick how the run is read. Sources is a line
 per counter; Grouped is a line per heading, the counters under it added up, which is how a run long
-enough to fill the plot stays legible - five lines instead of eight, and each of them the figure you
-were going to add up anyway. A grouped line counts what no counter names as well, so it is the only
-place on the chart a punish thrown with an unnamed weapon appears. Which lines you have clicked off
+enough to fill the plot stays legible - three lines instead of eight, and each of them the figure
+you were going to add up anyway. A grouped line counts what no counter names as well, so it is the
+only place on the chart a punish thrown with an unnamed weapon appears. Which lines you have clicked off
 is remembered for each of the two, so switching back finds the chart as you left it. This is a
-setting of the window rather than of the plugin: the overlay's own **Group counters** is untouched
-by it.
+setting of the window rather than of the plugin: the overlay's own **Healing**, **Prayer** and
+**Damage** settings are untouched by it.
+
+Reading by source, click a heading in the legend to fold its rows away and leave just its total,
+as in the side panel. Folding only tidies the legend: the chart keeps those lines, and clicking a
+row is still what takes one off. The fold is remembered across restarts, separately from the side
+panel's.
 
 The lower strip is the clock: each delve's full time, and under it the kill the game timed. A delve
 here is the kill and then getting ready for the next, so its full time runs from the delve starting
@@ -472,16 +490,21 @@ rather than the whole file.
 
 ## Config
 
+### Overlay
+
+| Setting | Default | Notes |
+|---|---|---|
+| Display | Panel | The panel of rows, one infobox square, or nothing drawn over the game |
+| Infobox figure | Delve | Which single figure the square holds |
+| Hide plugin name | off | Leaves the Doom Metrics title off the top of the overlay |
+| Show delve number / run timer / pace | on | Overlay rows |
+| Keep result for | 30 min | How long a finished run stays on screen; 0 hides it at once |
+
+### Pace & target
+
 | Setting | Default | Notes |
 |---|---|---|
 | Pace | Deep pace | Which figure the overlay and chat show |
-| Chat every N delves | 5 | 0 turns the delve messages off; reaching the target is still announced |
-| Announce run end | on | Summary on claim, leave or death |
-| Hide plugin name | off | Leaves the Doom Metrics title off the top of the overlay |
-| Display | Panel | The panel of rows, one infobox square, or nothing drawn over the game |
-| Infobox figure | Delve | Which single figure the square holds |
-| Show delve number / run timer / pace | on | Overlay rows |
-| Keep result for | 30 min | How long a finished run stays on screen; 0 hides it at once |
 | Show target delve | off | Adds the target and predicted rows |
 | Target delve | 50 | The delve being aimed for |
 | Prediction | Full run | Which predicted times the target rows show: to go, the full run, or both |
@@ -490,17 +513,18 @@ rather than the whole file.
 
 | Setting | Default | Notes |
 |---|---|---|
-| Icons for counters | off | Draw each counter as its weapon or spell icon instead of its name, in the overlay and the infobox |
+| Healing | Off | Blood spells and the ancient godsword and blowpipe specs: off, one total line, or a line each |
+| Prayer | Off | The eldritch staff spec: off, one total line, or a line each |
+| Damage | Off | The zaryte crossbow spec and your scythe and halberds punishing: off, one total line, or a line each |
+| Counter style | Names | Lead each counter's line with its name, its icon, or its icon two to a line; the infobox takes the icon too |
 | Hide counters at 0 | on | Leave a counter off the overlay until it has counted something, and start it switched off on the run detail chart |
-| Group counters | Separate | One line per counter, or one per group with everything under it summed |
-| Blood barrage heal | off | Hitpoints healed by blood spells |
-| AGS heal | off | Hitpoints healed by the ancient godsword spec |
-| Blowpipe heal | off | Hitpoints healed by the blowpipe spec |
-| Eldritch prayer | off | Prayer points restored by the eldritch staff spec |
-| ZCB damage | off | Damage dealt by the zaryte crossbow spec |
-| Scythe punish | off | Damage your scythe dealt punishing the boss's prayer |
-| Noxious halberd punish | off | Damage your noxious halberd dealt punishing the boss's prayer, its spec included |
-| Crystal halberd punish | off | Damage your crystal halberd dealt punishing the boss's prayer, its spec included |
+
+### Chat
+
+| Setting | Default | Notes |
+|---|---|---|
+| Chat every N delves | 5 | 0 turns the delve messages off; reaching the target is still announced |
+| Announce run end | on | Summary on claim, leave or death |
 
 ### Advanced
 

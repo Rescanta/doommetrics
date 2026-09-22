@@ -8,7 +8,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import javax.swing.SwingUtilities;
 import net.runelite.client.ui.laf.RuneLiteLAF;
 
@@ -116,11 +119,16 @@ public class PreviewShots
 		// The combat table's other tab, which nothing but a click reaches and so no scene above
 		// shows. Worth its own picture for the tab strip and for the meters, which are filled
 		// against the largest figure in the tally on show rather than across both.
-		written.add(shot(panel(deep, true), directory.resolve("combat-lifetime.png")));
+		written.add(shot(panel(deep, true, Collections.emptySet()),
+			directory.resolve("combat-lifetime.png")));
+
+		// The combat table with a heading folded down to its total, which only a click reaches.
+		written.add(shot(panel(deep, false, EnumSet.of(CombatMetric.Group.HEALING)),
+			directory.resolve("combat-folded.png")));
 
 		// The run detail window's other way of reading the counters, which a click reaches and no
-		// scene above shows: five lines and five rows instead of eight, and the only view in the
-		// plugin where the sources with no counter of their own are in a figure.
+		// scene above shows: three lines and three rows instead of eight, the sources with no
+		// counter of their own included.
 		written.add(shot(detail(deep, true), directory.resolve("detail-grouped.png")));
 
 		// The sidebar at a height too short to hold it, both ways round: the one state a scrollbar
@@ -130,16 +138,20 @@ public class PreviewShots
 		written.add(shot(detail(deep, true, SHORT_WINDOW),
 			directory.resolve("detail-short-grouped.png")));
 
-		// The counters drawn as icons, separate and combined, and the squares that take one.
+		// The legend with a heading folded down to its total, which only a click reaches: the rows
+		// go and the chart keeps every line.
+		written.add(shot(detail(deep, false, 600, EnumSet.of(CombatMetric.Group.HEALING)),
+			directory.resolve("detail-folded.png")));
+
+		// The counters drawn as icons, one and two to a line, and the squares that take one.
 		PreviewConfig iconic = new PreviewConfig();
 		iconic.adopt(deep.config);
-		iconic.counterIcons = true;
+		iconic.counterStyle = CounterStyle.ICONS;
 		written.add(shot(overlay(deep, iconic, PreviewRender.Backdrop.CAVE),
 			directory.resolve("icons-overlay.png")));
-		iconic.grouping = MetricDisplay.COMBINED;
+		iconic.counterStyle = CounterStyle.ICON_GRID;
 		written.add(shot(overlay(deep, iconic, PreviewRender.Backdrop.CAVE),
-			directory.resolve("icons-overlay-combined.png")));
-		iconic.grouping = deep.config.grouping;
+			directory.resolve("icons-overlay-grid.png")));
 		written.add(shot(infoBoxes(deep, iconic, PreviewRender.Backdrop.CAVE),
 			directory.resolve("icons-infobox.png")));
 
@@ -211,10 +223,11 @@ public class PreviewShots
 
 	private static BufferedImage panel(PreviewScene scene)
 	{
-		return panel(scene, false);
+		return panel(scene, false, Collections.emptySet());
 	}
 
-	private static BufferedImage panel(PreviewScene scene, boolean lifetimeCombat)
+	private static BufferedImage panel(PreviewScene scene, boolean lifetimeCombat,
+		Set<CombatMetric.Group> folded)
 	{
 		DoomMetricsPanel panel = new DoomMetricsPanel(() ->
 		{
@@ -223,6 +236,9 @@ public class PreviewShots
 		});
 		panel.setIcons(PreviewIcons.INSTANCE);
 		panel.showLifetime(lifetimeCombat);
+		panel.setCombatFolding(folded, groups ->
+		{
+		});
 
 		panel.setLive(scene.live(scene.config));
 		panel.setStats(scene.stats);
@@ -253,14 +269,23 @@ public class PreviewShots
 		return detail(scene, grouped, 600);
 	}
 
-	/** The run detail window at the size it opens at. Left unscaled: it is large enough to read. */
 	private static BufferedImage detail(PreviewScene scene, boolean grouped, int height)
+	{
+		return detail(scene, grouped, height, Collections.emptySet());
+	}
+
+	/** The run detail window at the size it opens at. Left unscaled: it is large enough to read. */
+	private static BufferedImage detail(PreviewScene scene, boolean grouped, int height,
+		Set<CombatMetric.Group> folded)
 	{
 		RunDetailWindow window = new RunDetailWindow(null, () ->
 		{
 		});
 		window.setIcons(PreviewIcons.INSTANCE);
 		window.setHideEmpty(scene.config.hideEmptyCounters);
+		window.setFolding(folded, groups ->
+		{
+		});
 		window.showGrouped(grouped);
 
 		window.setLive(scene.live(scene.config));

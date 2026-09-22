@@ -10,7 +10,7 @@ package com.rescanta.doommetrics;
  * you are playing on.
  *
  * <p>Public because the config interface returns it, for the reason spelled out on
- * {@link MetricDisplay}: RuneLite implements that interface with a dynamic proxy from another
+ * {@link CounterMode}: RuneLite implements that interface with a dynamic proxy from another
  * package, and a package-private return type there throws IllegalAccessError at the call site.
  */
 public enum DisplayStyle
