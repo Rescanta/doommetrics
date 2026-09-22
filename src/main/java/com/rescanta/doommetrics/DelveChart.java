@@ -91,6 +91,9 @@ class DelveChart extends JPanel
 
 	private RunDetail detail = RunDetail.empty();
 
+	/** The delves the counters are drawn over: none cleared while the plugin was off. */
+	private List<RunDetail.Delve> counted = detail.watchedDelves();
+
 	/** One line per counter, or per heading when grouped. */
 	private List<CombatSeries> series = CombatSeries.drawn(false);
 
@@ -166,7 +169,8 @@ class DelveChart extends JPanel
 		this.detail = detail;
 		this.deepest = detail.deepest();
 		this.shallowest = detail.shallowest();
-		this.window = ChartMath.windowFor(detail.delves().size());
+		this.counted = detail.watchedDelves();
+		this.window = ChartMath.windowFor(counted.size());
 		this.hovered = 0;
 		rescale();
 		repaint();
@@ -437,7 +441,8 @@ class DelveChart extends JPanel
 
 		return new String[][]{
 			delve,
-			{FULL_TIME + " ", DoomFormat.duration(at.fullTime)},
+			// An even share of a stretch the plugin did not watch.
+			{FULL_TIME + " ", (at.estimated ? "~" : "") + DoomFormat.duration(at.fullTime)},
 			{KILL_TIME + " ", at.fight == null ? "-" : DoomFormat.duration(at.fight)},
 		};
 	}
@@ -592,7 +597,7 @@ class DelveChart extends JPanel
 			return;
 		}
 
-		List<RunDetail.Delve> delves = detail.delves();
+		List<RunDetail.Delve> delves = counted;
 		long[] values = new long[delves.size()];
 
 		for (int i = 0; i < delves.size(); i++)

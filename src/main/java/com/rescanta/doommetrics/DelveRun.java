@@ -490,16 +490,85 @@ class DelveRun
 		return Collections.unmodifiableList(splits);
 	}
 
+	/** A delve on the detail window's timeline, cleared while watched or not. */
+	static final class DelveTime
+	{
+		final int level;
+
+		/** From this delve starting to the next one starting. */
+		final Duration fullTime;
+
+		/** The clear, or null for a delve cleared while the plugin was not watching. */
+		final Split split;
+
+		/** Whether {@link #fullTime} is an even share of a stretch nobody watched. */
+		final boolean estimated;
+
+		private DelveTime(int level, Duration fullTime, Split split, boolean estimated)
+		{
+			this.level = level;
+			this.fullTime = fullTime;
+			this.split = split;
+			this.estimated = estimated;
+		}
+	}
+
 	/**
-	 * A cleared delve's time as the detail window draws it: from its start to the next delve's
-	 * start, so its kill and the wait after it.
+	 * Every delve from the first clear to the last, with the time the detail window draws it
+	 * taking: from its start to the next one's, so its kill and the wait after it. Delves skipped
+	 * between two clears went by unwatched, and share the stretch from the clear before them evenly
+	 * - with the clear after them too, when its own start was not seen.
 	 */
-	Duration fullTime(int index)
+	List<DelveTime> timeline()
+	{
+		List<DelveTime> timeline = new ArrayList<>();
+
+		for (int i = 0; i < splits.size(); i++)
+		{
+			Split split = splits.get(i);
+			int firstUnwatched = i == 0 ? split.level : splits.get(i - 1).level + 1;
+
+			if (firstUnwatched >= split.level)
+			{
+				timeline.add(new DelveTime(split.level, Duration.between(startOf(i), endOf(i)),
+					split, false));
+				continue;
+			}
+
+			// A timed clear saw its delve start, which is where the unwatched stretch ends.
+			Instant from = splits.get(i - 1).completedAt;
+			Instant to = split.timed ? startOf(i) : endOf(i);
+			int shared = split.level - firstUnwatched + (split.timed ? 0 : 1);
+			Duration share = Duration.between(from, to).dividedBy(shared);
+
+			for (int level = firstUnwatched; level < split.level; level++)
+			{
+				timeline.add(new DelveTime(level, share, null, true));
+			}
+
+			timeline.add(split.timed
+				? new DelveTime(split.level, Duration.between(startOf(i), endOf(i)), split, false)
+				: new DelveTime(split.level, share, split, true));
+		}
+
+		return timeline;
+	}
+
+	private Instant startOf(int index)
 	{
 		Split split = splits.get(index);
-		Instant from = index == 0
+		return index == 0
 			? startedAt
 			: delveStarts.getOrDefault(split.level, splits.get(index - 1).completedAt);
+	}
+
+	/**
+	 * The next delve's start; a delve still in its wait runs to its kill, or to the run's end if
+	 * it ended there.
+	 */
+	private Instant endOf(int index)
+	{
+		Split split = splits.get(index);
 		Instant to = delveStarts.get(split.level + 1);
 
 		if (to == null)
@@ -507,6 +576,6 @@ class DelveRun
 			to = isFinished() && index == splits.size() - 1 ? endedAt : split.completedAt;
 		}
 
-		return Duration.between(from, to);
+		return to;
 	}
 }
