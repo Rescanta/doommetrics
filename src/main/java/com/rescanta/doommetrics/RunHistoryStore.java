@@ -19,31 +19,9 @@ import net.runelite.client.RuneLite;
 import net.runelite.client.config.ConfigManager;
 
 /**
- * The lifetime history of finished runs, one file per character under
- * {@code .runelite/doommetrics/}.
- *
- * <p>This does not live in the config the way {@link MilestoneStore} does, because config is the
- * wrong shape for it twice over. RuneLite's config service caps a single value at 262144
- * characters, which a per-run history reaches somewhere around four thousand runs and then starts
- * silently dropping writes; and every save rewrites and re-syncs the whole value, so the cost of
- * ending a run would climb with every run already ended. The milestone table stays in config
- * because it is an aggregate that stops growing.
- *
- * <p>Records are appended one JSON object per line rather than held in a single array. An append
- * then costs the same whether the file holds ten runs or ten thousand, and a write torn by a crash
- * costs the last line instead of the whole history. At around sixty bytes a run, twenty thousand
- * runs is about a megabyte, so there is no cap - losing the oldest runs would defeat the point of
- * keeping them.
- *
- * <p>Nothing in the plugin reads this file back. What is shown is the run you are on or the one
- * you just finished, and both of those are in memory - see {@link RunDetail}. The file is written
- * anyway because a run is impossible to recover once the next one starts and a record costs about
- * sixty bytes, so keeping one is close to free and losing one is permanent. {@link #load} is kept
- * for the same reason: it is what makes a view built on this history a display change rather than
- * a recovery problem.
- *
- * <p>All disk access runs on the shared executor. Reads hand their result back on that thread, so
- * callers marshal onto whichever thread owns what they are updating.
+ * Finished runs, one JSON line each, in a file per character under {@code .runelite/doommetrics/}.
+ * Not in config: values are size-capped and rewritten whole. Nothing reads it back yet. Disk access
+ * runs on the shared executor.
  */
 @Slf4j
 @Singleton
@@ -78,13 +56,8 @@ class RunHistoryStore
 	}
 
 	/**
-	 * Appends one run to the named character's history.
-	 *
-	 * <p>The caller names the character rather than letting this read whoever is logged in now,
-	 * because the two are not always the same. A run can outlive the login it was made on - one
-	 * interrupted by a dropped connection is held open until we can see where the player came back
-	 * to - and if they came back as somebody else, the run still belongs to the character who made
-	 * it. Resolving the file here would file it under the alt.
+	 * Appends one run to the named character's history - the one who made it, not whoever is logged
+	 * in now.
 	 */
 	void append(RunRecord record, String profileKey)
 	{
@@ -101,10 +74,8 @@ class RunHistoryStore
 	}
 
 	/**
-	 * Reads the current character's history, oldest run first.
-	 *
-	 * <p>The callback runs on the executor thread, and gets an empty list when there is no profile
-	 * or no file - "nothing recorded yet" and "nobody logged in" look the same to a reader.
+	 * Reads the current character's history, oldest first. Calls back on the executor thread, with an
+	 * empty list when there is no profile or file.
 	 */
 	void load(Consumer<List<RunRecord>> callback)
 	{
@@ -213,10 +184,7 @@ class RunHistoryStore
 		}
 	}
 
-	/**
-	 * The profile key is an account hash for a Jagex account and a display name for an old one, so
-	 * it is folded to a form that is safe in a filename either way.
-	 */
+	/** The profile key (account hash or display name), made safe for a filename. */
 	static String fileName(String profileKey)
 	{
 		// Trimming the separators matters as much as folding them: it is what turns a key with
