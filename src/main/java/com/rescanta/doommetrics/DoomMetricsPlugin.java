@@ -71,6 +71,9 @@ public class DoomMetricsPlugin extends Plugin
 	/** Ticks without the boss before a run with no clears is given up on. */
 	private static final int ABANDON_TICKS = 100;
 
+	/** Ticks a run is held open after a death, for the clear of a boss that died with the player. */
+	private static final int DEATH_SETTLE_TICKS = 10;
+
 	/** Package-private so the infobox can carry the same option the overlay does. */
 	static final String CLEAR_OPTION = "Clear";
 
@@ -173,6 +176,10 @@ public class DoomMetricsPlugin extends Plugin
 	private int bossCount;
 	private int ticksWithoutBoss;
 
+	/** The delve the player died on while {@link #run} is held open after it, or -1. */
+	private int deathLevel = -1;
+	private int ticksSinceDeath;
+
 	@Provides
 	DoomMetricsConfig provideConfig(ConfigManager configManager)
 	{
@@ -274,6 +281,15 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		run = null;
+
+		// Died a moment ago: the run is over, not unfinished.
+		if (deathLevel >= 0)
+		{
+			return runHistoryStore.append(
+				recordOf(unfinished, Instant.now(), EndReason.DIED, deathLevel, false),
+				profileOf(runProfile));
+		}
+
 		log.debug("Recording the run on delve {} as incomplete", unfinished.currentLevel());
 		return runHistoryStore.append(incompleteRecord(unfinished), profileOf(runProfile));
 	}
@@ -288,6 +304,13 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (unfinished == null || unfinished.lastLevel() == 0)
 		{
+			return;
+		}
+
+		// The player respawns outside, so there is nothing to carry on.
+		if (deathLevel >= 0)
+		{
+			endRun(EndReason.DIED, deathLevel);
 			return;
 		}
 
@@ -398,6 +421,7 @@ public class DoomMetricsPlugin extends Plugin
 		runProfile = null;
 		pickUpPending = true;
 		ticksWithoutBoss = 0;
+		deathLevel = -1;
 		loot.reset();
 		combat.stopTracking();
 		totals.forgetSession();
@@ -618,9 +642,23 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onActorDeath(ActorDeath event)
 	{
-		if (run != null && event.getActor() == client.getLocalPlayer())
+		if (run == null || deathLevel >= 0 || event.getActor() != client.getLocalPlayer())
 		{
-			endRun(EndReason.DIED, run.currentLevel());
+			return;
+		}
+
+		// A boss the same ticks' hits killed is cleared a few ticks later, so wait for it.
+		deathLevel = run.currentLevel();
+		ticksSinceDeath = 0;
+		log.debug("Died on delve {}, holding the run open for a clear", deathLevel);
+	}
+
+	/** Ends a run held open after a death once the time for a clear has gone by. */
+	private void settleDeath()
+	{
+		if (deathLevel >= 0 && ++ticksSinceDeath >= DEATH_SETTLE_TICKS)
+		{
+			endRun(EndReason.DIED, deathLevel);
 		}
 	}
 
@@ -761,6 +799,7 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
+		settleDeath();
 		checkResume();
 		pickUpRun();
 		trackAbandonedRun();
@@ -962,6 +1001,7 @@ public class DoomMetricsPlugin extends Plugin
 		runProfile = profile;
 		pickUpPending = false;
 		ticksWithoutBoss = 0;
+		deathLevel = -1;
 		combat.runStarted();
 		loot.runStarted(started, missedDelves);
 		totals.runStarted(sessionFrom);
@@ -969,6 +1009,14 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void endRun(EndReason reason, int diedOnLevel)
 	{
+		// However a run the player died in comes to an end, it ended in the death.
+		if (deathLevel >= 0)
+		{
+			reason = EndReason.DIED;
+			diedOnLevel = deathLevel;
+			deathLevel = -1;
+		}
+
 		DelveRun ended = run;
 		run = null;
 		resumeCheck = null;
