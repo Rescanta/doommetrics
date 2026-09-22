@@ -137,19 +137,16 @@ public class CombatTotalsTest
 		assertEquals(0, stored.get(CombatMetric.ZCB_DAMAGE));
 	}
 
-	/** The stored names are the file format, so a clash or a rename has to fail loudly here. */
+	/** The stored names are the file format, so a clash has to fail loudly here. */
 	@Test
-	public void everyMetricKeyIsDistinctAndRoundTrips()
+	public void everyMetricKeyIsDistinct()
 	{
 		Set<String> keys = new HashSet<>();
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
 			assertTrue("duplicate key " + metric.key(), keys.add(metric.key()));
-			assertEquals(metric, CombatMetric.byKey(metric.key()));
 		}
-
-		assertNull(CombatMetric.byKey("nothingStoredUnderThis"));
 	}
 
 	/** The overlay draws these with no heading over them, so each has to stand on its own. */

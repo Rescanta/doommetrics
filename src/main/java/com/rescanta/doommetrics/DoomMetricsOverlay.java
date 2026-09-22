@@ -32,10 +32,7 @@ class DoomMetricsOverlay extends OverlayPanel
 	/** How many counters share a line under {@link CounterStyle#ICON_GRID}. */
 	static final int GRID_COLUMNS = 2;
 
-	/**
-	 * The space between two counters sharing a line. Enough that the first one's figure is not
-	 * read as running into the second one's icon.
-	 */
+	/** The space between two counters sharing a line. */
 	static final int GRID_GAP = 6;
 
 	/** The most characters a figure keeps whole in a grid column - see {@link #figure}. */
@@ -140,26 +137,9 @@ class DoomMetricsOverlay extends OverlayPanel
 	}
 
 	/**
-	 * Draws each counter heading the way the config asks - nothing, one total line, or a line per
-	 * counter - in the order they are declared, so the overlay reads down in the same order as the
-	 * side panel's table.
-	 *
-	 * <p>There are no headings over the lines: a heading sitting above lines you asked for is a row
-	 * of overlay spent saying nothing you had not already been told. What the labels lose by having
-	 * no heading to qualify them they make up in saying outright what they count - see
-	 * {@link CombatMetric#overlayLabel()}.
-	 *
-	 * <p>A line that has counted nothing is left off by default, so a heading read counter by
-	 * counter only draws the gear you are using. With that switched off it gets its line, dimmed,
-	 * for the same reason the table keeps its zero rows: the overlay does not resize under you
-	 * mid-delve, and a spec you expected to be firing is visibly not.
-	 *
-	 * <p>A line that has just gained reads as the gain for a few seconds - {@code +97} - before it
-	 * goes back to the run's total. See {@link RecentGains}.
-	 *
-	 * <p>A total line carries what the counters cannot: the sources with no counter of their own,
-	 * such as a melee weapon punishing without a counter to name it. It is the figure the side
-	 * panel's heading carries, so the two never disagree.
+	 * Draws each heading as configured - nothing, one total line, or a line per counter - in the
+	 * side panel's order. Empty lines are dimmed or hidden, and a fresh gain shows as {@code +97}
+	 * for a few seconds.
 	 */
 	private void addCombatLines(DelveRun run, Instant now)
 	{
@@ -246,18 +226,11 @@ class DoomMetricsOverlay extends OverlayPanel
 	}
 
 	/**
-	 * One counter's line, its figure in the colour of whatever it is counted in, so which lines are
-	 * hitpoints, which are prayer and which are damage is legible without reading the labels.
-	 *
-	 * <p>A zero stays grey rather than taking a faint tint of its unit: a counter that has not
-	 * fired is being drawn back deliberately, and the whole point of the colour is that it marks
-	 * out a figure worth reading.
+	 * One counter's line, its figure in its unit's colour; a zero stays grey.
 	 *
 	 * @param icon   drawn in place of {@code left} when there is one, or null for the words
-	 * @param recent what the counter has just gained, drawn in place of the total while it is
-	 *               more than nothing
-	 * @param narrow whether the line is one column of a grid rather than the whole width - see
-	 *               {@link #figure}
+	 * @param recent what the counter has just gained, shown instead of the total while above zero
+	 * @param narrow whether the line is one column of a grid - see {@link #figure}
 	 */
 	private static LayoutableRenderableEntity amount(String left, BufferedImage icon, long amount,
 		long recent, CombatMetric.Unit unit, boolean narrow)
@@ -282,12 +255,8 @@ class DoomMetricsOverlay extends OverlayPanel
 	}
 
 	/**
-	 * The figure a counter's line reads: the gain while there is one, the total otherwise.
-	 *
-	 * <p>In a grid column, a figure too long for it is shortened the way the infobox shortens one -
-	 * {@code 25k}, {@code +1.2k}. Half a line holds an icon and five characters, which keeps
-	 * everything up to 9,999 whole; past that the column would wrap the figure onto a second line
-	 * and draw it back over the icon, which is worse than losing the last digits.
+	 * The gain while there is one, the total otherwise. Shortened in a grid column so it never
+	 * wraps over the icon.
 	 *
 	 * @param narrow whether the figure has a grid column rather than a whole line
 	 */

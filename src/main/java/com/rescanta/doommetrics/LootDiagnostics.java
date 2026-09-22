@@ -35,39 +35,10 @@ import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.eventbus.Subscribe;
 
 /**
- * Writes down everything the game tells the client around the end of a delve, for working out how
- * a unique drop can be seen by a player who never opens the loot pile.
- *
- * <p>What is known from play: a unique plays a sound and lights the hole as the delve is cleared,
- * the pile is only shown if the player investigates it, and descending with a unique still in the
- * pile puts up a warning naming it - one warning per unique, duplicates and the pet included, on
- * every descend. What is not known is which of those reach the client as something a plugin can
- * read, and in what order. This logs all of the candidates and decides nothing.
- *
- * <p>One of them is answered: the hole a cleared delve is left by spawns as
- * {@code DOM_DESCEND_HOLE_UNIQUE} rather than {@code DOM_DESCEND_HOLE} while the pile holds a
- * unique, a few ticks after the boss dies and before the player touches anything - which is what
- * {@link DoomMetricsPlugin#onGameObjectSpawned} reads. The hole then stays that way until the loot
- * is claimed or the run ends, so it says the pile holds a unique rather than that this delve
- * dropped one.
- *
- * <p>The sound is answered too, and the answer is no. A delve that dropped a cloth was captured
- * against twenty-nine that dropped nothing, and its sounds - both the ones aimed at the player and
- * the ones placed in the world - were a subset of what every other clear played: the boss's death,
- * the shockwaves, and the player's own specs. Nothing was played on the unique's clear and on no
- * other, and nor was any graphic, varbit or object bar the glowing hole itself. So there is no
- * second signal to be had here, and a second unique in a run the glow has already spoken for
- * cannot be placed by listening for one.
- *
- * <p>Only on the event bus while the debug logging setting is on - the plugin puts it there and
- * takes it off again as the setting changes - and only writing in the stretches where a drop can be
- * shown: from the boss's death to the next delve starting, and for a while after a run ends so the
- * claim is caught. The fight itself is left out - every attack plays a sound and every splat on the
- * floor is an object, and a run's worth of those would bury the few lines this is after.
- *
- * <p>Every line carries the game tick, so lines from here and from the plugin can be put in order.
- *
- * <p>Client thread only.
+ * Debug-only logger for what the game shows around the end of a delve, written to find out how a
+ * unique drop can be seen without opening the loot pile. Found the glowing hole; ruled out sounds.
+ * On the event bus only while debug logging is on, and only writes from the boss's death to the
+ * next delve and shortly after a run ends. Every line carries the game tick. Client thread only.
  */
 @Slf4j
 class LootDiagnostics
@@ -75,7 +46,9 @@ class LootDiagnostics
 	/** How long after the boss dies to keep watching before the clear arrives to take over. */
 	private static final int AFTER_BOSS_DEATH_TICKS = 20;
 
-	/** How long after a run ends to keep watching: the claim script and its chat lines come later. */
+	/**
+	 * How long after a run ends to keep watching: the claim script and its chat lines come later.
+	 */
 	private static final int AFTER_RUN_TICKS = 100;
 
 	private final Client client;
@@ -94,7 +67,9 @@ class LootDiagnostics
 	/** Scripts fired this tick and how many times each, written out on the tick. */
 	private final Map<Integer, Integer> scripts = new TreeMap<>();
 
-	/** Interfaces loaded this tick, whose text is written out on the next once their scripts ran. */
+	/**
+	 * Interfaces loaded this tick, whose text is written out on the next once their scripts ran.
+	 */
 	private final Map<Integer, Integer> pendingDumps = new TreeMap<>();
 
 	LootDiagnostics(Client client, DoomMetricsConfig config, BooleanSupplier runActive,
@@ -334,10 +309,7 @@ class LootDiagnostics
 			object.getWorldLocation(), extra, impostor);
 	}
 
-	/**
-	 * Every piece of text, item and sprite showing in an interface, with the component it is on -
-	 * so a warning's wording and the item it pictures can be read off without knowing its layout.
-	 */
+	/** Logs every text, item and sprite in an interface with its component. */
 	private void dumpInterface(int group)
 	{
 		Widget[] roots = client.getWidgetRoots();

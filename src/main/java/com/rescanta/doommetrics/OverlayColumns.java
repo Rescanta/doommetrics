@@ -8,16 +8,8 @@ import java.util.List;
 import net.runelite.client.ui.overlay.components.LayoutableRenderableEntity;
 
 /**
- * One overlay line cut into equal columns, a component in each - how two counters share a line
- * under {@link CounterStyle#ICON_GRID}.
- *
- * <p>RuneLite's own {@code SplitComponent} cannot do this: it hands its first component the whole
- * width, so a line component there takes all of it and leaves the second nothing. Here every
- * column is handed its share before it is drawn, so each figure is right-aligned in its own column
- * and the figures of two lines stacked up read down in two straight columns.
- *
- * <p>A line with fewer components than columns leaves the rest empty rather than stretching what
- * it has, which keeps the last counter of an odd number in line with the column above it.
+ * One overlay line cut into equal columns, for {@link CounterStyle#ICON_GRID}. RuneLite's
+ * {@code SplitComponent} gives its first child the whole width. A short row leaves columns empty.
  */
 final class OverlayColumns implements LayoutableRenderableEntity
 {
@@ -32,7 +24,7 @@ final class OverlayColumns implements LayoutableRenderableEntity
 	/**
 	 * @param cells   what goes in each column, left to right: no more than {@code columns}
 	 * @param columns how many columns the width is cut into
-	 * @param gap     the space left between two columns
+	 * @param gap     the space between two columns
 	 */
 	OverlayColumns(List<LayoutableRenderableEntity> cells, int columns, int gap)
 	{

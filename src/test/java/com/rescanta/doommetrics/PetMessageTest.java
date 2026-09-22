@@ -13,21 +13,21 @@ public class PetMessageTest
 	{
 		String sent = "<col=ef1020>You have a funny feeling like you would have been followed...</col>";
 
-		assertFalse(DoomMetricsPlugin.isPetMessage(sent));
-		assertTrue(DoomMetricsPlugin.isPetMessage(Text.removeTags(sent)));
+		assertFalse(LootWatcher.isPetMessage(sent));
+		assertTrue(LootWatcher.isPetMessage(Text.removeTags(sent)));
 	}
 
 	@Test
 	public void everyWayThePetArrivesIsRecognised()
 	{
-		assertTrue(DoomMetricsPlugin.isPetMessage("You have a funny feeling like you're being followed."));
-		assertTrue(DoomMetricsPlugin.isPetMessage(
+		assertTrue(LootWatcher.isPetMessage("You have a funny feeling like you're being followed."));
+		assertTrue(LootWatcher.isPetMessage(
 			"You feel something weird sneaking into your backpack."));
 	}
 
 	@Test
 	public void otherLinesAreNot()
 	{
-		assertFalse(DoomMetricsPlugin.isPetMessage("Deep delves completed: 6,900"));
+		assertFalse(LootWatcher.isPetMessage("Deep delves completed: 6,900"));
 	}
 }

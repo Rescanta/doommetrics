@@ -1,6 +1,5 @@
 package com.rescanta.doommetrics;
 
-import java.time.Instant;
 import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -10,16 +9,16 @@ import static org.junit.Assert.assertTrue;
  * The chart's arithmetic, tested away from any painting. Everything here is static, so none of it
  * needs a display or the Swing thread.
  */
-public class DelveChartTest
+public class ChartMathTest
 {
 	@Test
 	public void gridStepsAreRoundNumbersThatDoNotCrowdTheAxis()
 	{
-		assertEquals(1, DelveChart.niceStep(8, 10));
-		assertEquals(2, DelveChart.niceStep(20, 10));
-		assertEquals(5, DelveChart.niceStep(50, 10));
-		assertEquals(10, DelveChart.niceStep(100, 10));
-		assertEquals(500, DelveChart.niceStep(4200, 10));
+		assertEquals(1, ChartMath.niceStep(8, 10));
+		assertEquals(2, ChartMath.niceStep(20, 10));
+		assertEquals(5, ChartMath.niceStep(50, 10));
+		assertEquals(10, ChartMath.niceStep(100, 10));
+		assertEquals(500, ChartMath.niceStep(4200, 10));
 	}
 
 	@Test
@@ -27,7 +26,7 @@ public class DelveChartTest
 	{
 		for (int span = 0; span <= 3000; span += 7)
 		{
-			int step = DelveChart.niceStep(span, 8);
+			int step = ChartMath.niceStep(span, 8);
 
 			assertTrue("crowded at span " + span, span / step <= 8);
 
@@ -50,10 +49,10 @@ public class DelveChartTest
 	@Test
 	public void theDelveAxisStaysReadableOnTheDeepestRuns()
 	{
-		assertEquals(20, DelveChart.niceStep(200, 10));
-		assertEquals(50, DelveChart.niceStep(260, 10));
-		assertEquals(50, DelveChart.niceStep(350, 10));
-		assertEquals(100, DelveChart.niceStep(900, 10));
+		assertEquals(20, ChartMath.niceStep(200, 10));
+		assertEquals(50, ChartMath.niceStep(260, 10));
+		assertEquals(50, ChartMath.niceStep(350, 10));
+		assertEquals(100, ChartMath.niceStep(900, 10));
 	}
 
 	/**
@@ -63,18 +62,18 @@ public class DelveChartTest
 	@Test
 	public void theTimeStripsGridlinesLandOnRoundSpans()
 	{
-		assertEquals(15, DelveChart.timeStep(30, 2));
-		assertEquals(60, DelveChart.timeStep(100, 2));
-		assertEquals(60, DelveChart.timeStep(120, 2));
-		assertEquals(120, DelveChart.timeStep(300, 2));
-		assertEquals(600, DelveChart.timeStep(1200, 2));
+		assertEquals(15, ChartMath.timeStep(30, 2));
+		assertEquals(60, ChartMath.timeStep(100, 2));
+		assertEquals(60, ChartMath.timeStep(120, 2));
+		assertEquals(120, ChartMath.timeStep(300, 2));
+		assertEquals(600, ChartMath.timeStep(1200, 2));
 	}
 
 	/** A delve slow enough to run off the longest step is off any scale worth drawing. */
 	@Test
 	public void aTimeStepIsNeverInventedPastTheLongestOne()
 	{
-		assertEquals(3600, DelveChart.timeStep(Integer.MAX_VALUE, 2));
+		assertEquals(3600, ChartMath.timeStep(Integer.MAX_VALUE, 2));
 	}
 
 	@Test
@@ -82,7 +81,7 @@ public class DelveChartTest
 	{
 		for (int span = 0; span <= 4000; span += 3)
 		{
-			int step = DelveChart.timeStep(span, 2);
+			int step = ChartMath.timeStep(span, 2);
 
 			assertTrue("crowded at span " + span, span / step <= 2 || step == 3600);
 			assertTrue("step " + step + " is not a round span",
@@ -97,13 +96,13 @@ public class DelveChartTest
 	@Test
 	public void theAveragingWindowWidensThenSettles()
 	{
-		assertEquals(9, DelveChart.windowFor(80));
+		assertEquals(9, ChartMath.windowFor(80));
 		assertEquals("a tenth that comes out even rounds up to the odd window it really spans",
-			11, DelveChart.windowFor(100));
-		assertEquals(15, DelveChart.windowFor(150));
-		assertEquals(25, DelveChart.windowFor(260));
-		assertEquals(25, DelveChart.windowFor(350));
-		assertEquals(25, DelveChart.windowFor(900));
+			11, ChartMath.windowFor(100));
+		assertEquals(15, ChartMath.windowFor(150));
+		assertEquals(25, ChartMath.windowFor(260));
+		assertEquals(25, ChartMath.windowFor(350));
+		assertEquals(25, ChartMath.windowFor(900));
 	}
 
 	/**
@@ -115,7 +114,7 @@ public class DelveChartTest
 	{
 		for (int delves = 80; delves <= 1000; delves++)
 		{
-			assertEquals("window for " + delves + " delves", 1, DelveChart.windowFor(delves) % 2);
+			assertEquals("window for " + delves + " delves", 1, ChartMath.windowFor(delves) % 2);
 		}
 	}
 
@@ -126,9 +125,9 @@ public class DelveChartTest
 	@Test
 	public void aShortRunGetsNoAverage()
 	{
-		assertEquals(0, DelveChart.windowFor(0));
-		assertEquals(0, DelveChart.windowFor(1));
-		assertEquals(0, DelveChart.windowFor(79));
+		assertEquals(0, ChartMath.windowFor(0));
+		assertEquals(0, ChartMath.windowFor(1));
+		assertEquals(0, ChartMath.windowFor(79));
 	}
 
 	@Test
@@ -137,29 +136,29 @@ public class DelveChartTest
 		// A window of three: each delve is the mean of itself and one either side, and the ends
 		// average over what they have rather than being dropped.
 		assertArrayEquals(new double[]{15, 20, 30, 40, 45},
-			DelveChart.rollingAverage(new long[]{10, 20, 30, 40, 50}, 3), 1e-9);
+			ChartMath.rollingAverage(new long[]{10, 20, 30, 40, 50}, 3), 1e-9);
 	}
 
 	@Test
 	public void aWindowOfOneIsTheDelvesThemselves()
 	{
 		assertArrayEquals(new double[]{7, 3, 9},
-			DelveChart.rollingAverage(new long[]{7, 3, 9}, 1), 1e-9);
+			ChartMath.rollingAverage(new long[]{7, 3, 9}, 1), 1e-9);
 	}
 
 	@Test
 	public void aRunWithNoDelvesAveragesToNothing()
 	{
-		assertEquals(0, DelveChart.rollingAverage(new long[0], 5).length);
+		assertEquals(0, ChartMath.rollingAverage(new long[0], 5).length);
 	}
 
 	/** Both ends of an axis land on a gridline, so nothing is drawn off the top of the plot. */
 	@Test
 	public void anAxisReachesPastTheLargestFigureOnIt()
 	{
-		assertEquals(120, DelveChart.ceilTo(101, 20));
-		assertEquals(100, DelveChart.ceilTo(100, 20));
-		assertEquals(20, DelveChart.ceilTo(1, 20));
+		assertEquals(120, ChartMath.ceilTo(101, 20));
+		assertEquals(100, ChartMath.ceilTo(100, 20));
+		assertEquals(20, ChartMath.ceilTo(1, 20));
 	}
 
 	/**
@@ -170,19 +169,19 @@ public class DelveChartTest
 	@Test
 	public void anAxisStopsClearOfTheLargestFigureRatherThanOnIt()
 	{
-		assertEquals(180, DelveChart.topFor(120, 60));
-		assertEquals(120, DelveChart.topFor(101, 60));
-		assertEquals(60, DelveChart.topFor(1, 60));
-		assertEquals(60, DelveChart.topFor(0, 60));
+		assertEquals(180, ChartMath.topFor(120, 60));
+		assertEquals(120, ChartMath.topFor(101, 60));
+		assertEquals(60, ChartMath.topFor(1, 60));
+		assertEquals(60, ChartMath.topFor(0, 60));
 	}
 
 	/** A run that counted nothing has no axis to reach, and must not ask for a negative one. */
 	@Test
 	public void anAxisOverNothingIsNothing()
 	{
-		assertEquals(0, DelveChart.ceilTo(0, 20));
-		assertEquals(0, DelveChart.ceilTo(-5, 20));
-		assertEquals(0, DelveChart.ceilTo(10, 0));
+		assertEquals(0, ChartMath.ceilTo(0, 20));
+		assertEquals(0, ChartMath.ceilTo(-5, 20));
+		assertEquals(0, ChartMath.ceilTo(10, 0));
 	}
 
 	/** Icons with room between them all sit in the row nearest the plot. */
@@ -190,7 +189,7 @@ public class DelveChartTest
 	public void iconsFarApartShareOneRow()
 	{
 		assertArrayEquals(new int[]{0, 0, 0},
-			DelveChart.stackRows(new int[]{10, 60, 200}, 30, 3));
+			ChartMath.stackRows(new int[]{10, 60, 200}, 30, 3));
 	}
 
 	/** Too close to sit side by side, each goes up a row, and the last row takes the overflow. */
@@ -198,14 +197,14 @@ public class DelveChartTest
 	public void iconsTooCloseTogetherStack()
 	{
 		assertArrayEquals(new int[]{0, 1, 2, 2, 0},
-			DelveChart.stackRows(new int[]{100, 110, 120, 125, 130}, 30, 3));
+			ChartMath.stackRows(new int[]{100, 110, 120, 125, 130}, 30, 3));
 	}
 
 	/** Two drops off the same delve are two icons, one over the other. */
 	@Test
 	public void twoDropsOffOneDelveStack()
 	{
-		assertArrayEquals(new int[]{0, 1}, DelveChart.stackRows(new int[]{50, 50}, 30, 3));
+		assertArrayEquals(new int[]{0, 1}, ChartMath.stackRows(new int[]{50, 50}, 30, 3));
 	}
 
 	/** The rows are worked out left to right whatever order the drops are listed in. */
@@ -213,31 +212,12 @@ public class DelveChartTest
 	public void rowsDoNotDependOnTheOrderTheDropsLanded()
 	{
 		assertArrayEquals(new int[]{1, 0, 0},
-			DelveChart.stackRows(new int[]{110, 100, 300}, 30, 3));
+			ChartMath.stackRows(new int[]{110, 100, 300}, 30, 3));
 	}
 
 	@Test
 	public void noDropsNeedNoRows()
 	{
-		assertEquals(0, DelveChart.stackRows(new int[0], 30, 3).length);
-	}
-
-	/** A drop lost to a death says so, rather than that the run was left without claiming it. */
-	@Test
-	public void aLostDropSaysHowItWasLost()
-	{
-		assertEquals("Lost when you died",
-			DelveChart.lostHow(RunDetail.of(ended(EndReason.DIED, 2))));
-		assertEquals("Lost when the run ended unclaimed",
-			DelveChart.lostHow(RunDetail.of(ended(EndReason.FINISHED, -1))));
-	}
-
-	/** A run that cleared delve 1 and then ended as {@code reason} says. */
-	private static DelveRun ended(EndReason reason, int diedOn)
-	{
-		DelveRun run = new DelveRun(Instant.EPOCH, 1, false);
-		run.complete(1, Instant.EPOCH.plusSeconds(60), null);
-		run.end(reason, Instant.EPOCH.plusSeconds(90), diedOn);
-		return run;
+		assertEquals(0, ChartMath.stackRows(new int[0], 30, 3).length);
 	}
 }

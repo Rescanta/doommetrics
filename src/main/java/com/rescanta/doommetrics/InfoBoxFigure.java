@@ -8,23 +8,9 @@ import java.util.List;
 import java.util.function.ToLongFunction;
 
 /**
- * The single figure an infobox square can hold, and everything needed to draw it: the text, the
- * colour, and the tooltip that says what the text left out.
- *
- * <p>A square is not a panel with fewer rows. A panel row has a label beside it and room for a
- * separated figure, so it can afford to say {@code Deep pace 40.1/hr}; a square is thirty-five
- * pixels wide with a picture behind it, and everything that will not fit in it has to go somewhere
- * or be dropped. So the square carries the figure at a glance - {@code 40.1}, {@code 1.2k},
- * {@code 1h23} - and the tooltip carries what qualifies it: the unit, the full precision, and
- * whether the run it was measured over is one we saw the start of.
- *
- * <p>The constant names are what the config stores, so renaming one silently resets the choice of
- * whoever had it picked, the same way {@link CombatMetric#key()} works. The labels may be reworded
- * freely. The catch-all counters had squares once; a square still saved as one of them fails to
- * read back and the client falls back to the default, {@link #DELVE}.
- *
- * <p>Public because the config interface returns it - see {@link DisplayStyle} for why that
- * matters.
+ * The figure an infobox square can hold: the short text, its colour, and a tooltip with the rest.
+ * The constant names are stored in config, so renaming one resets users' choice. Public because the
+ * config interface returns it.
  */
 public enum InfoBoxFigure
 {
@@ -77,20 +63,13 @@ public enum InfoBoxFigure
 		this.group = group;
 	}
 
-	/**
-	 * Whether the square has anything to hold for this run. Only the time to a target ever has
-	 * nothing: once the target is behind you there is no time left to count down, and a square
-	 * that only says so is one more thing on screen saying nothing.
-	 */
+	/** Only the time to a target can have nothing to show, once the target is reached. */
 	boolean shown(DelveRun run, DoomMetricsConfig config)
 	{
 		return this != TIME_TO_TARGET || !run.hasReached(config.targetDelve());
 	}
 
-	/**
-	 * What the square reads, shortened to fit it. Never null and never empty, so a square that is
-	 * on screen always has a figure in it.
-	 */
+	/** The square's text, shortened to fit. Never null or empty. */
 	String text(DelveRun run, DoomMetricsConfig config, Instant now)
 	{
 		switch (this)
@@ -133,12 +112,8 @@ public enum InfoBoxFigure
 	}
 
 	/**
-	 * The colour the figure is drawn in: its unit's, so that red is hitpoints, blue is prayer and
-	 * yellow is damage without the square having room to say so, and dimmed when there is nothing
-	 * behind the figure yet.
-	 *
-	 * <p>The three run figures are drawn plain. They are not counted in any unit, and lending one
-	 * of them a unit's colour would spend the only thing the square has to tell the units apart.
+	 * The unit's colour, dimmed while there is nothing behind the figure. The run figures are
+	 * plain.
 	 */
 	Color color(DelveRun run, DoomMetricsConfig config, Instant now)
 	{
@@ -169,10 +144,7 @@ public enum InfoBoxFigure
 		}
 	}
 
-	/**
-	 * What the square could not fit: what the figure is, what it is counted in, and the full
-	 * precision of it. Split into lines the way RuneLite's tooltips are.
-	 */
+	/** What the square could not fit: what the figure is, its unit and full precision. */
 	String tooltip(DelveRun run, DoomMetricsConfig config, Instant now)
 	{
 		switch (this)
@@ -247,11 +219,7 @@ public enum InfoBoxFigure
 		}
 	}
 
-	/**
-	 * A time measured from the start of the run, with a line saying the start is a guess when the
-	 * run was joined part way through. The panel says this with an asterisk it has the width for;
-	 * here it is said out.
-	 */
+	/** Adds a line saying the start is a guess for a joined run. */
 	private static String partialNote(DelveRun run, String tooltip)
 	{
 		return run.isPartial()
@@ -294,9 +262,7 @@ public enum InfoBoxFigure
 
 		long total = 0;
 
-		// Every counter under the heading, the ones with no row of their own included - the same
-		// figure the panel's heading and the overlay's total line carry, so a square set to
-		// All healing does not read lower than the table it was set from.
+		// Every counter under the heading, catch-alls included, matching the panel's heading.
 		for (CombatMetric each : group.metrics())
 		{
 			total += figure.applyAsLong(each);
@@ -305,11 +271,7 @@ public enum InfoBoxFigure
 		return total;
 	}
 
-	/**
-	 * The delve the square reports: the one being fought, or the one the run ended on. A death is
-	 * reported on the delve it happened on rather than the last one banked, which is the delve the
-	 * panel names in the same state.
-	 */
+	/** The delve being fought, or the one the run ended (or died) on. */
 	private static int delve(DelveRun run)
 	{
 		if (!run.isFinished())
@@ -325,10 +287,6 @@ public enum InfoBoxFigure
 		return metric != null ? metric.unit() : group.unit();
 	}
 
-	/**
-	 * What the tooltip leads with: the figure's own name for one counter - the name it was picked
-	 * by, which says what it counts - and the heading's for a heading.
-	 */
 	private String heading()
 	{
 		return metric != null ? label : group.heading();

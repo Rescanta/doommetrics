@@ -3,15 +3,8 @@ package com.rescanta.doommetrics;
 import java.awt.image.BufferedImage;
 
 /**
- * The pictures drawn in place of a counter's or a drop's name: the weapon, the spell or the item,
- * as the game draws it.
- *
- * <p>Any of them can be null - still loading, or nothing to draw - and whatever asks for one draws
- * the name instead, so a picture that has not arrived yet never leaves a gap where a name should
- * be.
- *
- * <p>The plugin's come out of the game - see {@link GameIcons}. The preview harness, which has no
- * game, keeps copies with its tests.
+ * The pictures drawn beside a counter's or a drop's name. Any may be null - still loading, or none
+ * - and callers then draw the name alone.
  */
 interface Icons
 {

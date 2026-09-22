@@ -52,6 +52,19 @@ public class RunHistoryStoreTest
 	}
 
 	@Test
+	public void anIncompleteRunSurvivesTheRoundTrip()
+	{
+		RunRecord original = record(40, EndReason.ABANDONED);
+		original.incomplete = true;
+
+		RunRecord restored = store.decode(store.encode(original));
+
+		assertNotNull(restored);
+		assertEquals(EndReason.ABANDONED, restored.end);
+		assertTrue(restored.incomplete);
+	}
+
+	@Test
 	public void aRunsCombatFiguresSurviveTheRoundTrip()
 	{
 		RunRecord original = record(60, EndReason.FINISHED);

@@ -6,11 +6,7 @@ import java.util.regex.Pattern;
 import net.runelite.client.util.Text;
 
 /**
- * A delve boundary the game announced in chat.
- *
- * <p>Every delve is bracketed by two game messages, and the closing one carries the delve number
- * and the fight length to a tenth of a second. That makes chat the only signal a run needs, and
- * unlike the Doom varplayers it never fires on login.
+ * A delve start or clear the game announced in chat.
  *
  * <pre>
  * Delve level: 3                                                     started, delve 3
@@ -20,8 +16,7 @@ import net.runelite.client.util.Text;
  * Delve level: 8+ (15) duration: 1:30.60. Personal best: 0:48.60     cleared, delve 15
  * </pre>
  *
- * <p>The milestone line "Delve level 1 - 8 duration: ..." has no colon after "level", so it does
- * not match and is ignored.
+ * The milestone line "Delve level 1 - 8 duration: ..." has no colon after "level" and is ignored.
  */
 final class DelveMessage
 {

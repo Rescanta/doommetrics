@@ -4,16 +4,8 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * What each counter has gained in the last few seconds, so the overlay and the square can show a
- * hit's worth as {@code +97} before the figure goes back to the run's total.
- *
- * <p>A gain landing while the last one is still on show adds to it and starts the clock over. One
- * punish arrives as the swing's hitsplats and the strength-bonus ones behind them, a tick or two
- * apart, and reading it as {@code +30} then {@code +67} would show neither the punish nor the total.
- *
- * <p>Wall clock rather than game ticks, so the figure can be read in a frame without asking the
- * client what tick it is. Client thread only: written as amounts are credited, read as frames are
- * drawn, and both happen there.
+ * What each counter gained in the last few seconds, shown as {@code +97}. A new gain adds to one
+ * still showing, so a punish's swing and bonus splats read as one. Wall clock; client thread only.
  */
 class RecentGains
 {
@@ -41,7 +33,9 @@ class RecentGains
 		lastAt[slot] = at;
 	}
 
-	/** The gain on show for {@code metric}, or 0 once it has run its time or before there was one. */
+	/**
+	 * The gain on show for {@code metric}, or 0 once it has run its time or before there was one.
+	 */
 	long get(CombatMetric metric, Instant now)
 	{
 		int slot = metric.ordinal();

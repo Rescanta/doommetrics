@@ -24,30 +24,8 @@ import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
- * A window of its own, outside the side panel and outside the client: one run, taken apart delve
- * by delve.
- *
- * <p>It shows the run in progress, and goes on showing it once it ends - the last run you made is
- * the one you want to read afterwards, and unlike the overlay this window is only on screen
- * because you opened it, so it has no reason to time itself out. Clearing the overlay leaves it be
- * for the same reason: Clear takes a finished run off the game screen, and this is not on it.
- *
- * <p>Nothing here is read back from disk, so a window opened before this session's first run is
- * empty and says so. What survives a client restart is the milestone table and the lifetime totals,
- * and both of those are in the side panel where they always were.
- *
- * <p>The chart wants far more width than a side panel has, and its legend wants a column beside it,
- * so all of it lives here rather than being cramped to fit next to the client.
- *
- * <p>The counters are read either way from here: separately, a line per source, or grouped, a line
- * per heading. The tab that picks between them sits on the Counters heading rather than in the
- * config because it is a question about the run in front of you - which way round this one is
- * legible - and the answer changes from one run to the next. The overlay's own grouping setting is
- * left alone by it: that one is about a display that is up while you fight, and this is not.
- *
- * <p>Swing thread only. The plugin owns the single instance and disposes it on shutdown; closing
- * the window disposes it and tells the plugin to forget it, so the next open builds a fresh one
- * rather than resurrecting a disposed frame.
+ * One run, delve by delve: the chart, its legend and the drops. Shows the live run or the last one,
+ * ignoring the overlay's linger and Clear. Swing thread only; the plugin owns the one instance.
  */
 class RunDetailWindow extends JFrame
 {
@@ -84,14 +62,13 @@ class RunDetailWindow extends JFrame
 	private final JPanel[] rows = new JPanel[DoomMetricsPanel.Live.ROWS];
 
 	/**
-	 * Which of {@link #rows} are up, a bit for each by its index, or -1 while the idle line is.
-	 * Starts as neither, so the first snapshot always lays them out.
+	 * Which of {@link #rows} are up, a bit per index, or -1 for the idle line. Starts as neither.
 	 */
 	private int shownRows = Integer.MIN_VALUE;
 
 	/**
-	 * @param icon    the plugin's own icon, so the window is identifiable in the taskbar
-	 * @param onClose run when the user closes the window, to drop the plugin's reference to it
+	 * @param icon    the plugin's icon, for the taskbar
+	 * @param onClose run when the user closes the window
 	 */
 	RunDetailWindow(BufferedImage icon, Runnable onClose)
 	{
@@ -112,9 +89,8 @@ class RunDetailWindow extends JFrame
 			}
 		});
 
-		// The chart and its legend are two halves of one thing: pointing at a delve moves the
-		// legend's column onto that delve, and pointing at a name brings that line forward. The
-		// drops list is read the same way, lighting up whatever came off the delve pointed at.
+		// Hovering a delve moves the legend and drops list onto it; hovering a name brings a line
+		// forward.
 		chart.setHoverListener(level ->
 		{
 			legend.setDelve(level);
@@ -153,12 +129,6 @@ class RunDetailWindow extends JFrame
 		requestFocus();
 	}
 
-	/**
-	 * @param detail the run to draw, delve by delve
-	 *
-	 * <p>Pushed only when something on the chart has moved: a delve killed, something counted in
-	 * the wait after it, or that wait ending - see {@link RunDetail#keyFor}.
-	 */
 	void setDetail(RunDetail detail)
 	{
 		chart.setDetail(detail);
@@ -168,9 +138,8 @@ class RunDetailWindow extends JFrame
 	}
 
 	/**
-	 * @param folded        the legend's headings to fold down to their totals, as last left
-	 * @param onFoldChanged handed the headings folded down whenever a click changes them, on the
-	 *                      Swing thread, so the choice can be kept for next time
+	 * @param onFoldChanged handed the folded headings whenever a click changes them, on the Swing
+	 * thread
 	 */
 	void setFolding(Set<CombatMetric.Group> folded, Consumer<Set<CombatMetric.Group>> onFoldChanged)
 	{
@@ -184,11 +153,6 @@ class RunDetailWindow extends JFrame
 		legend.setHideEmpty(hideEmpty);
 	}
 
-	/**
-	 * @param icons the pictures of the drops on the chart, and of the counters and drops named
-	 *              beside it. The plugin hands over the game's own, again as each arrives; the
-	 *              preview harness, which has no game, hands over copies it keeps with its tests.
-	 */
 	void setIcons(Icons icons)
 	{
 		chart.setItemIcons(icons::item);
@@ -196,12 +160,7 @@ class RunDetailWindow extends JFrame
 		drops.setIcons(icons);
 	}
 
-	/**
-	 * @param live the same rows the overlay and the side panel draw, or null when there is no run
-	 *
-	 * <p>Pushed on the ordinary refresh, so the clock at the head of the sidebar runs while the
-	 * chart under it sits still between clears.
-	 */
+	/** @param live the side panel's live rows, or null when there is no run */
 	void setLive(DoomMetricsPanel.Live live)
 	{
 		int shown = -1;
@@ -249,12 +208,8 @@ class RunDetailWindow extends JFrame
 	}
 
 	/**
-	 * Puts up the rows a snapshot has, and does nothing when they are the ones already up.
-	 *
-	 * <p>A snapshot is pushed every time the clock at the head moves, which is every second, and
-	 * taking the rows down and building them again for that would lay the sidebar out anew each
-	 * time. What changes the rows is rarer - a run starting or ending, a target reached - and is
-	 * the only thing that needs them put up again.
+	 * Puts up the rows a snapshot has; a no-op when they're already up, since the clock ticks every
+	 * second.
 	 */
 	private void showRows(int shown)
 	{
@@ -285,10 +240,7 @@ class RunDetailWindow extends JFrame
 		summaryRows.repaint();
 	}
 
-	/**
-	 * The two figures a run is read by, and the rest of its rows under them - the same head the
-	 * side panel gives the run, so the two never word the same state differently.
-	 */
+	/** The same head the side panel gives the run. */
 	private void buildSummary()
 	{
 		JPanel hero = new JPanel(new GridLayout(1, 2, 6, 0));
@@ -328,12 +280,7 @@ class RunDetailWindow extends JFrame
 		return panel;
 	}
 
-	/**
-	 * The tabs that pick how the counters are read, on the Counters heading.
-	 *
-	 * <p>The same pair the side panel's combat table is read by, for the same reason: two ways of
-	 * looking at one set of figures, only one of them up at a time, and nothing lost by switching.
-	 */
+	/** Separate / Grouped tabs on the Counters heading. */
 	private MaterialTabGroup groupingTabs()
 	{
 		separateTab = groupingTab("Sources", false,
@@ -363,22 +310,13 @@ class RunDetailWindow extends JFrame
 		return tab;
 	}
 
-	/**
-	 * Puts either way of reading the counters up, for the preview harness - in the plugin nothing
-	 * but a click moves them, and the window opens on the separate lines.
-	 *
-	 * <p>Idempotent: picking the tab already in front does nothing at all.
-	 */
+	/** For the preview harness. Idempotent. */
 	void showGrouped(boolean grouped)
 	{
 		grouping.select(grouped ? groupedTab : separateTab);
 	}
 
-	/**
-	 * The run's own figures over its drops and the legend, stacked and scrolled together. Their
-	 * height is eight counters under three headings and a drop or two, so they scroll only when
-	 * the window is made short enough to need it.
-	 */
+	/** The run's figures, drops and legend, scrolled together. */
 	private JScrollPane sidebar()
 	{
 		// A hidden section takes its gap with it, so a run without drops lays out as it always did.
@@ -392,12 +330,8 @@ class RunDetailWindow extends JFrame
 		stack.add(PanelStyle.section("This run", PanelStyle.card(summary)), BorderLayout.NORTH);
 		stack.add(lower, BorderLayout.CENTER);
 
-		// The legend is a grid; wrapping it in a BorderLayout stops the viewport stretching its
-		// rows to fill the height. Pinning its width stops the opposite: a row wider than the
-		// sidebar - a long heading, a lifetime figure - would otherwise be laid out at the width
-		// it asked for and have its last digits clipped off by the viewport, with no horizontal
-		// scrollbar to reach them by. Held to the width it has, a row squeezes its name instead,
-		// which is what its tooltip is for.
+		// Wrapped so rows aren't stretched to the viewport height, and held to the sidebar width so
+		// a wide row squeezes its name rather than having its digits clipped.
 		JPanel top = new ColumnWidth();
 		top.setBackground(PanelStyle.BACKGROUND);
 		top.add(stack, BorderLayout.NORTH);
@@ -409,22 +343,13 @@ class RunDetailWindow extends JFrame
 		scroller.getViewport().setBackground(PanelStyle.BACKGROUND);
 		scroller.getVerticalScrollBar().setUnitIncrement(SCROLL_UNIT);
 
-		// The sidebar plus a lane for the scrollbar, which is kept clear whether or not the bar is
-		// in it. A scrollbar that takes its width out of the rows relays every one of them as it
-		// appears, and it appears on a window short enough that the counters listed one per source
-		// do not fit while the same counters grouped into three do - so switching between the two
-		// moved every figure in the column sideways, twice, for a bar neither of them asked about.
-		// Given a lane of its own it comes and goes in the gap between the sidebar and the chart,
-		// where there was nothing to disturb, and the rows do not move at all.
+		// A permanent lane for the scrollbar, so it appearing never relays the rows sideways.
 		int lane = scroller.getVerticalScrollBar().getPreferredSize().width;
 		scroller.setPreferredSize(new Dimension(SIDEBAR_WIDTH + lane, 0));
 		return scroller;
 	}
 
-	/**
-	 * The sidebar's contents, laid out at the sidebar's width whatever they would rather have and
-	 * whatever the viewport around them is doing - see {@link #sidebar()}.
-	 */
+	/** Lays the sidebar out at its own width whatever the viewport does. */
 	private static final class ColumnWidth extends JPanel implements Scrollable
 	{
 		private ColumnWidth()
@@ -456,10 +381,7 @@ class RunDetailWindow extends JFrame
 			return visible.height;
 		}
 
-		/**
-		 * Never. The width is this component's own, so the lane the scrollbar sits in is left
-		 * empty when there is no bar in it rather than being handed to the rows.
-		 */
+		/** Never, so the scrollbar lane is left empty rather than handed to the rows. */
 		@Override
 		public boolean getScrollableTracksViewportWidth()
 		{

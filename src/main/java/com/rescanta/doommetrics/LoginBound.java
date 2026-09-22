@@ -4,18 +4,8 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * The earliest a run we joined part way through can have started: the login it happened in.
- *
- * <p>The client does not say when it logged in, and a login the plugin saw for itself is only
- * there if the plugin was on at the time. The game tick counter fills the gap. It moves once per
- * server tick while logged in, so ticks times the tick length reads back to the login from any
- * moment - checked against a debug log, where it landed two seconds before the login screen let
- * go. It does not start over when you log out and back in, only stops while you are out, so after
- * a relog it reads back to a moment before the first login, less the time spent logged out. That
- * is still no later than the run's real start, which is all a bound has to be.
- *
- * <p>The earlier of it and a login actually seen is taken, which covers a counter that did start
- * over somehow.
+ * The earliest a joined run can have started: its login. Read back from the game tick counter,
+ * which only moves while logged in, or a login the plugin saw - whichever is earlier.
  */
 final class LoginBound
 {

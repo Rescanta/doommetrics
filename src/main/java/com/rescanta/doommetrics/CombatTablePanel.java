@@ -16,33 +16,8 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
 
 /**
- * A {@link CombatTotals} laid out as a table: what healed you, what restored your prayer and what
- * your specs hit for, under the heading each belongs to.
- *
- * <p>A component in its own right so the figures are laid out in one place: the side panel draws
- * the sitting's tally with it, and anything else that has a {@link CombatTotals} to show can draw
- * that one the same way rather than growing a second table that drifts from this.
- *
- * <p>Every heading carries its group's total: what all of its counters came to, including the
- * catch-alls that have no row - see {@link CombatMetric.Group#amount}. A column of sources answers
- * which of them did the work and never answers how much work there was, which is the figure anyone
- * comparing one sitting with another is after.
- *
- * <p>Every row is built once and only ever retexted. The rows never change: eight metrics under
- * three headings, whether or not any of them has fired. A metric that has counted nothing reads
- * zero in the muted colour rather than vanishing, so the table does not reflow as a run goes on and
- * so the reader can see that a source they expected to fire has not.
- *
- * <p>A click on a heading folds its rows away, leaving the heading's total - see
- * {@link #setFolded}. Which headings are folded is the reader's to choose and nothing else moves
- * them, so the table still never reflows by itself.
- *
- * <p>Each row carries a meter behind its figure, filled against the largest figure counted in the
- * same unit - see {@link #setTotals}. Eight numbers in a column say what each source gave you but
- * not which of them was carrying the run, and the answer is the shape of the column rather than
- * any one number in it.
- *
- * <p>Swing thread only.
+ * A {@link CombatTotals} as a table: headings with their group totals, and a row per counter with a
+ * meter scaled per unit. Rows are built once and never reflow. Swing thread only.
  */
 class CombatTablePanel extends JPanel
 {
@@ -97,10 +72,8 @@ class CombatTablePanel extends JPanel
 	}
 
 	/**
-	 * Puts up every heading, and the rows under the ones not folded.
-	 *
-	 * <p>Taken down and put back rather than hidden, because the grid lays out a hidden component
-	 * as a gap the height of the tallest row.
+	 * Puts up every heading and the rows under unfolded ones. Removed rather than hidden, since the
+	 * grid leaves a gap for a hidden component.
 	 */
 	private void layOut()
 	{
@@ -130,11 +103,7 @@ class CombatTablePanel extends JPanel
 		repaint();
 	}
 
-	/**
-	 * @param groups the headings to fold down to their totals, as the reader last left them
-	 *
-	 * <p>Tells no listener: this is the table being told what it already was, not a click.
-	 */
+	/** The headings to fold, as last left. Tells no listener. */
 	void setFolded(Set<CombatMetric.Group> groups)
 	{
 		folded.clear();
@@ -166,10 +135,6 @@ class CombatTablePanel extends JPanel
 		return folded.contains(group);
 	}
 
-	/**
-	 * @param icons the pictures to draw beside the counters' names. Handed over again as they
-	 *              arrive from the game, and a row stands on its name alone until its picture has.
-	 */
 	void setIcons(Icons icons)
 	{
 		this.icons = icons;
@@ -180,16 +145,7 @@ class CombatTablePanel extends JPanel
 		}
 	}
 
-	/**
-	 * Repaints every figure. A null tally reads as all zeroes, which is what it means.
-	 *
-	 * <p>The meters are scaled per unit rather than across the whole table: hitpoints, prayer
-	 * points and damage are three different things counted in three different sizes, and a damage
-	 * figure is routinely twenty times a healing one. Put on one scale it would leave every
-	 * healing row an indistinguishable stub. Scaled per unit, a bar answers the question the reader
-	 * actually has - which of these sources is doing the work - and never invites the comparison
-	 * across colours that the numbers do not support.
-	 */
+	/** Repaints every figure; a null tally reads as zeroes. Meters are scaled per unit. */
 	void setTotals(CombatTotals totals)
 	{
 		// An empty tally rather than a null one from here down: every figure below reads the same
@@ -214,12 +170,7 @@ class CombatTablePanel extends JPanel
 		}
 	}
 
-	/**
-	 * One metric: its name, its figure, and a meter behind both.
-	 *
-	 * <p>The meter is painted rather than laid out, so it costs the row no height and cannot push
-	 * the figure out of line with the figures above it.
-	 */
+	/** One metric: name, figure, and a painted meter behind both. */
 	private static final class MeterRow extends JPanel
 	{
 		private final CombatMetric metric;
@@ -230,10 +181,7 @@ class CombatTablePanel extends JPanel
 		/** How much of the row the meter fills, from nothing to {@link PanelStyle#METER_WIDTH}. */
 		private double fill;
 
-		/**
-		 * What the name was last drawn with, so the pictures arriving one at a time redraw the
-		 * rows waiting on theirs and leave the rows already holding one alone.
-		 */
+		/** The icon the name was last drawn with, so only rows still waiting redraw. */
 		private BufferedImage shownIcon;
 
 		private MeterRow(CombatMetric metric, Color stripe)
@@ -247,9 +195,7 @@ class CombatTablePanel extends JPanel
 			value.setBorder(PanelStyle.CELL_PADDING);
 
 			setBackground(stripe);
-			// The name in the middle and the figure on the edge, so a row too narrow for both
-			// takes it out of the name - which the row's tooltip still spells out - rather than
-			// clipping digits off a lifetime figure, which nothing else says.
+			// A narrow row squeezes the name rather than clipping the figure.
 			add(label, BorderLayout.CENTER);
 			add(value, BorderLayout.EAST);
 
@@ -278,8 +224,7 @@ class CombatTablePanel extends JPanel
 
 		/**
 		 * @param amount  what this metric has counted
-		 * @param largest the most anything counted in the same unit has counted, which is what
-		 *                fills the meter
+		 * @param largest the most counted in the same unit, which fills the meter
 		 */
 		private void set(long amount, long largest)
 		{
