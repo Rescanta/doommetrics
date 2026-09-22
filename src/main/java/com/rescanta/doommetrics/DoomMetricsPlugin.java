@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -153,17 +152,6 @@ public class DoomMetricsPlugin extends Plugin
 
 	/** The menu option that goes deeper, on the hole and on the loot screen alike. */
 	private static final String DESCEND_OPTION = "Descend";
-
-	/**
-	 * How long one of our handlers may take before it is worth a line in the log.
-	 *
-	 * <p>Every handler here runs on the client thread, so its time is time the game loop is not
-	 * running. A game tick is 600ms and a frame at 50fps is 20ms, which makes five a threshold
-	 * quiet enough never to fire in normal play and small enough to catch anything a player could
-	 * see. A lone report is more likely a garbage collection landing inside a handler than work we
-	 * did; a repeated one is ours.
-	 */
-	private static final long SLOW_HANDLER_NANOS = Duration.ofMillis(5).toNanos();
 
 	/**
 	 * How long a gap between runs takes the session off the panel.
@@ -436,7 +424,7 @@ public class DoomMetricsPlugin extends Plugin
 	/**
 	 * Set when "Claim and leave" is clicked, and cleared by anything that shows the run carrying on.
 	 * Only while it is set is the claimed loot filling in taken as the claim - see
-	 * {@link #handleItemContainerChanged} - so a copy of it sent for any other reason cannot end a
+	 * {@link #onItemContainerChanged} - so a copy of it sent for any other reason cannot end a
 	 * run. The claim script and the buttons that take the claimed loot still close the run out on
 	 * their own.
 	 */
@@ -731,13 +719,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
-		long started = System.nanoTime();
-		handleChatMessage(event);
-		reportSlow("onChatMessage", started);
-	}
-
-	private void handleChatMessage(ChatMessage event)
-	{
 		// Ahead of the type check: the drain line is spam, not a game message, and spam is where
 		// it will stay.
 		if (run != null && event.getMessage().contains(BLOOD_DRAIN))
@@ -950,25 +931,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		long started = System.nanoTime();
-		handleItemContainerChanged(event);
-		reportSlow("onItemContainerChanged", started);
-	}
-
-	/**
-	 * Watches the loot pile grow, and places each notable drop on the delve it came off.
-	 *
-	 * <p>Only a count going up is a drop. The game sends the pile over again and again while a
-	 * unique sits in it - and warns about it on every descend - so being told the pile holds an eye
-	 * says nothing on its own; being told it holds one more eye than it did is the eye dropping.
-	 * Both copies of the pile are watched, and a drop that shows up in both is placed once: the
-	 * second copy to show it finds the run already knows.
-	 *
-	 * <p>This places drops, and does not claim them. What the run walked out with is still decided
-	 * at the claim - see {@link #claimLootPile}.
-	 */
-	private void handleItemContainerChanged(ItemContainerChanged event)
-	{
 		int containerId = event.getContainerId();
 
 		if (run == null
@@ -1125,13 +1087,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
-		long started = System.nanoTime();
-		handleMenuOptionClicked(event);
-		reportSlow("onMenuOptionClicked", started);
-	}
-
-	private void handleMenuOptionClicked(MenuOptionClicked event)
-	{
 		if (run == null)
 		{
 			return;
@@ -1187,13 +1142,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event)
 	{
-		long started = System.nanoTime();
-		handleScriptPreFired(event);
-		reportSlow("onScriptPreFired", started);
-	}
-
-	private void handleScriptPreFired(ScriptPreFired event)
-	{
 		if (event.getScriptId() == ScriptID.DOM_LOOT_CLAIM && run != null)
 		{
 			clientThread.invokeLater(this::finishClaim);
@@ -1202,13 +1150,6 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onActorDeath(ActorDeath event)
-	{
-		long started = System.nanoTime();
-		handleActorDeath(event);
-		reportSlow("onActorDeath", started);
-	}
-
-	private void handleActorDeath(ActorDeath event)
 	{
 		if (run != null && event.getActor() == client.getLocalPlayer())
 		{
@@ -1222,13 +1163,6 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event)
-	{
-		long started = System.nanoTime();
-		handleHitsplatApplied(event);
-		reportSlow("onHitsplatApplied", started);
-	}
-
-	private void handleHitsplatApplied(HitsplatApplied event)
 	{
 		if (run == null)
 		{
@@ -1394,13 +1328,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onAnimationChanged(AnimationChanged event)
 	{
-		long started = System.nanoTime();
-		handleAnimationChanged(event);
-		reportSlow("onAnimationChanged", started);
-	}
-
-	private void handleAnimationChanged(AnimationChanged event)
-	{
 		Actor actor = event.getActor();
 
 		if (run == null || actor == null)
@@ -1465,13 +1392,6 @@ public class DoomMetricsPlugin extends Plugin
 	 */
 	@Subscribe
 	public void onStatChanged(StatChanged event)
-	{
-		long started = System.nanoTime();
-		handleStatChanged(event);
-		reportSlow("onStatChanged", started);
-	}
-
-	private void handleStatChanged(StatChanged event)
 	{
 		if (event.getSkill() == Skill.PRAYER)
 		{
@@ -1601,13 +1521,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onGraphicChanged(GraphicChanged event)
 	{
-		long started = System.nanoTime();
-		handleGraphicChanged(event);
-		reportSlow("onGraphicChanged", started);
-	}
-
-	private void handleGraphicChanged(GraphicChanged event)
-	{
 		Actor actor = event.getActor();
 
 		if (run == null || actor == null)
@@ -1694,13 +1607,6 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
-	{
-		long started = System.nanoTime();
-		handleVarbitChanged(event);
-		reportSlow("onVarbitChanged", started);
-	}
-
-	private void handleVarbitChanged(VarbitChanged event)
 	{
 		int varpId = event.getVarpId();
 
@@ -1823,13 +1729,6 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onRuneScapeProfileChanged(RuneScapeProfileChanged event)
-	{
-		long started = System.nanoTime();
-		handleRuneScapeProfileChanged(event);
-		reportSlow("onRuneScapeProfileChanged", started);
-	}
-
-	private void handleRuneScapeProfileChanged(RuneScapeProfileChanged event)
 	{
 		closeRunFromAnotherCharacter();
 		loadMilestones();
@@ -1954,13 +1853,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onNpcSpawned(NpcSpawned event)
 	{
-		long started = System.nanoTime();
-		handleNpcSpawned(event);
-		reportSlow("onNpcSpawned", started);
-	}
-
-	private void handleNpcSpawned(NpcSpawned event)
-	{
 		if (isDoomBoss(event.getNpc().getId()))
 		{
 			bossCount++;
@@ -1971,13 +1863,6 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onNpcDespawned(NpcDespawned event)
-	{
-		long started = System.nanoTime();
-		handleNpcDespawned(event);
-		reportSlow("onNpcDespawned", started);
-	}
-
-	private void handleNpcDespawned(NpcDespawned event)
 	{
 		if (isDoomBoss(event.getNpc().getId()))
 		{
@@ -2000,10 +1885,6 @@ public class DoomMetricsPlugin extends Plugin
 	 * <p>Only between delves, which is where a cleared delve's hole belongs. The scene sends every
 	 * object in it again whenever it is rebuilt, so this fires for the same hole more than once -
 	 * which places nothing more, see {@link DelveRun#uniqueSignalled}.
-	 *
-	 * <p>Written without the timing every other handler carries: this runs for every object the
-	 * scene spawns, so what it does before the id fails to match is all it costs the other ten
-	 * thousand.
 	 */
 	@Subscribe
 	public void onGameObjectSpawned(GameObjectSpawned event)
@@ -2023,13 +1904,6 @@ public class DoomMetricsPlugin extends Plugin
 
 	@Subscribe
 	public void onGameTick(GameTick event)
-	{
-		long started = System.nanoTime();
-		handleGameTick(event);
-		reportSlow("onGameTick", started);
-	}
-
-	private void handleGameTick(GameTick event)
 	{
 		checkResume();
 		pickUpRun();
@@ -2222,13 +2096,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
 	{
-		long started = System.nanoTime();
-		handleGameStateChanged(event);
-		reportSlow("onGameStateChanged", started);
-	}
-
-	private void handleGameStateChanged(GameStateChanged event)
-	{
 		GameState state = event.getGameState();
 
 		if (state == GameState.LOGIN_SCREEN)
@@ -2304,55 +2171,19 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onOverlayMenuClicked(OverlayMenuClicked event)
 	{
-		long started = System.nanoTime();
-		handleOverlayMenuClicked(event);
-		reportSlow("onOverlayMenuClicked", started);
-	}
-
-	private void handleOverlayMenuClicked(OverlayMenuClicked event)
-	{
 		if (event.getOverlay() == overlay && CLEAR_OPTION.equals(event.getEntry().getOption()))
 		{
 			lastRunCleared = true;
 		}
 	}
 
+	/** The same Clear the overlay carries, for the display style where the overlay is not drawn. */
 	@Subscribe
 	public void onInfoBoxMenuClicked(InfoBoxMenuClicked event)
-	{
-		long started = System.nanoTime();
-		handleInfoBoxMenuClicked(event);
-		reportSlow("onInfoBoxMenuClicked", started);
-	}
-
-	/** The same Clear the overlay carries, for the display style where the overlay is not drawn. */
-	private void handleInfoBoxMenuClicked(InfoBoxMenuClicked event)
 	{
 		if (event.getInfoBox() == infoBox && CLEAR_OPTION.equals(event.getEntry().getOption()))
 		{
 			lastRunCleared = true;
-		}
-	}
-
-	/**
-	 * Logs a handler that ran long, so a stutter can be pinned on this plugin or ruled out.
-	 *
-	 * <p>Each public event method above is a two line wrapper around the private one that does the
-	 * work, purely so this can time it. Timing the wrapper rather than the body means an early
-	 * return is measured too, and no handler can be added later that quietly escapes measurement.
-	 *
-	 * <p>The measurement itself is two clock reads and a comparison, and the report is at debug, so
-	 * this costs nothing in production - RuneLite logs at INFO, where the line is never built. It
-	 * only sees the client thread: work handed to the Swing thread is timed up to the handoff, not
-	 * through the repaint.
-	 */
-	private void reportSlow(String handler, long startedNanos)
-	{
-		long took = System.nanoTime() - startedNanos;
-
-		if (took >= SLOW_HANDLER_NANOS)
-		{
-			log.debug("{} took {}ms", handler, String.format(Locale.US, "%.1f", took / 1_000_000d));
 		}
 	}
 
