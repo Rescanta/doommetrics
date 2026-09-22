@@ -9,12 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.config.ConfigManager;
 
 /**
- * Reads and writes the milestone table against the logged in character.
- *
- * <p>It is kept on the RuneScape profile rather than in the plugin's own config so an alt keeps its
- * own table, and so it survives client restarts and updates the way any other setting does. There
- * is no profile to key off while logged out, so every call here tolerates being a no-op - callers
- * check {@link #hasProfile()} before letting an empty read mean anything.
+ * The milestone table, on the RuneScape profile so each alt has its own. A no-op while logged out -
+ * check {@link #hasProfile()}.
  */
 @Slf4j
 @Singleton
@@ -23,10 +19,7 @@ class MilestoneStore
 	private static final String KEY_ROWS = "milestones";
 	private static final String KEY_SEEDED = "milestonesSeeded";
 
-	/**
-	 * Wrapper so the map's generic type is carried by a field signature Gson can read off a plain
-	 * class literal, rather than needing a type token at the call site.
-	 */
+	/** Carries the map's generic type for Gson. */
 	private static final class Stored
 	{
 		Map<Integer, MilestoneTable.Row> rows;
@@ -60,9 +53,8 @@ class MilestoneStore
 	}
 
 	/**
-	 * Whether this character's table has already been pre-filled from the game's own deepest delve.
-	 * Recorded separately from the table so it stays true once set, and a character whose deepest
-	 * is still under ten is not asked again on every login.
+	 * Whether the table was already seeded from the game's deepest delve, stored separately so it
+	 * sticks.
 	 */
 	boolean isSeeded()
 	{

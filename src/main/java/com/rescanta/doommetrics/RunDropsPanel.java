@@ -13,15 +13,8 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
 
 /**
- * The run's notable drops, written down beside the chart: what each was, the delve it came off,
- * and whether the run walked out with it.
- *
- * <p>The chart already draws each drop as an icon over its delve. This is the same thing in
- * words, for the same reason the counters have a table as well as lines: an icon says what
- * dropped to a reader who knows the icon, and the row says it to everyone. Pointing at a delve on
- * the chart lights up the drops that came off it.
- *
- * <p>Swing thread only.
+ * The run's notable drops in words beside the chart, with the hovered delve's lit up. Swing thread
+ * only.
  */
 class RunDropsPanel extends JPanel
 {
@@ -48,10 +41,6 @@ class RunDropsPanel extends JPanel
 		setBackground(PanelStyle.BACKGROUND);
 	}
 
-	/**
-	 * @param icons the pictures to draw in place of the drops' names. Handed over again as they
-	 *              arrive from the game, and a name stays in words until its picture has.
-	 */
 	void setIcons(Icons icons)
 	{
 		this.icons = icons;
@@ -75,9 +64,7 @@ class RunDropsPanel extends JPanel
 
 		this.delve = delve;
 
-		// Only the highlight moves, so only the backgrounds change. Building the rows again would
-		// fade every lost drop's icon afresh and lay the sidebar out anew for each delve the
-		// pointer crosses. The rows are the drops, one each and in order - see rebuild.
+		// Only the highlight moves: recolour, don't rebuild. The rows are the drops, in order.
 		List<RunDetail.Drop> drops = detail.drops();
 
 		for (int i = 0; i < drops.size() && i < getComponentCount(); i++)
@@ -86,11 +73,6 @@ class RunDropsPanel extends JPanel
 		}
 	}
 
-	/**
-	 * Rebuilt whole rather than updated when the drops or their icons change, because it is a
-	 * handful of rows at the very most. Pointing at a delve only recolours them - see
-	 * {@link #setDelve}.
-	 */
 	private void rebuild()
 	{
 		removeAll();
@@ -154,13 +136,13 @@ class RunDropsPanel extends JPanel
 		if (drop.isUnknown())
 		{
 			panel.setToolTipText("<html>" + text + "<br>" + RunDetail.UNKNOWN_UNIQUE_CANDIDATES
-				+ (drop.kept ? "" : "<br>" + DelveChart.lostHow(detail)) + "</html>");
+				+ (drop.kept ? "" : "<br>" + detail.lostHow()) + "</html>");
 		}
 		else
 		{
 			panel.setToolTipText(drop.kept
 				? text
-				: "<html>" + text + "<br>" + DelveChart.lostHow(detail) + "</html>");
+				: "<html>" + text + "<br>" + detail.lostHow() + "</html>");
 		}
 
 		return panel;

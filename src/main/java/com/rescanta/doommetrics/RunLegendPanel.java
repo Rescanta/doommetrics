@@ -24,50 +24,20 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
 
 /**
- * The chart's legend and its table of figures, which are the same thing.
- *
- * <p>Eight lines need eight names, and a legend drawn across the top of a plot has room for about
- * three of them. Down the side there is room for all eight, for the group headings that say what
- * each is counted in, and for a figure beside each name - so the legend that says which line is
- * which is also the table that says what each line came to. That answers the objection to reading
- * a chart by hovering it: every figure on the plot is also written down.
- *
- * <p>The column reads the whole run by default, and the delve under the pointer while there is one.
- * That is the crosshair's other half - see {@link DelveChart#drawCrosshair} for why the per-delve
- * figures are not in a tooltip.
- *
- * <p>Grouped, the same legend is three rows and the chart three lines: a heading's row is its line,
- * and the counters under it are added up rather than listed - see {@link #setGrouped}. Which rows
- * the reader has clicked off is remembered separately for each way of reading, so switching back
- * finds the chart as it was left.
- *
- * <p>Read separately, a click on a heading folds the rows under it away, leaving the heading and its
- * total - see {@link #setFolded}. Folding tidies the column and nothing else: the lines stay on the
- * chart as they were, since which lines are drawn is what clicking a row, or grouping, is for.
- *
- * <p>Pointing at a row brings its line forward on the plot and pushes the others back;
- * clicking one takes its line off. Neither ever changes another row's colour: a colour belongs to
- * a counter for as long as the window is open.
- *
- * <p>A counter the run has not counted anything on starts switched off, so a run that used three of
- * the eight draws three lines rather than five flat ones along the bottom. Its row stays, and a
- * click puts its line on like any other. Whether a counter is empty goes by the whole run, never
- * by the delve being pointed at, so lines do not come and go as the pointer moves.
- *
- * <p>Swing thread only.
+ * The chart's legend, which is also its table of figures: the whole run, or the hovered delve.
+ * Clicking a row toggles its line; hovering brings it forward. Swing thread only.
  */
 class RunLegendPanel extends JPanel
 {
-	/** The swatch beside each name: the colour of that counter's line, at the weight it is drawn. */
+	/**
+	 * The swatch beside each name: the colour of that counter's line, at the weight it is drawn.
+	 */
 	private static final int SWATCH = 9;
 
 	/** How much of a switched-off counter's icon is drawn, as its name is drawn in grey. */
 	private static final float OFF_ALPHA = 0.35f;
 
-	/**
-	 * Every row either way of reading can want, built once at the start and only ever retexted -
-	 * the rows of the way not being read are simply not laid out.
-	 */
+	/** Every row either reading mode can want, built once and only retexted. */
 	private final Map<CombatSeries, Row> rows = new HashMap<>();
 
 	/** The headings over the counters, on show only while the counters are listed separately. */
@@ -167,15 +137,15 @@ class RunLegendPanel extends JPanel
 
 		for (CombatMetric.Group each : CombatMetric.Group.values())
 		{
-			// A heading's own row carries the unit stripe the heading was carrying, in the place
-			// the heading had it: grouped, the row is the heading, and what it is counted in is
-			// the one thing its colour no longer says.
+			// Grouped, a heading's row keeps the unit stripe.
 			rows.put(each, new Row(each,
 				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE, true));
 		}
 	}
 
-	/** Puts up the rows for the way the run is being read, which is all that changes between them. */
+	/**
+	 * Puts up the rows for the way the run is being read, which is all that changes between them.
+	 */
 	private void layOut()
 	{
 		removeAll();
@@ -213,10 +183,6 @@ class RunLegendPanel extends JPanel
 		repaint();
 	}
 
-	/**
-	 * @param icons the pictures to draw beside the counters' names. Handed over again as they
-	 *              arrive from the game, and a row stands on its name alone until its picture has.
-	 */
 	void setIcons(Icons icons)
 	{
 		this.icons = icons;
@@ -227,7 +193,9 @@ class RunLegendPanel extends JPanel
 		}
 	}
 
-	/** @param hideEmpty whether a counter the run has not counted anything on starts switched off */
+	/**
+	 * @param hideEmpty whether a counter the run has not counted anything on starts switched off
+	 */
 	void setHideEmpty(boolean hideEmpty)
 	{
 		if (this.hideEmpty == hideEmpty)
@@ -239,14 +207,6 @@ class RunLegendPanel extends JPanel
 		refresh();
 	}
 
-	/**
-	 * @param grouped whether the counters are folded into their headings: three rows and three
-	 *                lines rather than eight of each
-	 *
-	 * <p>What a grouped row adds up is everything under its heading, the counters with no row of
-	 * their own included - so a punish thrown with a weapon the plugin does not name is in the
-	 * punish figure here and nowhere else.
-	 */
 	void setGrouped(boolean grouped)
 	{
 		if (this.grouped == grouped)
@@ -259,11 +219,7 @@ class RunLegendPanel extends JPanel
 		refresh();
 	}
 
-	/**
-	 * @param groups the headings to fold down to their totals, as the reader last left them
-	 *
-	 * <p>Tells no listener: this is the column being told what it already was, not a click.
-	 */
+	/** The headings to fold, as last left. Tells no listener. */
 	void setFolded(Set<CombatMetric.Group> groups)
 	{
 		folded.clear();
@@ -314,14 +270,7 @@ class RunLegendPanel extends JPanel
 		return CombatSeries.drawn(grouped);
 	}
 
-	/**
-	 * Redraws every figure.
-	 *
-	 * <p>The meters are scaled per unit, not across the table: damage on a delve runs several times
-	 * the prayer restored on it, and on one scale the prayer row would be a stub whatever it did.
-	 * Per unit, the bar answers the question the reader has - which source is carrying this - and
-	 * never invites a comparison across colours the numbers do not support.
-	 */
+	/** Redraws every figure. Meters are scaled per unit, not across the table. */
 	private void refresh()
 	{
 		updateHidden();
@@ -353,15 +302,14 @@ class RunLegendPanel extends JPanel
 			}
 		}
 
-		heading.setText(delve > 0 ? "Delve " + delve : "This run");
+		RunDetail.Delve at = delve > 0 ? detail.at(delve) : null;
+		heading.setText(delve <= 0 ? "This run"
+			: at != null && !at.watched ? "Delve " + delve + " - not watched" : "Delve " + delve);
 	}
 
 	/**
-	 * Works out which lines are off - the ones clicked off, and the ones the run has counted
-	 * nothing on unless they were clicked back on - and tells the chart when that has changed.
-	 *
-	 * <p>A counter that was only off for being empty comes on by itself once it counts something,
-	 * so a live run's lines appear as they start to matter.
+	 * Lines are off when clicked off, or when the run counted nothing on them and they weren't
+	 * clicked back on. Tells the chart when that changes.
 	 */
 	private void updateHidden()
 	{
@@ -411,19 +359,11 @@ class RunLegendPanel extends JPanel
 
 		refresh();
 
-		// A click lands on the row under the pointer, whose line is the one brought forward. Taken
-		// off, it would leave every other line pushed back behind a line no longer drawn; put back
-		// on, it comes forward as it would have had the pointer just arrived.
+		// The clicked row is the hovered one, so its emphasis follows the toggle.
 		onEmphasis.accept(hidden.contains(line) ? null : line);
 	}
 
-	/**
-	 * One counter: its swatch, its name, its figure, and a meter behind them.
-	 *
-	 * <p>The figure is set in text ink rather than in the line's colour. The swatch carries the
-	 * identity, and a column of eight numbers each in a different colour is a column nothing can
-	 * be read off.
-	 */
+	/** One counter: swatch, name, figure in text ink, and a meter behind them. */
 	private final class Row extends JPanel
 	{
 		/** How wide the unit's stripe down a grouped row is - the width a heading gave it. */
@@ -520,7 +460,10 @@ class RunLegendPanel extends JPanel
 			repaint();
 		}
 
-		/** The name and the picture beside it, the picture faded while the line is off as the words are. */
+		/**
+		 * The name and the picture beside it, the picture faded while the line is off as the words
+		 * are.
+		 */
 		private void showName()
 		{
 			BufferedImage icon = series.icon(icons);
@@ -558,9 +501,7 @@ class RunLegendPanel extends JPanel
 			}
 		}
 
-		/**
-		 * A filled square while the line is on the chart, and a hollow one once it is off.
-		 */
+		/** Filled while the line is on the chart, hollow once it is off. */
 		private final class Swatch extends JPanel
 		{
 			private Swatch()

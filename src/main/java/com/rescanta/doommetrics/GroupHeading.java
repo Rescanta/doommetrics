@@ -20,23 +20,8 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
 /**
- * A heading over the counters it covers, with what all of them came to.
- *
- * <p>The total is the group's whole figure, the catch-alls included - see
- * {@link CombatMetric.Group#amount}. The rows under it name what can be named, so the two need not
- * agree, and where they do not the tooltip says by how much and why.
- *
- * <p>The group's colour is spent on a stripe down the side rather than on the words. A heading set
- * in its own colour reads as loudly as the name of the section it sits inside, and a panel where a
- * group of three rows shouts as loudly as the block containing it has no hierarchy at all. The
- * stripe says which unit the block is counted in - the same thing the colour was saying - without
- * competing with anything.
- *
- * <p>Shared by the side panel's table and the run detail window's legend, which draw the same
- * headings over the same counters: two copies of this drifted apart would have the same figure
- * reading two ways in two windows.
- *
- * <p>Swing thread only.
+ * A heading over its counters with their group total, catch-alls included. Its unit colour is a
+ * side stripe, not the words. Shared by the side panel and the detail legend. Swing thread only.
  */
 class GroupHeading extends JPanel
 {
@@ -81,11 +66,7 @@ class GroupHeading extends JPanel
 	}
 
 	/**
-	 * Makes a click on the heading fold the rows under it away, or bring them back, leaving the
-	 * heading and its total - which is the figure most readers are after - where they were.
-	 *
-	 * <p>The heading only says whether it is folded; the rows are whoever built it to put up or
-	 * take down, which is why this takes a callback rather than the rows.
+	 * Makes a click fold or unfold the heading; the caller owns the rows.
 	 *
 	 * @param onToggle told when the heading is clicked
 	 */
@@ -112,12 +93,7 @@ class GroupHeading extends JPanel
 		repaint();
 	}
 
-	/**
-	 * @param totals what the heading is reading - the sitting, the lifetime, the run or one delve
-	 *
-	 * <p>The figure is drawn in the unit's colour, as the figures under it are, so a heading and
-	 * its rows read as the same kind of number. A zero stays muted.
-	 */
+	/** @param totals the sitting, the lifetime, the run or one delve */
 	void set(CombatTotals totals)
 	{
 		long amount = group.amount(totals);
@@ -132,10 +108,7 @@ class GroupHeading extends JPanel
 			: tooltip);
 	}
 
-	/**
-	 * Folded headings as they are kept in the config: their names, comma-separated. A name
-	 * that is no heading any more - one folded before the headings changed - is dropped.
-	 */
+	/** Folded headings as stored in config: comma-separated names, unknown ones dropped. */
 	static Set<CombatMetric.Group> parseFolded(String stored)
 	{
 		Set<CombatMetric.Group> groups = EnumSet.noneOf(CombatMetric.Group.class);
@@ -175,11 +148,7 @@ class GroupHeading extends JPanel
 		return names.toString();
 	}
 
-	/**
-	 * The fold arrow: pointing down at the rows while they are there, and at the total while they
-	 * are folded away. Painted rather than set as text, because the game font the heading is set
-	 * in has no arrows.
-	 */
+	/** The fold arrow, painted because the game font has no arrows. */
 	private final class Arrow extends JPanel
 	{
 		/** How far the arrow's point is from its base. */
