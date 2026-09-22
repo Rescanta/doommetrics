@@ -94,11 +94,11 @@ public class CombatMetricTest
 		totals.add(CombatMetric.SCYTHE_PUNISH, 600);
 		totals.add(CombatMetric.OTHER_MELEE_PUNISH, 141);
 
-		assertEquals(741, CombatMetric.Group.PUNISH.amount(totals));
-		assertEquals("what no row names", 141, CombatMetric.Group.PUNISH.unnamed(totals));
+		assertEquals(741, CombatMetric.Group.DAMAGE.amount(totals));
+		assertEquals("what no row names", 141, CombatMetric.Group.DAMAGE.unnamed(totals));
 
 		assertEquals("a group nothing was counted under", 0,
-			CombatMetric.Group.SPELL_HEAL.amount(totals));
+			CombatMetric.Group.HEALING.amount(totals));
 	}
 
 	/** The breakdown is only worth a line when there is something under it to break down. */
@@ -109,13 +109,37 @@ public class CombatMetricTest
 		totals.add(CombatMetric.SCYTHE_PUNISH, 600);
 
 		assertFalse("nothing unnamed to mention",
-			CombatMetric.Group.PUNISH.tooltip(totals).contains("Includes"));
+			CombatMetric.Group.DAMAGE.tooltip(totals).contains("Includes"));
 
 		totals.add(CombatMetric.OTHER_MELEE_PUNISH, 141);
-		String tooltip = CombatMetric.Group.PUNISH.tooltip(totals);
+		String tooltip = CombatMetric.Group.DAMAGE.tooltip(totals);
 
 		assertTrue(tooltip, tooltip.contains("741 damage dealt"));
-		assertTrue(tooltip, tooltip.contains("Includes 141 from Other melee"));
+		assertTrue("names only the catch-all that counted: " + tooltip,
+			tooltip.contains("Includes 141 from Other melee,"));
+
+		totals.add(CombatMetric.OTHER_SPEC_DAMAGE, 59);
+		tooltip = CombatMetric.Group.DAMAGE.tooltip(totals);
+
+		assertTrue(tooltip, tooltip.contains("Includes 200 from Other specs and Other melee"));
+	}
+
+	/**
+	 * Folding the counters into their headings is only worth doing if it folds: eight counters
+	 * into as many headings as there are units, so a player reading every heading as a total gets
+	 * one line for each thing a figure can be counted in.
+	 */
+	@Test
+	public void thereIsOneHeadingPerUnit()
+	{
+		assertEquals(CombatMetric.Unit.values().length, CombatMetric.Group.values().length);
+
+		Set<CombatMetric.Unit> units = new HashSet<>();
+
+		for (CombatMetric.Group group : CombatMetric.Group.values())
+		{
+			assertTrue(group + " shares its unit with another heading", units.add(group.unit()));
+		}
 	}
 
 	/** Every counter is under exactly one heading, so grouping neither drops nor double-counts. */

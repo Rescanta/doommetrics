@@ -145,7 +145,8 @@ final class PreviewScene
 			idle(),
 			shallow(now),
 			deep(now),
-			combined(now),
+			totals(now),
+			grid(now),
 			died(now),
 			lingering(now),
 			bare(now),
@@ -205,16 +206,32 @@ final class PreviewScene
 			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
 	}
 
-	private static PreviewScene combined(Instant now)
+	private static PreviewScene totals(Instant now)
 	{
 		DelveRun run = run(23, now, counters(1));
 
 		PreviewConfig config = new PreviewConfig();
-		config.grouping = MetricDisplay.COMBINED;
+		config.allModes(CounterMode.TOTAL);
 		config.paceMode = PaceMode.RUN_THROUGHPUT;
 
-		return new PreviewScene("combined", "The same run with the counters folded into their "
-			+ "groups, and full pace in place of deep pace",
+		return new PreviewScene("totals", "The same run with every heading drawn as one total, "
+			+ "and full pace in place of deep pace",
+			config, run, session(), lifetime(),
+			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
+	}
+
+	private static PreviewScene grid(Instant now)
+	{
+		DelveRun run = run(23, now, counters(1));
+
+		// The compact way to read it: healing as one figure, and the gear that does the work
+		// pictured two to a line.
+		PreviewConfig config = new PreviewConfig();
+		config.mode(CombatMetric.Group.HEALING, CounterMode.TOTAL);
+		config.counterStyle = CounterStyle.ICON_GRID;
+
+		return new PreviewScene("grid", "The same run with healing as a total and the prayer and "
+			+ "damage counters pictured two to a line",
 			config, run, session(), lifetime(),
 			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
 	}
@@ -256,7 +273,7 @@ final class PreviewScene
 		DelveRun run = run(23, now, counters(1));
 
 		PreviewConfig config = new PreviewConfig();
-		config.allCounters(false);
+		config.allModes(CounterMode.OFF);
 		config.showPace = false;
 
 		return new PreviewScene("bare", "Everything optional switched off, which is the narrowest "

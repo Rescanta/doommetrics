@@ -86,7 +86,8 @@ public class PreviewWindow
 	private final JComboBox<PreviewRender.Chatbox> chatboxPicker =
 		new JComboBox<>(PreviewRender.Chatbox.values());
 	private final JComboBox<PaceMode> pacePicker = new JComboBox<>(PaceMode.values());
-	private final JComboBox<MetricDisplay> groupingPicker = new JComboBox<>(MetricDisplay.values());
+	private final JComboBox<CounterStyle> counterStylePicker =
+		new JComboBox<>(CounterStyle.values());
 	private final JComboBox<TargetPrediction> predictionPicker =
 		new JComboBox<>(TargetPrediction.values());
 
@@ -105,6 +106,8 @@ public class PreviewWindow
 		JFrame frame = new JFrame("Doom Metrics - interface preview");
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		panel.setIcons(PreviewIcons.INSTANCE);
+		panel.setCombatFolding(GroupHeading.parseFolded(config.foldedCombatGroups()),
+			folded -> config.foldedCombatGroups(GroupHeading.formatFolded(folded)));
 		frame.setContentPane(content());
 		frame.setSize(1180, 780);
 		frame.setLocationRelativeTo(null);
@@ -186,12 +189,12 @@ public class PreviewWindow
 		});
 		restaters.add(() -> pacePicker.setSelectedItem(config.paceMode));
 
-		groupingPicker.addActionListener(event ->
+		counterStylePicker.addActionListener(event ->
 		{
-			config.grouping = (MetricDisplay) groupingPicker.getSelectedItem();
+			config.counterStyle = (CounterStyle) counterStylePicker.getSelectedItem();
 			refresh();
 		});
-		restaters.add(() -> groupingPicker.setSelectedItem(config.grouping));
+		restaters.add(() -> counterStylePicker.setSelectedItem(config.counterStyle));
 
 		predictionPicker.addActionListener(event ->
 		{
@@ -230,19 +233,17 @@ public class PreviewWindow
 			() -> config.showTargetDelve, on -> config.showTargetDelve = on));
 		stack.add(labelled("Prediction", predictionPicker));
 		stack.add(labelled("Pace mode", pacePicker));
-		stack.add(labelled("Counters", groupingPicker));
-		stack.add(toggle("Icons for counters",
-			() -> config.counterIcons, on -> config.counterIcons = on));
+
+		stack.add(heading("Counters"));
+
+		for (CombatMetric.Group group : CombatMetric.Group.values())
+		{
+			stack.add(labelled(group.overlayHeading(), modePicker(group)));
+		}
+
+		stack.add(labelled("Style", counterStylePicker));
 		stack.add(toggle("Hide counters at 0",
 			() -> config.hideEmptyCounters, on -> config.hideEmptyCounters = on));
-
-		stack.add(heading("Counters shown"));
-
-		for (CombatMetric metric : CombatMetric.DISPLAYED)
-		{
-			stack.add(toggle(metric.overlayLabel(),
-				() -> config.counter(metric), on -> config.counter(metric, on)));
-		}
 
 		stack.add(Box.createVerticalStrut(10));
 		stack.add(button("Open run detail window", this::openDetail));
@@ -314,6 +315,8 @@ public class PreviewWindow
 		{
 			detail = new RunDetailWindow(null, () -> detail = null);
 			detail.setIcons(PreviewIcons.INSTANCE);
+			detail.setFolding(GroupHeading.parseFolded(config.foldedDetailGroups()),
+				folded -> config.foldedDetailGroups(GroupHeading.formatFolded(folded)));
 		}
 
 		detail.setHideEmpty(config.hideEmptyCounters);
@@ -422,6 +425,21 @@ public class PreviewWindow
 
 			target.drawImage(drawn, 10, 10, null);
 		}
+	}
+
+	/** How one counter heading is drawn, put back whenever a scene changes it. */
+	private JComboBox<CounterMode> modePicker(CombatMetric.Group group)
+	{
+		JComboBox<CounterMode> picker = new JComboBox<>(CounterMode.values());
+		picker.setSelectedItem(config.mode(group));
+		picker.addActionListener(event ->
+		{
+			config.mode(group, (CounterMode) picker.getSelectedItem());
+			refresh();
+		});
+
+		restaters.add(() -> picker.setSelectedItem(config.mode(group)));
+		return picker;
 	}
 
 	private JCheckBox toggle(String text, BooleanSupplier state, Consumer<Boolean> set)

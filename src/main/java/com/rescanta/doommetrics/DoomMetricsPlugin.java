@@ -456,6 +456,8 @@ public class DoomMetricsPlugin extends Plugin
 		icon = ImageUtil.loadImageResource(DoomMetricsPlugin.class, "panel_icon.png");
 		panel = new DoomMetricsPanel(this::openDetailWindow,
 			() -> clientThread.invoke(this::resetSession));
+		panel.setCombatFolding(GroupHeading.parseFolded(config.foldedCombatGroups()),
+			folded -> config.foldedCombatGroups(GroupHeading.formatFolded(folded)));
 
 		// Asked for up front, so they are in hand by the time anything is drawn with them.
 		icons = new GameIcons(itemManager, spriteManager,
@@ -2749,6 +2751,8 @@ public class DoomMetricsPlugin extends Plugin
 			detailWindow = new RunDetailWindow(icon, () -> detailWindow = null);
 			detailWindow.setIcons(getIcons());
 			detailWindow.setHideEmpty(config.hideEmptyCounters());
+			detailWindow.setFolding(GroupHeading.parseFolded(config.foldedDetailGroups()),
+				folded -> config.foldedDetailGroups(GroupHeading.formatFolded(folded)));
 			// Whatever was last pushed across, so a window opened mid-delve shows the run it is
 			// in the middle of rather than filling in on the next clear.
 			detailWindow.setDetail(windowDetail);

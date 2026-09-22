@@ -43,11 +43,9 @@ public enum InfoBoxFigure
 	NOXIOUS_HALBERD_PUNISH("Noxious halberd punish", CombatMetric.NOXIOUS_HALBERD_PUNISH),
 	CRYSTAL_HALBERD_PUNISH("Crystal halberd punish", CombatMetric.CRYSTAL_HALBERD_PUNISH),
 
-	ALL_SPELL_HEALING("All spell healing", CombatMetric.Group.SPELL_HEAL),
-	ALL_SPEC_HEALING("All spec healing", CombatMetric.Group.SPEC_HEAL),
+	ALL_HEALING("All healing", CombatMetric.Group.HEALING),
 	ALL_PRAYER_RESTORED("All prayer restored", CombatMetric.Group.PRAYER),
-	ALL_SPEC_DAMAGE("All spec damage", CombatMetric.Group.DAMAGE),
-	ALL_PUNISH_DAMAGE("All punish damage", CombatMetric.Group.PUNISH);
+	ALL_DAMAGE("All spec & punish damage", CombatMetric.Group.DAMAGE);
 
 	private final String label;
 
@@ -297,8 +295,8 @@ public enum InfoBoxFigure
 		long total = 0;
 
 		// Every counter under the heading, the ones with no row of their own included - the same
-		// figure the panel's heading and the overlay's combined line carry, so a square set to
-		// All punish damage does not read lower than the table it was set from.
+		// figure the panel's heading and the overlay's total line carry, so a square set to
+		// All healing does not read lower than the table it was set from.
 		for (CombatMetric each : group.metrics())
 		{
 			total += figure.applyAsLong(each);
@@ -327,9 +325,13 @@ public enum InfoBoxFigure
 		return metric != null ? metric.unit() : group.unit();
 	}
 
+	/**
+	 * What the tooltip leads with: the figure's own name for one counter - the name it was picked
+	 * by, which says what it counts - and the heading's for a heading.
+	 */
 	private String heading()
 	{
-		return metric != null ? metric.qualifiedLabel() : group.heading();
+		return metric != null ? label : group.heading();
 	}
 
 	@Override

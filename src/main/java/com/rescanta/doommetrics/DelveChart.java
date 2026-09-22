@@ -34,7 +34,7 @@ import net.runelite.client.ui.FontManager;
  * delve took.
  *
  * <p>Two plots, stacked, sharing one delve axis. The upper one carries the eight counters, a line
- * each - or, grouped, the five headings they sit under, which is the same figures added up and is
+ * each - or, grouped, the three headings they sit under, which is the same figures added up and is
  * what a run long enough to fill the plot is read by - see {@link #setGrouped}. The lower one
  * carries the clock: the delve's full time - its kill and the wait after it -
  * and, under it, the kill the game timed, with the band between them - the restocking, the specs
