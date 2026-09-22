@@ -12,12 +12,7 @@ import javax.swing.SwingConstants;
 import javax.swing.border.Border;
 import net.runelite.client.ui.ColorScheme;
 
-/**
- * The lifetime milestone table - delve, kill count, personal best - as a component in its own
- * right, so anywhere the table is wanted draws this one rather than a second that drifts from it.
- *
- * <p>Runs on the Swing thread. Callers hand it immutable snapshots, never live model objects.
- */
+/** The lifetime milestone table - delve, kill count, personal best. Swing thread only. */
 class MilestoneTablePanel extends JPanel
 {
 	/** One row of the table, copied out of {@link MilestoneTable} for display. */
@@ -39,13 +34,7 @@ class MilestoneTablePanel extends JPanel
 		}
 	}
 
-	/**
-	 * How the three columns share the available width.
-	 *
-	 * <p>Weights only divide the space left over once every cell has its preferred width, so these
-	 * hold their promise only because the whole table is a single grid. Laying each row out on its
-	 * own would let a long personal best in one row push that row's columns off the others.
-	 */
+	/** How the columns share the width; holds only because the whole table is one grid. */
 	private static final double[] COLUMN_WEIGHTS = {0.30, 0.26, 0.44};
 
 	private static final Border HEADER_PADDING = BorderFactory.createCompoundBorder(
@@ -117,12 +106,7 @@ class MilestoneTablePanel extends JPanel
 			PanelStyle.CELL_PADDING, delve, kc, pb);
 	}
 
-	/**
-	 * Adds one row of cells straight into the shared grid.
-	 *
-	 * <p>The cells carry the row's stripe themselves rather than sitting on a panel that paints it,
-	 * which is what lets every row live in one grid and so line its columns up with every other.
-	 */
+	/** Adds a row's cells to the shared grid; the cells paint the row stripe themselves. */
 	private void addRow(int gridy, Color background, Border border, JLabel... cells)
 	{
 		GridBagConstraints constraints = new GridBagConstraints();

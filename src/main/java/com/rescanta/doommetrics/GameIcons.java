@@ -10,18 +10,8 @@ import net.runelite.client.game.SpriteManager;
 import net.runelite.client.util.AsyncBufferedImage;
 
 /**
- * The pictures drawn in place of names, taken from the game: an item's inventory sprite, or an
- * interface sprite for a spell or a skill.
- *
- * <p>None of them is there the moment it is asked for. The game draws an item's sprite on the
- * client thread, and an interface sprite is only readable once the client has loaded, so each
- * picture is asked for once, arrives later, and is kept. Until it arrives the answer is null and
- * the name is drawn instead; when it does, {@code onArrived} is told, so the side panel and the
- * detail window can put it in. The overlay and the infobox simply find it there on their next
- * frame.
- *
- * <p>Safe from any thread. The overlay and the infobox read these on the client thread and the
- * panels on the Swing thread, and a picture arrives on whichever thread the game hands it over on.
+ * Item and interface sprites from the game, requested once and cached as they arrive; null until
+ * then, and {@code onArrived} is told. Safe from any thread.
  */
 final class GameIcons implements Icons
 {
@@ -46,10 +36,7 @@ final class GameIcons implements Icons
 		this.onArrived = onArrived;
 	}
 
-	/**
-	 * Asks for every counter's picture and each of {@code itemIds}, so they are in hand before
-	 * anything goes looking for them.
-	 */
+	/** Asks for every counter's picture and each of {@code itemIds} up front. */
 	void preload(Collection<Integer> itemIds)
 	{
 		for (CombatMetric metric : CombatMetric.DISPLAYED)

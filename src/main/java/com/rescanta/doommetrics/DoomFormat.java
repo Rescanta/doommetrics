@@ -21,19 +21,7 @@ final class DoomFormat
 			: String.format(Locale.US, "%d:%02d", minutes, seconds);
 	}
 
-	/**
-	 * The same clock shortened to fit an infobox square, where {@link #duration} would be drawn
-	 * wider than the box it sits in once a run passes the hour.
-	 *
-	 * <p>Under the hour it is the clock unchanged - {@code 14:18} is already short. Past it the
-	 * seconds are dropped and the hours are marked, so an hour and twenty-three minutes reads
-	 * {@code 1h23} rather than {@code 1:23}, which the minutes and seconds above it would make
-	 * unreadable: {@code 1:23} has already been on screen once this run, meaning something else.
-	 *
-	 * <p>Past ten hours the minutes go too, because a two figure hour beside them is wider than
-	 * the box and a square that will not hold its own figure is worse than one that rounds it.
-	 * Nothing is lost that matters at that point, and the exact time is in the tooltip throughout.
-	 */
+	/** The clock shortened for an infobox square: {@code 14:18}, {@code 1h23}, then whole hours past ten. */
 	static String compactDuration(Duration duration)
 	{
 		long total = Math.max(0, duration.getSeconds());
@@ -49,19 +37,13 @@ final class DoomFormat
 			: duration(duration);
 	}
 
-	/**
-	 * What a predicted time to a target delve reads as: the span itself, or a dash while there is
-	 * no deep average to predict from.
-	 */
+	/** A predicted time, or a dash while there is nothing to predict from. */
 	static String prediction(Duration remaining)
 	{
 		return remaining == null ? "-" : duration(remaining);
 	}
 
-	/**
-	 * Same as {@link #duration} but with tenths, for the per-delve times the game hands us to that
-	 * precision. A delve that took 90.6 seconds reads {@code 1:30.6}.
-	 */
+	/** {@link #duration} with tenths: {@code 1:30.6}. */
 	static String preciseDuration(Duration duration)
 	{
 		long tenths = Math.max(0, duration.toMillis() / 100);
@@ -75,25 +57,12 @@ final class DoomFormat
 			: String.format(Locale.US, "%d:%02d.%d", minutes, seconds, tenths % 10);
 	}
 
-	/**
-	 * A plain count with thousands separated, for anywhere there is room to read the whole number.
-	 * A lifetime of delving reaches seven figures of damage, and {@code 1,204,318} is legible where
-	 * {@code 1204318} is not.
-	 */
 	static String count(long value)
 	{
 		return String.format(Locale.US, "%,d", value);
 	}
 
-	/**
-	 * A count shortened to three or four characters, for a chart's gridline labels where the
-	 * separated form would not fit.
-	 *
-	 * <p>Deliberately truncating rather than rounding: a gridline is a floor the dots above it are
-	 * read against, and {@code 12k} rounded up from 12,600 would sit above dots it is meant to sit
-	 * under. One decimal is kept below ten thousand, where the step between gridlines is often
-	 * small enough that whole thousands would repeat a label.
-	 */
+	/** A count shortened for gridline labels. Truncates rather than rounds, since a gridline is a floor. */
 	static String compact(long value)
 	{
 		long magnitude = Math.abs(value);
@@ -123,11 +92,7 @@ final class DoomFormat
 		return perHour == null ? "-" : String.format(Locale.US, "%.1f/hr", perHour);
 	}
 
-	/**
-	 * A pace with the unit left off, for the infobox square. The {@code /hr} is a third of the
-	 * width of the box and says the same thing every time it is drawn, so it goes in the tooltip
-	 * and the square keeps the part that moves.
-	 */
+	/** A pace without {@code /hr}, for the infobox square. */
 	static String compactPace(Double perHour)
 	{
 		return perHour == null ? "-" : String.format(Locale.US, "%.1f", perHour);
@@ -142,19 +107,13 @@ final class DoomFormat
 		return (int) ((millis + TICK_MILLIS / 2) / TICK_MILLIS);
 	}
 
-	/**
-	 * A stored personal best, as hours, minutes, seconds and a tenth. Tick resolution means the
-	 * tenth only ever lands on a multiple of six, so 152 ticks reads {@code 1:31.2}.
-	 */
+	/** A personal best with tenths: 152 ticks reads {@code 1:31.2}. */
 	static String ticks(int ticks)
 	{
 		return ticks <= 0 ? "-" : preciseDuration(Duration.ofMillis(ticks * TICK_MILLIS));
 	}
 
-	/**
-	 * A span of ticks as hours, minutes and seconds. Used for the summed run time behind a rate,
-	 * where the tenth {@link #ticks} shows would be noise against a total measured in hours.
-	 */
+	/** A span of ticks without tenths, for summed run time. */
 	static String tickDuration(long ticks)
 	{
 		return ticks <= 0 ? "-" : duration(Duration.ofMillis(ticks * TICK_MILLIS));
