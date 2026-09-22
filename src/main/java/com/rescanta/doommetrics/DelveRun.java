@@ -35,12 +35,16 @@ class DelveRun
 		/** The fight length the game reported, or null if we never saw it. */
 		final Duration fight;
 
-		Split(int level, Instant completedAt, Duration segment, Duration fight)
+		/** Whether {@link #segment} was measured, rather than starting wherever we picked it up. */
+		final boolean timed;
+
+		Split(int level, Instant completedAt, Duration segment, Duration fight, boolean timed)
 		{
 			this.level = level;
 			this.completedAt = completedAt;
 			this.segment = segment;
 			this.fight = fight;
+			this.timed = timed;
 		}
 	}
 
@@ -74,10 +78,13 @@ class DelveRun
 	/** No later than the real start of a joined run, for personal bests. Null when exact. */
 	private final Instant pbAnchor;
 
-	/** Whether the first clear was watched from its delve's start. */
-	private boolean firstClearTimed;
+	/** Whether the next clear's delve was watched from its start, so its segment is measured. */
+	private boolean nextClearTimed;
 
 	private Instant lastClearedAt;
+
+	/** Where the next clear's segment starts: the last clear, or where the run was picked up. */
+	private Instant segmentStart;
 	private int currentLevel;
 	private EndReason endReason;
 	private Instant endedAt;
@@ -92,18 +99,19 @@ class DelveRun
 	{
 		this.startedAt = startedAt;
 		this.lastClearedAt = startedAt;
+		this.segmentStart = startedAt;
 		this.currentLevel = currentLevel;
 		this.partial = partial;
 		this.pbAnchor = pbAnchor;
 		this.loot = new RunLoot(partial, this::dropLevel);
-		this.firstClearTimed = !partial;
+		this.nextClearTimed = !partial;
 	}
 
 	/** The game announced the delve we have just dropped into. */
 	void enterLevel(int level, Instant at)
 	{
-		// A joined run picked up between delves has now seen one start.
-		if (partial && splits.isEmpty() && level > currentLevel)
+		// A run picked up between delves has now seen one start.
+		if (!nextClearTimed && level > currentLevel)
 		{
 			watchedFromDelveStart(at);
 		}
@@ -114,17 +122,41 @@ class DelveRun
 		delveStarts.putIfAbsent(level, at);
 	}
 
-	/** A joined run with no clears saw its delve start, so its first clear is measured. */
+	/** A picked up run saw its delve start, so its next clear is measured. */
 	void watchedFromDelveStart(Instant at)
 	{
-		if (!splits.isEmpty())
+		if (splits.isEmpty())
 		{
-			return;
+			startedAt = at;
+			lastClearedAt = at;
 		}
 
-		startedAt = at;
-		lastClearedAt = at;
-		firstClearTimed = true;
+		segmentStart = at;
+		nextClearTimed = true;
+	}
+
+	/**
+	 * Whether the player on {@code level} is still in this run, given the delves cleared since it
+	 * was last watched. Between delves the level reads one short, as the varp does.
+	 */
+	boolean continuesAt(int level, int clearsSince)
+	{
+		int expected = currentLevel + clearsSince;
+		return clearsSince >= 0 && (level == expected || level == expected - 1);
+	}
+
+	/**
+	 * Carries the run on at {@code level} after delves nobody watched. The next clear's segment
+	 * starts somewhere in them, so it is left out of the rates.
+	 */
+	void resumeOn(int level, Instant at)
+	{
+		currentLevel = level;
+		betweenDelves = false;
+		nextClearTimed = false;
+		segmentStart = at;
+		loot.resumed();
+		delveStarts.putIfAbsent(level, at);
 	}
 
 	/**
@@ -142,14 +174,17 @@ class DelveRun
 
 		startedAt = at;
 		lastClearedAt = at;
+		segmentStart = at;
 		return true;
 	}
 
 	Split complete(int level, Instant at, Duration fight)
 	{
-		Split split = new Split(level, at, Duration.between(lastClearedAt, at), fight);
+		Split split = new Split(level, at, Duration.between(segmentStart, at), fight, nextClearTimed);
 		splits.add(split);
 		lastClearedAt = at;
+		segmentStart = at;
+		nextClearTimed = true;
 		currentLevel = level + 1;
 		betweenDelves = true;
 		loot.delveCleared();
@@ -159,7 +194,7 @@ class DelveRun
 	/** Whether the last clear's segment was measured, and so can be charged to a rate. */
 	boolean lastClearTimed()
 	{
-		return !splits.isEmpty() && (firstClearTimed || splits.size() > 1);
+		return !splits.isEmpty() && splits.get(splits.size() - 1).timed;
 	}
 
 	/** The last clear's segment in ticks, rounded so a run's clears sum to its total. */
@@ -329,19 +364,35 @@ class DelveRun
 		return deep;
 	}
 
-	/** Every clear less an unmeasured first one. */
+	/** Every clear whose segment was measured. */
 	private List<Split> timedSplits()
 	{
-		return firstClearTimed || splits.isEmpty() ? splits : splits.subList(1, splits.size());
+		List<Split> timed = new ArrayList<>();
+
+		for (Split split : splits)
+		{
+			if (split.timed)
+			{
+				timed.add(split);
+			}
+		}
+
+		return timed;
 	}
 
-	/** Deep delves per hour of run time, shallow delves counting against you. */
+	/** Deep delves per hour of measured run time, shallow delves counting against you. */
 	Double fullPace()
 	{
 		List<Split> timed = timedSplits();
 		int deep = deepIn(timed);
-		Instant from = timed.size() == splits.size() ? startedAt : splits.get(0).completedAt;
-		double seconds = Duration.between(from, lastClearedAt).toMillis() / 1000.0;
+		long millis = 0;
+
+		for (Split split : timed)
+		{
+			millis += split.segment.toMillis();
+		}
+
+		double seconds = millis / 1000.0;
 
 		if (deep == 0 || seconds <= 0)
 		{
@@ -399,7 +450,7 @@ class DelveRun
 		}
 
 		long remaining = target - lastLevel();
-		long millis = remaining * mean.toMillis() - Duration.between(lastClearedAt, now).toMillis();
+		long millis = remaining * mean.toMillis() - Duration.between(segmentStart, now).toMillis();
 		return Duration.ofMillis(Math.max(millis, (remaining - 1) * mean.toMillis()));
 	}
 

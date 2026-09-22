@@ -102,6 +102,13 @@ class RunLoot
 		trustWarnings = true;
 	}
 
+	/** The run was picked up again after delves nobody watched: the pile may hold their drops. */
+	void resumed()
+	{
+		warned.clear();
+		trustWarnings = false;
+	}
+
 	/** A delve was cleared: warnings are counted afresh. */
 	void delveCleared()
 	{
