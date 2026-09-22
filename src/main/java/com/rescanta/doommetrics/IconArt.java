@@ -15,19 +15,10 @@ import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.SpriteID;
 import net.runelite.client.util.ImageUtil;
 
-/**
- * Which picture stands for each counter, and how a picture is cut down to stand in for a name.
- *
- * <p>A counter that credits one weapon is pictured by that weapon's inventory sprite, and the
- * blood barrage by its spell. The catch-all counters are drawn nowhere, so they have no picture -
- * see {@link CombatMetric#DISPLAYED}.
- */
+/** Which picture stands for each counter, and how a picture is cut down to sit beside a name. */
 final class IconArt
 {
-	/**
-	 * The square a picture standing in for a name is fitted into: a line of text high, so a row
-	 * drawn with one is the height it would have been with the name.
-	 */
+	/** A line of text high. */
 	static final int SMALL = 16;
 
 	/** The gold of the glowing hole, which is the one thing an unknown unique is known by. */
@@ -47,10 +38,8 @@ final class IconArt
 	}
 
 	/**
-	 * The picture for a unique the game signalled without naming: a gold question mark on a dark
-	 * round badge, the hole and its glow. Drawn rather than taken from the game, because there is no
-	 * item to take it from - and drawn at the size it is shown rather than shrunk, so the mark stays
-	 * sharp at a line of text high.
+	 * A gold question mark on a dark badge, for a unique the game signalled without naming. Drawn at
+	 * the size it is shown.
 	 */
 	static BufferedImage unknownUnique(int width, int height)
 	{
@@ -130,14 +119,9 @@ final class IconArt
 	}
 
 	/**
-	 * A picture cut down to fit a {@code box} pixel square: trimmed to what is drawn in it, then
-	 * shrunk to fit, keeping its shape.
+	 * Trims a picture to what is drawn in it, then shrinks it to a {@code box} square. Never enlarges.
 	 *
-	 * <p>Trimmed first because an inventory sprite sits in a slot wider than the item, and shrinking
-	 * the slot would shrink the item to a speck. Never enlarged: a sprite is pixel art, and one
-	 * already small enough is drawn as it is.
-	 *
-	 * @return the picture, or null when there is nothing drawn in it - a sprite still loading
+	 * @return the picture, or null when nothing is drawn in it (a sprite still loading)
 	 */
 	static BufferedImage shrink(BufferedImage image, int box)
 	{

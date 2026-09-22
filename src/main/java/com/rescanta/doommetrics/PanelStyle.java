@@ -19,25 +19,9 @@ import net.runelite.client.ui.DynamicGridLayout;
 import net.runelite.client.ui.FontManager;
 
 /**
- * The look the side panel and the run detail window are both built out of: three text weights, one
- * card, one section heading.
- *
- * <p>Held in one place because the two windows draw the same figures and a block that reads as a
- * heading in one and as a row in the other is telling the reader something about the numbers that
- * is not true. What the weights are for:
- *
- * <ul>
- * <li>{@link #hero} is the figure you look up mid-fight and nothing else - the delve you are on
- * and how long you have been down there.
- * <li>{@link #caption} names something: a section, a column, a row, a group of rows. Never a
- * number.
- * <li>{@link #body} is every figure that is not a hero one.
- * </ul>
- *
- * <p>Colour is left to the caller, because what a figure is counted in is the one thing colour is
- * spent on here - see {@link CombatMetric.Unit#color()}.
- *
- * <p>Swing thread only.
+ * The shared look of the side panel and the detail window: {@link #hero} for the two mid-fight
+ * figures, {@link #caption} for names, {@link #body} for every other figure. Colour is left to
+ * callers. Swing thread only.
  */
 final class PanelStyle
 {
@@ -62,10 +46,7 @@ final class PanelStyle
 	static final Border CARD_PADDING = new EmptyBorder(6, 8, 7, 8);
 	static final Border CELL_PADDING = new EmptyBorder(3, 5, 3, 5);
 
-	/**
-	 * How much of a row's width a meter can fill, as a fraction. Kept short of the whole so the
-	 * largest figure in a unit reads as a bar rather than as a row that has changed colour.
-	 */
+	/** Short of the whole, so the largest figure reads as a bar rather than a recoloured row. */
 	static final double METER_WIDTH = 0.94;
 
 	/** How strongly a meter is tinted. Low enough that the figure over it stays legible. */
@@ -74,13 +55,7 @@ final class PanelStyle
 	/** Between a picture and the name beside it. */
 	private static final int ICON_TEXT_GAP = 4;
 
-	/**
-	 * The two figures worth reading at a glance, at a size you can read without stopping.
-	 *
-	 * <p>Sized to what the tile it sits in can hold: the widest clock a run reaches is seven
-	 * characters, at half the panel width. Larger than this and an hour long run has its seconds
-	 * clipped off, which is worse than a figure a point smaller.
-	 */
+	/** Sized so a seven-character clock fits half the panel width. */
 	private static final Font HERO_FONT = FontManager.getRunescapeBoldFont().deriveFont(24f);
 
 	private PanelStyle()
@@ -129,24 +104,14 @@ final class PanelStyle
 		return panel;
 	}
 
-	/**
-	 * A named block: the name, a hairline carrying it across the panel, and the card under it.
-	 *
-	 * <p>The rule is what makes the heading a heading. Without it the four or five names down the
-	 * panel are only more text in another colour, which is how a group of rows inside a card ends
-	 * up reading as loudly as the section containing it.
-	 */
+	/** A named block: the name, a hairline rule across the panel, and the card under it. */
 	static JPanel section(String title, Component content)
 	{
 		return section(title, null, content);
 	}
 
 	/**
-	 * The same, with a control of its own on the end of the heading's rule.
-	 *
-	 * <p>Up there rather than over the content because it belongs to the section rather than to
-	 * anything in it - it changes what the whole block is - and because a control inside the card
-	 * would be one more row of it, read as a row, in a block whose rows are all figures.
+	 * The same, with a control on the end of the heading's rule.
 	 *
 	 * @param control what the reader can change about this section, or null for a plain heading
 	 */
@@ -194,17 +159,8 @@ final class PanelStyle
 	}
 
 	/**
-	 * Puts a picture on {@code label} beside its words, or leaves the words on their own while
-	 * there is no picture to draw - one still on its way from the game, or none at all.
-	 *
-	 * <p>Both, rather than the picture in place of the name. An inventory sprite trimmed to a line
-	 * of text high is a few pixels of a dark weapon on a dark row, and half the counters are long
-	 * thin polearms that come out of that as the same smudge. The picture is what the eye finds a
-	 * row by; the name is what settles which row it found.
-	 *
-	 * <p>The name never goes on the label's own tooltip. A tooltip gives the label mouse listeners
-	 * of its own, and a row that answers clicks and hovers would stop hearing them over its name.
-	 * The row carries the name in its tooltip instead.
+	 * Puts a picture beside the label's words, or just the words while there is none. The name stays
+	 * off the label's tooltip, which would give it mouse listeners that swallow the row's.
 	 */
 	static void nameAndIcon(JLabel label, String name, BufferedImage icon)
 	{
