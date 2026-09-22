@@ -243,7 +243,7 @@ final class PreviewScene
 		// unique, because a glow over one already known about places nothing - see
 		// DelveRun#uniqueSignalled. A named drop lost the same way is the lingering scene.
 		DelveRun run = run(31, now, counters(2),
-			landing(31, DelveRun.UNKNOWN_UNIQUE, DelveRun.UNKNOWN_UNIQUE_NAME));
+			landing(31, RunLoot.UNKNOWN_UNIQUE, RunLoot.UNKNOWN_UNIQUE_NAME));
 		// Died a few seconds into delve 32, which the game had announced like any other.
 		run.enterLevel(32, now.minusSeconds(15));
 		run.end(EndReason.DIED, now, 32);
@@ -259,7 +259,7 @@ final class PreviewScene
 		// Claimed on the way out, so the treads are kept.
 		DelveRun run = run(27, now, counters(2),
 			landing(14, ItemID.AVERNIC_TREADS, "Avernic treads"));
-		run.recordLoot(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
+		run.loot().recordLoot(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
 		run.end(EndReason.FINISHED, now, 0);
 
 		return new PreviewScene("lingering", "A run walked out of, still up for the linger "
@@ -405,13 +405,13 @@ final class PreviewScene
 
 			for (Landing landing : landings)
 			{
-				if (landing.level == level && landing.itemId == DelveRun.UNKNOWN_UNIQUE)
+				if (landing.level == level && landing.itemId == RunLoot.UNKNOWN_UNIQUE)
 				{
-					run.uniqueSignalled();
+					run.loot().uniqueSignalled();
 				}
 				else if (landing.level == level)
 				{
-					run.sawInPile(landing.itemId, landing.name, run.held(landing.itemId) + 1);
+					run.loot().sawInPile(landing.itemId, landing.name, run.loot().held(landing.itemId) + 1);
 				}
 			}
 		}

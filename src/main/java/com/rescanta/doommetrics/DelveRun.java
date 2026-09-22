@@ -9,7 +9,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import net.runelite.api.gameval.ItemID;
 
 /**
  * One trip into the Doom of Mokhaiotl, from entering the cave until the player leaves or dies.
@@ -24,20 +23,6 @@ class DelveRun
 
 	/** Shared and read only. */
 	private static final CombatTotals EMPTY_COMBAT = new CombatTotals();
-
-	/** The item id of a unique the glowing hole signalled but nothing has named yet. */
-	static final int UNKNOWN_UNIQUE = -1;
-
-	static final String UNKNOWN_UNIQUE_NAME = "Unknown unique";
-
-	/** Returned in place of a delve when nothing was written down. */
-	static final int NOT_RECORDED = -1;
-
-	/** Both forms of the eye count as the same drop. */
-	static int dropKey(int itemId)
-	{
-		return itemId == ItemID.EYE_OF_AYAK ? ItemID.EYE_OF_AYAK_UNCHARGED : itemId;
-	}
 
 	static final class Split
 	{
@@ -61,62 +46,7 @@ class DelveRun
 
 	private final List<Split> splits = new ArrayList<>();
 
-	/** Claimed drops by {@link #dropKey}: the most the pile was seen holding, not a running sum. */
-	private final Map<Integer, Drop> loot = new LinkedHashMap<>();
-
-	private static final class Drop
-	{
-		private final String name;
-		private int quantity;
-
-		private Drop(String name, int quantity)
-		{
-			this.name = name;
-			this.quantity = quantity;
-		}
-	}
-
-	/** A notable drop as it landed in the loot pile, claimed or not. */
-	static final class Landed
-	{
-		/** The delve it came off. */
-		final int level;
-
-		final int itemId;
-		final String name;
-
-		/** How many landed on this delve at once - almost always one. */
-		final int quantity;
-
-		/** How many of this item the pile held once these landed. */
-		final int heldAfter;
-
-		Landed(int level, int itemId, String name, int quantity, int heldAfter)
-		{
-			this.level = level;
-			this.itemId = itemId;
-			this.name = name;
-			this.quantity = quantity;
-			this.heldAfter = heldAfter;
-		}
-	}
-
-	private final List<Landed> landed = new ArrayList<>();
-
-	/** Known pile counts by {@link #dropKey}; only a count above this is a new drop. */
-	private final Map<Integer, Integer> held = new HashMap<>();
-
-	/** "Your loot contains" warnings per item since the last descend try. */
-	private final Map<Integer, Integer> warned = new HashMap<>();
-
-	/** A joined run's first warnings are about the pile it inherited. */
-	private boolean trustWarnings;
-
-	/** Whether the pet in the pile lit the hole (only a character's first one does). */
-	private boolean petGlows;
-
-	/** Bumped whenever a drop lands or a claim is read - see {@link RunDetail#keyFor}. */
-	private int lootChanges;
+	private final RunLoot loot;
 
 	/** From a clear until the game announces the next delve. */
 	private boolean betweenDelves;
@@ -165,7 +95,7 @@ class DelveRun
 		this.currentLevel = currentLevel;
 		this.partial = partial;
 		this.pbAnchor = pbAnchor;
-		this.trustWarnings = !partial;
+		this.loot = new RunLoot(partial, this::dropLevel);
 		this.firstClearTimed = !partial;
 	}
 
@@ -180,8 +110,7 @@ class DelveRun
 
 		currentLevel = level;
 		betweenDelves = false;
-		warned.clear();
-		trustWarnings = true;
+		loot.delveEntered();
 		delveStarts.putIfAbsent(level, at);
 	}
 
@@ -223,7 +152,7 @@ class DelveRun
 		lastClearedAt = at;
 		currentLevel = level + 1;
 		betweenDelves = true;
-		warned.clear();
+		loot.delveCleared();
 		return split;
 	}
 
@@ -246,173 +175,15 @@ class DelveRun
 		return DoomFormat.toTicks(through) - DoomFormat.toTicks(before);
 	}
 
-	/** Records a claimed quantity. Repeats are harmless; only a larger count moves it. */
-	void recordLoot(int itemId, String name, int quantity)
-	{
-		if (name == null || quantity <= 0)
-		{
-			return;
-		}
-
-		int key = dropKey(itemId);
-		Drop drop = loot.get(key);
-
-		if (drop == null)
-		{
-			loot.put(key, new Drop(name, quantity));
-			lootChanges++;
-		}
-		else if (quantity > drop.quantity)
-		{
-			drop.quantity = quantity;
-			lootChanges++;
-		}
-	}
-
-	/** How many of a notable drop this trip has claimed, or 0 for none. */
-	int claimed(int itemId)
-	{
-		Drop drop = loot.get(dropKey(itemId));
-		return drop == null ? 0 : drop.quantity;
-	}
-
-	/**
-	 * The pile was seen holding {@code quantity}; whatever is more than before landed now.
-	 *
-	 * @return the delve the drop was written down on, or {@link #NOT_RECORDED}
-	 */
-	int sawInPile(int itemId, String name, int quantity)
-	{
-		int key = dropKey(itemId);
-		int before = held.getOrDefault(key, 0);
-
-		if (name == null || quantity <= before)
-		{
-			return NOT_RECORDED;
-		}
-
-		held.put(key, quantity);
-
-		int named = nameUnknown(key, name, quantity - before, quantity);
-
-		if (named != NOT_RECORDED)
-		{
-			return named;
-		}
-
-		landed.add(new Landed(dropLevel(), key, name, quantity - before, quantity));
-		lootChanges++;
-		return dropLevel();
-	}
-
-	/** A descend was tried; its warnings are counted from nothing. */
-	void descending()
-	{
-		warned.clear();
-	}
-
-	/**
-	 * A "Your loot contains" warning. One per copy, so this try's count is the pile's count.
-	 *
-	 * @return the delve the drop was written down on, or {@link #NOT_RECORDED}
-	 */
-	int warnedOf(int itemId, String name)
-	{
-		int count = warned.merge(dropKey(itemId), 1, Integer::sum);
-
-		if (!trustWarnings)
-		{
-			pileAlreadyHeld(itemId, count);
-			// About an inherited pile: places nothing, but can still name the glow's mark.
-			return nameUnknown(dropKey(itemId), name, 1, count);
-		}
-
-		return sawInPile(itemId, name, count);
-	}
-
-	/**
-	 * The glowing hole: marks an unknown unique, unless the run already knows what it glows for.
-	 *
-	 * @return true if this placed a drop
-	 */
-	boolean uniqueSignalled()
-	{
-		if (knowsOfGlowInPile())
-		{
-			return false;
-		}
-
-		landed.add(new Landed(dropLevel(), UNKNOWN_UNIQUE, UNKNOWN_UNIQUE_NAME, 1, 1));
-		lootChanges++;
-		return true;
-	}
-
-	/** A duplicate pet sits in the pile without lighting the hole, so it doesn't count. */
-	private boolean knowsOfGlowInPile()
-	{
-		for (Map.Entry<Integer, Integer> entry : held.entrySet())
-		{
-			if (entry.getValue() > 0 && (petGlows || entry.getKey() != ItemID.DOMPET))
-			{
-				return true;
-			}
-		}
-
-		return outstandingUnknown() >= 0;
-	}
-
-	/**
-	 * The first drop named after a glow takes over its mark, keeping the mark's delve.
-	 *
-	 * @return the delve the mark was on, or {@link #NOT_RECORDED} if there was none
-	 */
-	private int nameUnknown(int key, String name, int quantity, int heldAfter)
-	{
-		int unknown = outstandingUnknown();
-
-		if (unknown < 0)
-		{
-			return NOT_RECORDED;
-		}
-
-		int level = landed.get(unknown).level;
-		landed.set(unknown, new Landed(level, key, name, quantity, heldAfter));
-		lootChanges++;
-
-		petGlows |= key == ItemID.DOMPET;
-		return level;
-	}
-
-	/** The index of the unnamed glow mark in {@link #landed}, or -1. */
-	private int outstandingUnknown()
-	{
-		for (int i = 0; i < landed.size(); i++)
-		{
-			if (landed.get(i).itemId == UNKNOWN_UNIQUE)
-			{
-				return i;
-			}
-		}
-
-		return -1;
-	}
-
-	/** How many of a notable drop the pile is known to hold, or 0 for none. */
-	int held(int itemId)
-	{
-		return held.getOrDefault(dropKey(itemId), 0);
-	}
-
-	/** What a joined run's pile held before we were watching. */
-	void pileAlreadyHeld(int itemId, int quantity)
-	{
-		held.merge(dropKey(itemId), quantity, Math::max);
-	}
-
 	/** The delve a drop seen now came off: the one just cleared, or the one still being fought. */
 	int dropLevel()
 	{
 		return betweenDelves ? lastLevel() : currentLevel;
+	}
+
+	RunLoot loot()
+	{
+		return loot;
 	}
 
 	boolean isBetweenDelves()
@@ -420,35 +191,9 @@ class DelveRun
 		return betweenDelves;
 	}
 
-	List<Landed> getLanded()
-	{
-		return Collections.unmodifiableList(landed);
-	}
-
-	int lootChanges()
-	{
-		return lootChanges;
-	}
-
 	int bankedCombatChanges()
 	{
 		return bankedCombatChanges;
-	}
-
-	/** Claimed drops by name, a drop earned twice listed twice. */
-	List<String> getLoot()
-	{
-		List<String> names = new ArrayList<>();
-
-		for (Drop drop : loot.values())
-		{
-			for (int i = 0; i < drop.quantity; i++)
-			{
-				names.add(drop.name);
-			}
-		}
-
-		return names;
 	}
 
 	/** Credits a heal, prayer restore or hit to this trip and to the delve. */
