@@ -26,23 +26,8 @@ import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
- * The side panel: the run in progress on top, the sitting beside the character's lifetime under it,
- * then the combat figures, the lifetime milestone table, a button that opens the run detail window,
- * and one that starts the session over.
- *
- * <p>The run is drawn as two large figures with the rest of it in small type beneath, because
- * there are only two things a player reads while they are being hit - which delve they are on and
- * how long they have been down - and the panel is worth nothing if those have to be picked out of
- * a list of eleven numbers set in the same type.
- *
- * <p>The sitting and the lifetime share one table, one column each, rather than sitting in two
- * sections one above the other. They do answer different questions - how this evening is going,
- * and what the character has done over all of them - but the question a player actually asks is
- * whether tonight is better than usual, and that is a comparison. Under the two column headings
- * each figure still says which it is; side by side it also says how they stand.
- *
- * <p>Everything here runs on the Swing thread. The plugin hands it immutable snapshots rather than
- * live objects, so nothing the client thread is still writing to is ever read from a paint.
+ * The side panel: the live run, session beside lifetime, the combat table, milestones, and the
+ * detail window and reset buttons. Swing thread only; fed immutable snapshots.
  */
 class DoomMetricsPanel extends PluginPanel
 {
@@ -75,8 +60,7 @@ class DoomMetricsPanel extends PluginPanel
 		}
 
 		/**
-		 * The live rows of a run, formatted for drawing. The overlay draws the same figures itself
-		 * from the run; this is the panel's copy of them.
+		 * The panel's formatted copy of the live rows.
 		 *
 		 * @param target     the delve being aimed for, or 0 when the target rows are switched off
 		 * @param prediction which predicted times the target rows carry
@@ -133,11 +117,7 @@ class DoomMetricsPanel extends PluginPanel
 				died);
 		}
 
-		/**
-		 * Enough of the snapshot to tell one repaint from the next. Built from the rows themselves
-		 * rather than named off a list of fields, so a row added later cannot be left out of it and
-		 * silently stop the panel redrawing.
-		 */
+		/** Built from the rows themselves so no row can be left out of it. */
 		String key()
 		{
 			StringBuilder key = new StringBuilder();
@@ -151,11 +131,7 @@ class DoomMetricsPanel extends PluginPanel
 		}
 	}
 
-	/**
-	 * The sitting's figures and the character's, already formatted. Any of them may be null, which
-	 * reads as {@code "-"}: between sittings there is nothing to report on the session, and a brand
-	 * new character has no lifetime rate until a run banks a deep delve.
-	 */
+	/** Session and lifetime figures, formatted. Null reads as {@code "-"}. */
 	static final class Stats
 	{
 		final String sessionLength;
@@ -229,10 +205,6 @@ class DoomMetricsPanel extends PluginPanel
 	private final JLabel lifetimePace = PanelStyle.body("-", SwingConstants.RIGHT);
 	private final JLabel lifetimeDeep = PanelStyle.body("-", SwingConstants.RIGHT);
 
-	/**
-	 * @param onOpenDetail invoked on the Swing thread when the run detail button is pressed
-	 * @param onReset      invoked on the Swing thread once a session reset has been confirmed
-	 */
 	DoomMetricsPanel(Runnable onOpenDetail, Runnable onReset)
 	{
 		setBackground(PanelStyle.BACKGROUND);
@@ -278,10 +250,7 @@ class DoomMetricsPanel extends PluginPanel
 		apply(lifetimeDeep, stats == null ? null : stats.lifetimeDeep, null);
 	}
 
-	/**
-	 * Retexts one value cell. A null tooltip leaves whatever the cell already had, so the fixed
-	 * explanations set once at build time are not wiped by a snapshot that has nothing to add.
-	 */
+	/** Retexts one value cell. A null tooltip keeps the one set at build time. */
 	private static void apply(JLabel label, String value, String tooltip)
 	{
 		label.setText(value == null ? "-" : value);
@@ -293,11 +262,7 @@ class DoomMetricsPanel extends PluginPanel
 		}
 	}
 
-	/**
-	 * Repaints the live figures. A null snapshot leaves the two large figures blank and collapses
-	 * the rest of the card to one idle line, so the section holds its shape between runs instead
-	 * of the whole panel jumping every time one starts.
-	 */
+	/** A null snapshot collapses the card to one idle line. */
 	void setLive(Live live)
 	{
 		runRows.removeAll();
@@ -346,16 +311,7 @@ class DoomMetricsPanel extends PluginPanel
 		runRows.repaint();
 	}
 
-	/**
-	 * Repaints the combat table from both tallies: the sitting's, the run in progress included,
-	 * and the character's lifetime.
-	 *
-	 * <p>A null tally reads as all zeroes. The sitting's is null between sittings - there is
-	 * nothing being earned, and that is not the same as leaving this morning's numbers up as
-	 * though there were. The character's is handed over whatever the sitting is doing: it is not
-	 * the evening's to go quiet with, and it is the figure the panel is opened for when there is
-	 * no run to watch.
-	 */
+	/** A null session tally reads as zeroes. */
 	void setCombat(CombatTotals session, CombatTotals lifetime)
 	{
 		sessionCombat = session;
@@ -369,15 +325,7 @@ class DoomMetricsPanel extends PluginPanel
 		combatPanel.setTotals(showingLifetime ? lifetimeCombat : sessionCombat);
 	}
 
-	/**
-	 * The combat table, under a tab each for the sitting and the character's lifetime.
-	 *
-	 * <p>One table behind two tabs rather than two tables down the panel: the rows are the same
-	 * counters either way, and stacked they would read as sixteen figures where there are eight
-	 * counted twice. Each tab's meters are filled against the largest figure in the tally on show,
-	 * so both answer which source is carrying it - against a lifetime the sitting is a rounding
-	 * error of, one shared scale would leave every row of the evening empty.
-	 */
+	/** The combat table, behind Session and Lifetime tabs. Each tab scales its meters to its own tally. */
 	private JComponent combatSection()
 	{
 		combatTabs.setBorder(new EmptyBorder(0, 0, 4, 0));
@@ -413,12 +361,7 @@ class DoomMetricsPanel extends PluginPanel
 		return tab;
 	}
 
-	/**
-	 * Puts either combat tab in front, for the preview harness - in the plugin nothing but a click
-	 * moves them, and the panel opens on the sitting's.
-	 *
-	 * <p>Idempotent: picking the tab already in front does nothing at all.
-	 */
+	/** For the preview harness. Idempotent. */
 	void showLifetime(boolean lifetime)
 	{
 		combatTabs.select(lifetime ? lifetimeTab : sessionTab);
@@ -430,11 +373,7 @@ class DoomMetricsPanel extends PluginPanel
 		combatPanel.setIcons(icons);
 	}
 
-	/**
-	 * @param folded        the combat headings to fold down to their totals, as last left
-	 * @param onFoldChanged handed the headings folded down whenever a click changes them, on the
-	 *                      Swing thread, so the choice can be kept for next time
-	 */
+	/** @param onFoldChanged handed the folded headings whenever a click changes them, on the Swing thread */
 	void setCombatFolding(Set<CombatMetric.Group> folded,
 		Consumer<Set<CombatMetric.Group>> onFoldChanged)
 	{
@@ -448,12 +387,7 @@ class DoomMetricsPanel extends PluginPanel
 		tablePanel.setRows(rows);
 	}
 
-	/**
-	 * The delve and the clock, side by side and large, each under the word for what it is.
-	 *
-	 * <p>The clock is set against the right edge so its digits stay put as it goes from four
-	 * characters to five to seven, rather than the whole figure sliding left as the run wears on.
-	 */
+	/** The delve and the clock, large. The clock is right-aligned so its digits stay put. */
 	private JPanel hero()
 	{
 		JPanel panel = new JPanel(new GridLayout(1, 2, 6, 0));
@@ -471,12 +405,7 @@ class DoomMetricsPanel extends PluginPanel
 		return panel;
 	}
 
-	/**
-	 * The sitting's figures and the character's in one grid, a column each under its own heading.
-	 *
-	 * <p>The sitting's length has no lifetime counterpart, so it sits above the comparison rather
-	 * than in them as a row with half of it permanently blank.
-	 */
+	/** Session and lifetime figures side by side, with the session length above them. */
 	private JPanel compare()
 	{
 		JLabel length = PanelStyle.caption("Sitting length", SwingConstants.LEFT);
@@ -525,10 +454,6 @@ class DoomMetricsPanel extends PluginPanel
 		return panel;
 	}
 
-	/**
-	 * Asks before resetting, because the session it throws away cannot be got back - a whole
-	 * evening's figures are one stray click from gone otherwise.
-	 */
 	private void confirmReset(Runnable onReset)
 	{
 		int answer = JOptionPane.showConfirmDialog(this,
