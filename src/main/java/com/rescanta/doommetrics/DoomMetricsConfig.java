@@ -11,14 +11,7 @@ public interface DoomMetricsConfig extends Config
 {
 	String GROUP = "doom-of-mokhaiotl-metrics";
 
-	/**
-	 * The deepest delve anything here has to account for: the ceiling on a target, and the widest
-	 * delve number the overlay is measured against.
-	 *
-	 * <p>Well clear of the record rather than level with it. The record was 260 when this was
-	 * written and only moves one way as better gear arrives, and a plugin that has to be updated to
-	 * keep up with it is a plugin that will one day quietly refuse to show someone their own delve.
-	 */
+	/** The ceiling on a target and the widest delve the overlay is sized for, well clear of the record. */
 	int MAX_DELVE = 1000;
 
 	@ConfigSection(

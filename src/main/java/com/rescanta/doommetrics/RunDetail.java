@@ -6,26 +6,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * One run broken down delve by delve: what each delve took, and what each delve's gear and
- * spellbook gave back.
- *
- * <p>This is what {@link DelveChart} plots and what {@link RunLegendPanel} lists, and it exists
- * so neither of them ever reads a {@link DelveRun} the client thread is still writing to. Built on
- * the client thread from a run, immutable once built, then handed to Swing.
- *
- * <p>A delve here is its kill and the wait after it: the time from the delve starting to the next
- * one starting, and everything counted in that time, the specs fired before going down again
- * included - see {@link DelveRun#fullTime}. Only delves already killed are in here. The delve being
- * fought has no kill yet, and half a delve's counters plotted against whole ones would read as a
- * collapse at the end of every run. A killed delve's column is final once the next delve starts or
- * the run ends - until then its wait is still going.
- *
- * <p>Nothing counted is left off, though, even where it has no column of its own: see {@link
- * #columnFor}.
- *
- * <p>Nothing here is written to disk. The window shows the run you are on or the one you just
- * finished, and both of those are in memory already - see the note in {@link RunHistoryStore} for
- * what is still recorded and why the two are separate concerns.
+ * An immutable snapshot of a run, delve by delve, for the chart and legend. Built on the client
+ * thread. A delve is its kill and the wait after it; only killed delves have a column.
  */
 final class RunDetail
 {
@@ -35,17 +17,10 @@ final class RunDetail
 		/** The delve number the game announced. */
 		final int level;
 
-		/**
-		 * Wall clock from this delve starting to the next one starting: the kill and the wait after
-		 * it - see {@link DelveRun#fullTime}. Not the split the pace figures are built on, which
-		 * charges a wait to the delve it precedes.
-		 */
+		/** From this delve starting to the next one starting - see {@link DelveRun#fullTime}. */
 		final Duration fullTime;
 
-		/**
-		 * The fight length the game reported, or null if we never saw it. At or under
-		 * {@link #fullTime}, and the difference between the two is the time spent not fighting.
-		 */
+		/** The fight length the game reported, or null if we never saw it. */
 		final Duration fight;
 
 		/** What this delve alone earned. Never null; empty for a delve that earned nothing. */
@@ -70,10 +45,7 @@ final class RunDetail
 		/** How many landed on that delve at once - almost always one, and drawn as one icon. */
 		final int quantity;
 
-		/**
-		 * False once the run is over without this having been claimed: died with it in the pile,
-		 * or left it there. It still dropped where it dropped, so it is still drawn - faded.
-		 */
+		/** False once the run is over without this having been claimed. Drawn faded. */
 		final boolean kept;
 
 		Drop(int level, int itemId, String name, int quantity, boolean kept)
@@ -85,20 +57,13 @@ final class RunDetail
 			this.kept = kept;
 		}
 
-		/**
-		 * Whether the game only signalled a unique here without saying which - see
-		 * {@link DelveRun#uniqueSignalled}. Drawn as a question mark rather than an item.
-		 */
+		/** A glow mark nothing has named - see {@link DelveRun#uniqueSignalled}. */
 		boolean isUnknown()
 		{
 			return itemId == DelveRun.UNKNOWN_UNIQUE;
 		}
 	}
 
-	/**
-	 * What an unknown unique could have been, for the line under one: the three tradeable uniques,
-	 * which always make the hole glow, and the pet, which only does the first time.
-	 */
 	static final String UNKNOWN_UNIQUE_CANDIDATES =
 		"Avernic treads, Mokhaiotl cloth or Eye of ayak - or Dom, if it was your first";
 
@@ -112,11 +77,7 @@ final class RunDetail
 
 	private final CombatTotals totals;
 
-	/**
-	 * Whether there is a run behind this at all, which is not the same as having a delve in it: a
-	 * run walked into and straight back out of is a run that banked nothing, and reads differently
-	 * from a session that has not been down there yet.
-	 */
+	/** Whether there is a run behind this at all, delves or not. */
 	private final boolean started;
 
 	private final boolean finished;
@@ -141,10 +102,7 @@ final class RunDetail
 		return EMPTY;
 	}
 
-	/**
-	 * Takes a run apart into its delves. Reads the run once, on the thread that owns it, and
-	 * copies everything it keeps.
-	 */
+	/** Takes a run apart on the thread that owns it, copying everything it keeps. */
 	static RunDetail of(DelveRun run)
 	{
 		if (run == null)
@@ -155,10 +113,7 @@ final class RunDetail
 		List<DelveRun.Split> splits = run.getSplits();
 		List<Delve> delves = new ArrayList<>(splits.size());
 
-		// Summed from the delves rather than read off the run, so the column of totals beside the
-		// chart is the sum of exactly the columns on it. The run's own tally also holds whatever
-		// the delve in progress has earned, and a total that ran ahead of the plot would have the
-		// legend and the chart disagreeing for the length of every delve.
+		// Summed from the columns, not read off the run, so the totals match the plot exactly.
 		CombatTotals totals = new CombatTotals();
 
 		List<CombatTotals> earned = new ArrayList<>(splits.size());
@@ -192,15 +147,8 @@ final class RunDetail
 	}
 
 	/**
-	 * Which column what was counted on {@code level} is drawn in, or -1 for none.
-	 *
-	 * <p>A cleared delve is its own column. What was counted on a delve that never cleared still
-	 * really happened, so it goes on a neighbour rather than being left off: the next delve cleared
-	 * after it, or the last one when there is none after. That covers the wait a run was picked up
-	 * in, which was counted on a delve cleared before we were watching, and the delve read one short
-	 * when a run is picked up just as a delve starts. The delve died on or walked out of joins the
-	 * last column once the run is over. While the run is still going, the delve being fought is
-	 * left for its own column, which it gets when it is killed.
+	 * The column what was counted on {@code level} is drawn in, or -1 for none. A delve with no clear
+	 * goes on the next cleared one, or the last; the delve being fought waits for its own.
 	 */
 	private static int columnFor(List<DelveRun.Split> splits, int level, boolean finished)
 	{
@@ -221,19 +169,8 @@ final class RunDetail
 	}
 
 	/**
-	 * The run's drops, each marked with whether it was walked out with.
-	 *
-	 * <p>A drop is only on the chart once the delve it came off is: the pile can be seen growing a
-	 * moment before the chat line that clears the delve, and there is no column for it until then.
-	 *
-	 * <p>A drop is kept while the run is still going - it is in the pile, and nothing has lost it
-	 * yet - and afterwards only if the claim reached it. The second eye of a run is kept by a claim
-	 * of two and not by a claim of one, which is why each drop carries the count it brought the
-	 * pile to rather than a flag for its item.
-	 *
-	 * <p>An unknown unique is kept the same way, and so is only ever kept while the run is going:
-	 * nothing is claimed under its made-up item id, and every way of walking out with it would have
-	 * named it and put the real item in its place.
+	 * The run's drops, once their delve has a column. Kept while the run goes on; afterwards only if
+	 * the claim reached the drop's {@code heldAfter}.
 	 */
 	private static List<Drop> dropsOf(DelveRun run)
 	{
@@ -292,10 +229,7 @@ final class RunDetail
 		return diedOn;
 	}
 
-	/**
-	 * The first delve cleared: 1 for a run watched from the start, later for one joined part way
-	 * through, and 1 for a run that has cleared none.
-	 */
+	/** The first delve cleared, or 1 for a run that has cleared none. */
 	int shallowest()
 	{
 		return delves.isEmpty() ? 1 : delves.get(0).level;
@@ -322,26 +256,8 @@ final class RunDetail
 	}
 
 	/**
-	 * Enough of this to tell one snapshot from the next, so a run that has not banked anything
-	 * since the last look is not rebuilt and pushed across again.
-	 *
-	 * <p>Built out of the run rather than out of a detail, because the point is to decide whether
-	 * taking a snapshot is worth it. A snapshot holds only killed delves, and one of those moves in
-	 * three ways: the kill that adds it, something counted in the wait after it, and the wait ending
-	 * - the next delve starting, or the run ending - which settles its time. The deepest delve
-	 * cleared, the count of what landed in a wait, and whether a wait is going cover all three.
-	 *
-	 * <p>Which is what makes this cheap on the tick. A run four hundred delves deep is taken apart a
-	 * few times a delve rather than once per heal, and never at all on the ticks where nothing
-	 * moved - which is almost all of them.
-	 *
-	 * <p>The drops can move between clears as well: the pile a delve's drop lands in can arrive
-	 * after the clear that banked the delve, and a claim decides which drops were kept. Both are
-	 * rare enough that counting them into the key costs nothing.
-	 *
-	 * <p>The run's identity leads, because none of the rest says which run it is: a run that ends
-	 * unseen and is replaced by a new one at the same depth, with nothing banked and no drops,
-	 * would otherwise keep the old run's snapshot on screen.
+	 * Changes whenever a new snapshot would differ: the run itself, its deepest clear, anything counted
+	 * in a wait, whether a wait is going, and the drops. Cheap, since it runs every tick.
 	 */
 	static String keyFor(DelveRun run)
 	{
