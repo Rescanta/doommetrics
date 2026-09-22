@@ -88,9 +88,9 @@ class LootWatcher
 		{
 			// Already in the pile, from delves we did not see.
 			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE))
-				.forEach(started::pileAlreadyHeld);
+				.forEach(started.loot()::pileAlreadyHeld);
 			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
-				.forEach(started::pileAlreadyHeld);
+				.forEach(started.loot()::pileAlreadyHeld);
 		}
 	}
 
@@ -123,11 +123,11 @@ class LootWatcher
 			return;
 		}
 
-		int pets = Math.max(1, current.held(ItemID.DOMPET));
-		int delve = current.sawInPile(ItemID.DOMPET, items.name(ItemID.DOMPET), pets);
-		current.recordLoot(ItemID.DOMPET, items.name(ItemID.DOMPET), pets);
+		int pets = Math.max(1, current.loot().held(ItemID.DOMPET));
+		int delve = current.loot().sawInPile(ItemID.DOMPET, items.name(ItemID.DOMPET), pets);
+		current.loot().recordLoot(ItemID.DOMPET, items.name(ItemID.DOMPET), pets);
 		log.debug("Pet claimed, from delve {}",
-			delve == DelveRun.NOT_RECORDED ? current.dropLevel() : delve);
+			delve == RunLoot.NOT_RECORDED ? current.dropLevel() : delve);
 	}
 
 	/** A "Your loot contains" warning. The dialog's item is read once it has been filled in. */
@@ -167,9 +167,9 @@ class LootWatcher
 				return;
 			}
 
-			int delve = current.warnedOf(itemId, items.name(itemId));
+			int delve = current.loot().warnedOf(itemId, items.name(itemId));
 			log.debug("Loot warning for item {} while on delve {}, recorded on delve {}",
-				itemId, current.dropLevel(), delve == DelveRun.NOT_RECORDED ? "none" : delve);
+				itemId, current.dropLevel(), delve == RunLoot.NOT_RECORDED ? "none" : delve);
 		});
 	}
 
@@ -205,9 +205,9 @@ class LootWatcher
 
 		drops.forEach((itemId, quantity) ->
 		{
-			int delve = current.sawInPile(itemId, items.name(itemId), quantity);
+			int delve = current.loot().sawInPile(itemId, items.name(itemId), quantity);
 
-			if (delve != DelveRun.NOT_RECORDED)
+			if (delve != RunLoot.NOT_RECORDED)
 			{
 				log.debug("Item {} recorded on delve {}, pile now holds {}", itemId, delve, quantity);
 			}
@@ -237,7 +237,7 @@ class LootWatcher
 			|| (DESCEND_OPTION.equals(Text.removeTags(event.getMenuOption()))
 				&& WidgetUtil.componentToInterface(widgetId) != InterfaceID.OBJECTBOX))
 		{
-			current.descending();
+			current.loot().descending();
 			claimRequested = false;
 			return;
 		}
@@ -283,7 +283,7 @@ class LootWatcher
 			return;
 		}
 
-		if (current.uniqueSignalled())
+		if (current.loot().uniqueSignalled())
 		{
 			log.debug("Delve {} was left by the glowing hole: a unique is in the pile",
 				current.dropLevel());
@@ -313,7 +313,7 @@ class LootWatcher
 
 		claimed.forEach((itemId, quantity) ->
 		{
-			current.recordLoot(itemId, items.name(itemId), quantity);
+			current.loot().recordLoot(itemId, items.name(itemId), quantity);
 			log.debug("Loot pile holds {} x item {} on delve {}",
 				quantity, itemId, current.currentLevel());
 		});

@@ -878,7 +878,7 @@ public class DoomMetricsPlugin extends Plugin
 		record.end = ended.getEndReason();
 		record.diedOn = Math.max(0, diedOnLevel);
 		record.partial = ended.isPartial();
-		record.loot = ended.getLoot();
+		record.loot = ended.loot().getClaimed();
 		// Left out entirely for runs that attribute nothing.
 		record.combat = ended.getCombat().isEmpty() ? null : ended.getCombat().copy();
 

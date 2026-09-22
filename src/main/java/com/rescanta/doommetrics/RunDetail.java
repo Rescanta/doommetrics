@@ -60,7 +60,7 @@ final class RunDetail
 		/** A glow mark nothing has named - see {@link DelveRun#uniqueSignalled}. */
 		boolean isUnknown()
 		{
-			return itemId == DelveRun.UNKNOWN_UNIQUE;
+			return itemId == RunLoot.UNKNOWN_UNIQUE;
 		}
 	}
 
@@ -177,14 +177,14 @@ final class RunDetail
 		List<Drop> drops = new ArrayList<>();
 		int deepest = run.lastLevel();
 
-		for (DelveRun.Landed landed : run.getLanded())
+		for (RunLoot.Landed landed : run.loot().getLanded())
 		{
 			if (landed.level < 1 || landed.level > deepest)
 			{
 				continue;
 			}
 
-			boolean kept = !run.isFinished() || run.claimed(landed.itemId) >= landed.heldAfter;
+			boolean kept = !run.isFinished() || run.loot().claimed(landed.itemId) >= landed.heldAfter;
 			drops.add(new Drop(landed.level, landed.itemId, landed.name, landed.quantity, kept));
 		}
 
@@ -268,6 +268,6 @@ final class RunDetail
 
 		return System.identityHashCode(run) + "|" + run.lastLevel() + "|" + run.isBetweenDelves()
 			+ "|" + run.bankedCombatChanges() + "|" + run.isFinished() + "|" + run.getDiedOnLevel()
-			+ "|" + run.lootChanges();
+			+ "|" + run.loot().changes();
 	}
 }
