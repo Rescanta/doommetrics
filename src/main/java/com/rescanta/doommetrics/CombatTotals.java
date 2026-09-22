@@ -4,8 +4,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * A tally of every {@link CombatMetric}, used for a run, a session and a lifetime. This is the stored
- * format: a map by {@link CombatMetric#key()}, which carries unknown keys through untouched.
+ * A tally of every {@link CombatMetric}, used for a run, a session and a lifetime. This is the
+ * stored format: a map by {@link CombatMetric#key()}, which carries unknown keys through untouched.
  * {@link #v} versions it.
  */
 class CombatTotals

@@ -74,8 +74,8 @@ class RunHistoryStore
 	}
 
 	/**
-	 * Reads the current character's history, oldest first. Calls back on the executor thread, with an
-	 * empty list when there is no profile or file.
+	 * Reads the current character's history, oldest first. Calls back on the executor thread, with
+	 * an empty list when there is no profile or file.
 	 */
 	void load(Consumer<List<RunRecord>> callback)
 	{

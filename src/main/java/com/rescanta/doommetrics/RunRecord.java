@@ -3,15 +3,8 @@ package com.rescanta.doommetrics;
 import java.util.List;
 
 /**
- * One finished trip into the Doom, as it is written to the history file.
- *
- * <p>This is the on-disk shape, so the field names are the file format: renaming one silently
- * drops that column out of every record already written. {@link #v} exists so a later change can
- * tell old records from new ones without guessing.
- *
- * <p>Only runs that ended in a way we saw are recorded - see {@link EndReason#ABANDONED}. A run
- * that never cleared a delve is not worth a row either, so the deepest delve here is always at
- * least 1.
+ * One finished run as written to the history file. The field names are the file format; {@link #v}
+ * versions it. Only runs with a seen ending and at least one clear are written.
  */
 class RunRecord
 {
@@ -26,10 +19,7 @@ class RunRecord
 	/** The deepest delve cleared. Dying part way into the next one does not count towards it. */
 	int delve;
 
-	/**
-	 * Time from the start of the run to that last clear, in game ticks - the same measure the
-	 * milestone table's personal bests use. Zero when nothing trustworthy could be measured.
-	 */
+	/** Start to last clear in game ticks, or 0 when nothing trustworthy could be measured. */
 	int ticks;
 
 	EndReason end;
@@ -37,39 +27,18 @@ class RunRecord
 	/** The delve being fought when the player died, or 0 for a run that ended any other way. */
 	int diedOn;
 
-	/**
-	 * True when the run was already underway when the plugin started watching, so {@link #ticks}
-	 * is an over-estimate and the run's real start is unknown.
-	 */
+	/** Joined part way through, so {@link #ticks} is an over-estimate. */
 	boolean partial;
 
-	/**
-	 * True when the plugin stopped watching before the run ended - it was switched off part way
-	 * through, and for all we know the player carried on delving afterwards.
-	 *
-	 * <p>{@link #delve} is then a floor on where the run actually got to rather than the answer,
-	 * which is why the depth chart leaves these out. The run is still written down: what happened
-	 * is worth keeping even when how far it went is only bounded.
-	 */
+	/** The plugin stopped watching before the run ended, so {@link #delve} is only a floor. */
 	boolean incomplete;
 
 	/**
-	 * The notable drops from this run, by name, in the order they were seen. Empty for the many
-	 * runs that produce none.
-	 *
-	 * <p>Only the drops that make a trip worth remembering are listed, not every item claimed -
-	 * the supplies and currency are noise here. A drop earned twice on one trip is listed twice,
-	 * since a deep run really can roll the same unique more than once.
+	 * The notable drops from this run by name, in the order seen; a drop earned twice is listed
+	 * twice.
 	 */
 	List<String> loot;
 
-	/**
-	 * What this run's gear and spellbook gave back, by source - see {@link CombatMetric}. Null for
-	 * runs written before this was recorded, and for runs where nothing could be attributed.
-	 *
-	 * <p>The lifetime figure is kept separately in config, so this is not what any total shown is
-	 * read from. It is written so a run's figures are recoverable at all: nothing displays this
-	 * file today - see {@link RunHistoryStore} - and a run is gone the moment the next one starts.
-	 */
+	/** What this run's gear and spellbook gave back, or null when nothing was attributed. */
 	CombatTotals combat;
 }

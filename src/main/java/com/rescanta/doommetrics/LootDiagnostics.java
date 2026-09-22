@@ -46,7 +46,9 @@ class LootDiagnostics
 	/** How long after the boss dies to keep watching before the clear arrives to take over. */
 	private static final int AFTER_BOSS_DEATH_TICKS = 20;
 
-	/** How long after a run ends to keep watching: the claim script and its chat lines come later. */
+	/**
+	 * How long after a run ends to keep watching: the claim script and its chat lines come later.
+	 */
 	private static final int AFTER_RUN_TICKS = 100;
 
 	private final Client client;
@@ -65,7 +67,9 @@ class LootDiagnostics
 	/** Scripts fired this tick and how many times each, written out on the tick. */
 	private final Map<Integer, Integer> scripts = new TreeMap<>();
 
-	/** Interfaces loaded this tick, whose text is written out on the next once their scripts ran. */
+	/**
+	 * Interfaces loaded this tick, whose text is written out on the next once their scripts ran.
+	 */
 	private final Map<Integer, Integer> pendingDumps = new TreeMap<>();
 
 	LootDiagnostics(Client client, DoomMetricsConfig config, BooleanSupplier runActive,

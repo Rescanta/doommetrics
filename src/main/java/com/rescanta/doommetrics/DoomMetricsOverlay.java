@@ -137,9 +137,9 @@ class DoomMetricsOverlay extends OverlayPanel
 	}
 
 	/**
-	 * Draws each heading as configured - nothing, one total line, or a line per counter - in the side
-	 * panel's order. Empty lines are dimmed or hidden, and a fresh gain shows as {@code +97} for a few
-	 * seconds.
+	 * Draws each heading as configured - nothing, one total line, or a line per counter - in the
+	 * side panel's order. Empty lines are dimmed or hidden, and a fresh gain shows as {@code +97}
+	 * for a few seconds.
 	 */
 	private void addCombatLines(DelveRun run, Instant now)
 	{
@@ -255,8 +255,8 @@ class DoomMetricsOverlay extends OverlayPanel
 	}
 
 	/**
-	 * The gain while there is one, the total otherwise. Shortened in a grid column so it never wraps
-	 * over the icon.
+	 * The gain while there is one, the total otherwise. Shortened in a grid column so it never
+	 * wraps over the icon.
 	 *
 	 * @param narrow whether the figure has a grid column rather than a whole line
 	 */

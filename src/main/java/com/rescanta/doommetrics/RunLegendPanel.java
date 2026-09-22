@@ -29,7 +29,9 @@ import net.runelite.client.ui.DynamicGridLayout;
  */
 class RunLegendPanel extends JPanel
 {
-	/** The swatch beside each name: the colour of that counter's line, at the weight it is drawn. */
+	/**
+	 * The swatch beside each name: the colour of that counter's line, at the weight it is drawn.
+	 */
 	private static final int SWATCH = 9;
 
 	/** How much of a switched-off counter's icon is drawn, as its name is drawn in grey. */
@@ -141,7 +143,9 @@ class RunLegendPanel extends JPanel
 		}
 	}
 
-	/** Puts up the rows for the way the run is being read, which is all that changes between them. */
+	/**
+	 * Puts up the rows for the way the run is being read, which is all that changes between them.
+	 */
 	private void layOut()
 	{
 		removeAll();
@@ -189,7 +193,9 @@ class RunLegendPanel extends JPanel
 		}
 	}
 
-	/** @param hideEmpty whether a counter the run has not counted anything on starts switched off */
+	/**
+	 * @param hideEmpty whether a counter the run has not counted anything on starts switched off
+	 */
 	void setHideEmpty(boolean hideEmpty)
 	{
 		if (this.hideEmpty == hideEmpty)
@@ -452,7 +458,10 @@ class RunLegendPanel extends JPanel
 			repaint();
 		}
 
-		/** The name and the picture beside it, the picture faded while the line is off as the words are. */
+		/**
+		 * The name and the picture beside it, the picture faded while the line is off as the words
+		 * are.
+		 */
 		private void showName()
 		{
 			BufferedImage icon = series.icon(icons);

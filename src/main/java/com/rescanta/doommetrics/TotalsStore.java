@@ -8,8 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.config.ConfigManager;
 
 /**
- * The lifetime deep delve rate and combat totals, on the RuneScape profile. Config writes only touch
- * memory, so this runs on the client thread. A no-op while logged out - check {@link #hasProfile()}.
+ * The lifetime deep delve rate and combat totals, on the RuneScape profile. Config writes only
+ * touch memory, so this runs on the client thread. A no-op while logged out - check {@link
+ * #hasProfile()}.
  */
 @Slf4j
 @Singleton

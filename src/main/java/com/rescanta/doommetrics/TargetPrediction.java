@@ -4,14 +4,8 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * Which predicted times the target rows carry: how long is left to the target, how long the whole
- * run to it will have taken, or both.
- *
- * <p>The rows are worked out here rather than by the overlay and the side panel each, because both
- * draw them and the one thing they must not do is disagree about which rows a state has.
- *
- * <p>Public because the config interface returns it - see {@link CounterMode} for why that
- * matters.
+ * Which predicted times the target rows carry. Worked out here so the overlay and panel agree.
+ * Public because the config interface returns it - see {@link CounterMode}.
  */
 public enum TargetPrediction
 {
@@ -30,10 +24,7 @@ public enum TargetPrediction
 		this.label = label;
 	}
 
-	/**
-	 * The label of the row naming the target, which is also the row that says it has been reached -
-	 * so the time left row has nothing to add once it has, and goes.
-	 */
+	/** The target row's label, which also says when it has been reached. */
 	static String targetLabel(DelveRun run, int target)
 	{
 		return run.hasReached(target) ? "Target reached" : "Target";
@@ -51,10 +42,7 @@ public enum TargetPrediction
 		return DoomFormat.prediction(run.untilTarget(target, now));
 	}
 
-	/**
-	 * The label of the full run row, or null when it is not drawn. The asterisk marks a run joined
-	 * part way through, whose start is a guess, as it does on the run timer.
-	 */
+	/** The full run row's label, or null when not drawn. An asterisk marks a joined run. */
 	String totalLabel(DelveRun run)
 	{
 		if (this == REMAINING)
@@ -66,8 +54,8 @@ public enum TargetPrediction
 	}
 
 	/**
-	 * What the full run row reads: the predicted or real time to the target, {@code Reached} for a
-	 * run joined already past it, or a dash while there is nothing to predict from.
+	 * The predicted or real time to the target, {@code Reached} for a run joined past it, or a
+	 * dash.
 	 */
 	static String totalValue(DelveRun run, int target, Instant now)
 	{

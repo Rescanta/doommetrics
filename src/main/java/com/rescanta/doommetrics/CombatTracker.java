@@ -54,8 +54,8 @@ class CombatTracker
 	}
 
 	/**
-	 * An effect that arrived before its cause, kept for its own tick: the client reads players before
-	 * NPCs, so a heal can come before the graphic that explains it.
+	 * An effect that arrived before its cause, kept for its own tick: the client reads players
+	 * before NPCs, so a heal can come before the graphic that explains it.
 	 */
 	private static final class Held
 	{

@@ -147,8 +147,8 @@ final class RunDetail
 	}
 
 	/**
-	 * The column what was counted on {@code level} is drawn in, or -1 for none. A delve with no clear
-	 * goes on the next cleared one, or the last; the delve being fought waits for its own.
+	 * The column what was counted on {@code level} is drawn in, or -1 for none. A delve with no
+	 * clear goes on the next cleared one, or the last; the delve being fought waits for its own.
 	 */
 	private static int columnFor(List<DelveRun.Split> splits, int level, boolean finished)
 	{
@@ -169,8 +169,8 @@ final class RunDetail
 	}
 
 	/**
-	 * The run's drops, once their delve has a column. Kept while the run goes on; afterwards only if
-	 * the claim reached the drop's {@code heldAfter}.
+	 * The run's drops, once their delve has a column. Kept while the run goes on; afterwards only
+	 * if the claim reached the drop's {@code heldAfter}.
 	 */
 	private static List<Drop> dropsOf(DelveRun run)
 	{
@@ -256,8 +256,8 @@ final class RunDetail
 	}
 
 	/**
-	 * Changes whenever a new snapshot would differ: the run itself, its deepest clear, anything counted
-	 * in a wait, whether a wait is going, and the drops. Cheap, since it runs every tick.
+	 * Changes whenever a new snapshot would differ: the run itself, its deepest clear, anything
+	 * counted in a wait, whether a wait is going, and the drops. Cheap, since it runs every tick.
 	 */
 	static String keyFor(DelveRun run)
 	{

@@ -124,7 +124,9 @@ class DelveRun
 	/** When each delve after the first was announced, for {@link #fullTime}. */
 	private final Map<Integer, Instant> delveStarts = new HashMap<>();
 
-	/** Bumped when something is counted onto a delve already killed - see {@link RunDetail#keyFor}. */
+	/**
+	 * Bumped when something is counted onto a delve already killed - see {@link RunDetail#keyFor}.
+	 */
 	private int bankedCombatChanges;
 
 	private final CombatTotals combat = new CombatTotals();

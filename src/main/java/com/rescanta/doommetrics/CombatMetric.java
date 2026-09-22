@@ -197,8 +197,8 @@ enum CombatMetric implements CombatSeries
 		}
 
 		/**
-		 * The counters under each heading. A holder class, since a static field in the enum would be
-		 * filled before {@code CombatMetric}'s constants exist.
+		 * The counters under each heading. A holder class, since a static field in the enum would
+		 * be filled before {@code CombatMetric}'s constants exist.
 		 */
 		private static final class Members
 		{
@@ -337,7 +337,9 @@ enum CombatMetric implements CombatSeries
 		return icons.smallCounter(this);
 	}
 
-	/** The weapons whose specs feed this figure, or nothing when its label already names the one. */
+	/**
+	 * The weapons whose specs feed this figure, or nothing when its label already names the one.
+	 */
 	@Override
 	public List<String> sources()
 	{

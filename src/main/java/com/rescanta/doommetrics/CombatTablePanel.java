@@ -72,8 +72,8 @@ class CombatTablePanel extends JPanel
 	}
 
 	/**
-	 * Puts up every heading and the rows under unfolded ones. Removed rather than hidden, since the grid
-	 * leaves a gap for a hidden component.
+	 * Puts up every heading and the rows under unfolded ones. Removed rather than hidden, since the
+	 * grid leaves a gap for a hidden component.
 	 */
 	private void layOut()
 	{

@@ -399,7 +399,9 @@ public class DoomMetricsPlugin extends Plugin
 		sessionProfile = null;
 	}
 
-	/** Drops the runs and the session, but not what the plugin is watching (login, boss, levels). */
+	/**
+	 * Drops the runs and the session, but not what the plugin is watching (login, boss, levels).
+	 */
 	private void forgetRuns()
 	{
 		run = null;
@@ -917,7 +919,9 @@ public class DoomMetricsPlugin extends Plugin
 		}
 	}
 
-	/** Punish bonus splats aren't {@code isMine()}; the fight is solo, so others' colours are ours. */
+	/**
+	 * Punish bonus splats aren't {@code isMine()}; the fight is solo, so others' colours are ours.
+	 */
 	private static boolean isPunishSplat(Hitsplat hitsplat)
 	{
 		return hitsplat.isMine() || hitsplat.isOthers()
@@ -1131,7 +1135,10 @@ public class DoomMetricsPlugin extends Plugin
 		return equipped(EquipmentInventorySlot.GLOVES) == ItemID.JEWL_BRACELET_REGEN;
 	}
 
-	/** Healing spell impacts on a target. Blood spells are read from chat - see {@link #BLOOD_DRAIN}. */
+	/**
+	 * Healing spell impacts on a target. Blood spells are read from chat - see {@link
+	 * #BLOOD_DRAIN}.
+	 */
 	@Subscribe
 	public void onGraphicChanged(GraphicChanged event)
 	{

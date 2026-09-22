@@ -21,7 +21,10 @@ final class DoomFormat
 			: String.format(Locale.US, "%d:%02d", minutes, seconds);
 	}
 
-	/** The clock shortened for an infobox square: {@code 14:18}, {@code 1h23}, then whole hours past ten. */
+	/**
+	 * The clock shortened for an infobox square: {@code 14:18}, {@code 1h23}, then whole hours past
+	 * ten.
+	 */
 	static String compactDuration(Duration duration)
 	{
 		long total = Math.max(0, duration.getSeconds());
@@ -62,7 +65,10 @@ final class DoomFormat
 		return String.format(Locale.US, "%,d", value);
 	}
 
-	/** A count shortened for gridline labels. Truncates rather than rounds, since a gridline is a floor. */
+	/**
+	 * A count shortened for gridline labels. Truncates rather than rounds, since a gridline is a
+	 * floor.
+	 */
 	static String compact(long value)
 	{
 		long magnitude = Math.abs(value);

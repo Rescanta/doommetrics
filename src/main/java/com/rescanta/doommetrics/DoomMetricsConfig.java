@@ -11,7 +11,10 @@ public interface DoomMetricsConfig extends Config
 {
 	String GROUP = "doom-of-mokhaiotl-metrics";
 
-	/** The ceiling on a target and the widest delve the overlay is sized for, well clear of the record. */
+	/**
+	 * The ceiling on a target and the widest delve the overlay is sized for, well clear of the
+	 * record.
+	 */
 	int MAX_DELVE = 1000;
 
 	@ConfigSection(

@@ -159,8 +159,8 @@ final class PanelStyle
 	}
 
 	/**
-	 * Puts a picture beside the label's words, or just the words while there is none. The name stays
-	 * off the label's tooltip, which would give it mouse listeners that swallow the row's.
+	 * Puts a picture beside the label's words, or just the words while there is none. The name
+	 * stays off the label's tooltip, which would give it mouse listeners that swallow the row's.
 	 */
 	static void nameAndIcon(JLabel label, String name, BufferedImage icon)
 	{

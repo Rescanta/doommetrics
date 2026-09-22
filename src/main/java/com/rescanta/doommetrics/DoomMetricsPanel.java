@@ -325,7 +325,10 @@ class DoomMetricsPanel extends PluginPanel
 		combatPanel.setTotals(showingLifetime ? lifetimeCombat : sessionCombat);
 	}
 
-	/** The combat table, behind Session and Lifetime tabs. Each tab scales its meters to its own tally. */
+	/**
+	 * The combat table, behind Session and Lifetime tabs. Each tab scales its meters to its own
+	 * tally.
+	 */
 	private JComponent combatSection()
 	{
 		combatTabs.setBorder(new EmptyBorder(0, 0, 4, 0));
@@ -373,7 +376,10 @@ class DoomMetricsPanel extends PluginPanel
 		combatPanel.setIcons(icons);
 	}
 
-	/** @param onFoldChanged handed the folded headings whenever a click changes them, on the Swing thread */
+	/**
+	 * @param onFoldChanged handed the folded headings whenever a click changes them, on the Swing
+	 * thread
+	 */
 	void setCombatFolding(Set<CombatMetric.Group> folded,
 		Consumer<Set<CombatMetric.Group>> onFoldChanged)
 	{
