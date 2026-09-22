@@ -8,17 +8,8 @@ import net.runelite.client.ui.overlay.OverlayMenuEntry;
 import net.runelite.client.ui.overlay.infobox.InfoBox;
 
 /**
- * The run as one square: a picture, one figure over it, and a tooltip for everything the figure
- * left out.
- *
- * <p>Which figure is the config's to say, and it can be any of those in {@link InfoBoxFigure},
- * counters included. The per-heading counter settings have no say here - they choose
- * which lines the panel draws, and a square has one line.
- *
- * <p>Added once at startup and taken down at shutdown rather than added and removed as runs come
- * and go: whether the square is on screen is answered by {@link #render()}, which the client asks
- * every frame anyway. That keeps the infobox out of the tick handlers entirely, and keeps its
- * place in the infobox bar from moving every time a run starts.
+ * The run as one square: a picture, one configured figure, and a tooltip. Added once at start up;
+ * {@link #render()} decides when it shows.
  */
 class DoomMetricsInfoBox extends InfoBox
 {
@@ -38,12 +29,8 @@ class DoomMetricsInfoBox extends InfoBox
 	}
 
 	/**
-	 * The square's picture: what its figure counts, when it counts one thing and the config asks
-	 * for icons, and the plugin's own the rest of the time - a group, a figure that is not a
-	 * counter, or an icon the game has not handed over yet.
-	 *
-	 * <p>The client scales this once, when it is told the picture has changed, rather than every
-	 * frame - so the plugin looks at it on every tick and tells the client when it moves.
+	 * The counter's icon when it shows one counter and icons are on, otherwise the plugin's. The client
+	 * only rescales it when told, which the plugin does each tick.
 	 */
 	@Override
 	public BufferedImage getImage()

@@ -8,21 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.config.ConfigManager;
 
 /**
- * Reads and writes the lifetime deep delve rate against the logged in character.
- *
- * <p>Kept on the RuneScape profile alongside the milestone table, for the same reasons: an alt
- * keeps its own rate, and it survives client restarts the way any other setting does. It belongs
- * in config rather than in the history file because it is an aggregate that stops growing - two
- * numbers, whatever the character has done - so writing it costs the same on the ten thousandth
- * run as on the first.
- *
- * <p>Written on the client thread as each delve is cleared, which is only fine because a config
- * write never touches the disk: it changes the value in memory, and the client saves config in
- * batches on a thread of its own, and once more as it closes. That is why this has none of the
- * executor {@link RunHistoryStore} writes its file on.
- *
- * <p>There is no profile to key off while logged out, so every call here tolerates being a no-op -
- * callers check {@link #hasProfile()} before letting an empty read mean anything.
+ * The lifetime deep delve rate and combat totals, on the RuneScape profile. Config writes only touch
+ * memory, so this runs on the client thread. A no-op while logged out - check {@link #hasProfile()}.
  */
 @Slf4j
 @Singleton
@@ -58,13 +45,7 @@ class TotalsStore
 		configManager.setRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_TOTALS, encode(totals));
 	}
 
-	/**
-	 * The stored combat tally for the current character, or null if there is nothing to read.
-	 *
-	 * <p>Kept beside the delve rate and for the same reasons: it is an aggregate that stops
-	 * growing - a number per counter, whatever the character has done - so writing it costs the same on
-	 * the ten thousandth run as on the first, and an alt keeps its own.
-	 */
+	/** The stored combat tally for the current character, or null if there is nothing to read. */
 	CombatTotals loadCombat()
 	{
 		return decodeCombat(

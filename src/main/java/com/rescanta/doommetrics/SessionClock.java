@@ -3,14 +3,7 @@ package com.rescanta.doommetrics;
 import java.time.Duration;
 import java.time.Instant;
 
-/**
- * How long a session has been going, counting only the time spent logged in.
- *
- * <p>A session now lasts until the client is closed or the player resets it, so it can easily span
- * a logout for dinner or a night with the client left open at the login screen. Wall clock from the
- * first run would charge all of that to the session; this leaves out every stretch spent logged
- * out, and keeps everything else - banking, restocking and walking back are the session too.
- */
+/** How long a session has been going, counting only the time spent logged in. */
 final class SessionClock
 {
 	/** When the session's first run started, or null before it has one. */
@@ -40,10 +33,8 @@ final class SessionClock
 	}
 
 	/**
-	 * Notes a dropped connection, without stopping the clock. Most drops reconnect with the
-	 * character still in the world, and the wait is the session's as much as the run's. A drop that
-	 * ends at the login screen instead was a logout from the moment the connection went - see
-	 * {@link #pause}.
+	 * Notes a dropped connection without stopping the clock; one that ends at the login screen was a
+	 * logout from the start - see {@link #pause}.
 	 */
 	void connectionLost(Instant at)
 	{
@@ -53,10 +44,7 @@ final class SessionClock
 		}
 	}
 
-	/**
-	 * Stops the clock at a logout, or back at the dropped connection that ended in one. Does
-	 * nothing before the session has a run in it.
-	 */
+	/** Stops the clock at a logout, or back at the drop that led to one. */
 	void pause(Instant at)
 	{
 		Instant from = droppedAt != null ? droppedAt : at;
@@ -68,10 +56,7 @@ final class SessionClock
 		}
 	}
 
-	/**
-	 * Carries the clock on at a login, leaving out the time spent logged out. A drop still pending
-	 * was a reconnect, and its wait stays on the clock.
-	 */
+	/** Carries the clock on at a login. A pending drop was a reconnect, and its wait stays. */
 	void resume(Instant at)
 	{
 		droppedAt = null;
