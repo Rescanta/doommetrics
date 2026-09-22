@@ -385,18 +385,4 @@ enum CombatMetric implements CombatSeries
 	{
 		return series;
 	}
-
-	/** The metric stored under {@code key}, or null if nothing is - an older or newer schema. */
-	static CombatMetric byKey(String key)
-	{
-		for (CombatMetric metric : values())
-		{
-			if (metric.key.equals(key))
-			{
-				return metric;
-			}
-		}
-
-		return null;
-	}
 }
