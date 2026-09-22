@@ -13,68 +13,27 @@ import net.runelite.api.gameval.ItemID;
 
 /**
  * One trip into the Doom of Mokhaiotl, from entering the cave until the player leaves or dies.
- *
- * <p>Delve segments are contiguous with no gaps: a delve's segment runs from the moment the
- * previous delve was cleared, so restocking and dropping down the hole are charged to the delve
- * they precede. The first segment starts when the run does. That makes the sum of every segment
- * equal the total run time by construction, which is what the pace figures are built on.
- *
- * <p>The game also reports the length of each fight on its own, to a tenth of a second. That is
- * kept alongside the segment as {@link Split#fight} for display, but it deliberately does not feed
- * the pace maths - the downtime between delves is real time spent, and a delves-per-hour figure
- * that ignored it would flatter you.
- *
- * <p>The run detail window divides a run between its delves at a different point, for reading a
- * delve as it was played rather than for pacing it - see {@link #fullTime}. Nothing that reports a
- * pace does.
- *
- * <p>All timing is wall clock and never pauses.
+ * A delve's segment runs from the previous clear, so segments sum to the run time. Wall clock.
  */
 class DelveRun
 {
-	/**
-	 * The first delve that counts as deep - the numerator of every deep delve count and of
-	 * {@link PaceMode#RUN_THROUGHPUT}, and the floor for the chat messages.
-	 */
 	static final int DEEP_DELVE_LEVEL = 8;
 
-	/**
-	 * The first delve included in the {@link PaceMode#DEEP_AVERAGE} mean. One past
-	 * {@link #DEEP_DELVE_LEVEL} because delve 8 has a different amount of health to 9 and above,
-	 * so averaging it in reads as a pace nobody is actually sustaining.
-	 */
+	/** Delve 8 has different boss health, so the deep average starts at 9. */
 	static final int PACE_AVERAGE_FROM_LEVEL = 9;
 
-	/**
-	 * Handed back for a delve that earned nothing. Shared and never written to - every caller of
-	 * {@link #combatOn} only reads.
-	 */
+	/** Shared and read only. */
 	private static final CombatTotals EMPTY_COMBAT = new CombatTotals();
 
-	/**
-	 * The item id a drop is placed under when the game said a unique dropped without saying which:
-	 * the hole glowing and the unique sound playing. Not a real item, so nothing is ever claimed
-	 * under it - see {@link #uniqueSignalled}.
-	 */
+	/** The item id of a unique the glowing hole signalled but nothing has named yet. */
 	static final int UNKNOWN_UNIQUE = -1;
 
-	/** What an unknown unique is called where a name has to be written down. */
 	static final String UNKNOWN_UNIQUE_NAME = "Unknown unique";
 
-	/**
-	 * Handed back in place of a delve by the calls that write a drop down, when they wrote nothing.
-	 * No delve is numbered below 1, so it cannot be mistaken for one.
-	 */
+	/** Returned in place of a delve when nothing was written down. */
 	static final int NOT_RECORDED = -1;
 
-	/**
-	 * The id a notable drop is counted under.
-	 *
-	 * <p>The eye has two forms, and the warning, the pile and the claim each name it from a
-	 * different place. Should two of them name different forms they still mean the same eye, so
-	 * both forms count as the uncharged one - otherwise a warning would place one eye, the pile a
-	 * second, and the claim would keep neither.
-	 */
+	/** Both forms of the eye count as the same drop. */
 	static int dropKey(int itemId)
 	{
 		return itemId == ItemID.EYE_OF_AYAK ? ItemID.EYE_OF_AYAK_UNCHARGED : itemId;
@@ -102,18 +61,7 @@ class DelveRun
 
 	private final List<Split> splits = new ArrayList<>();
 
-	/**
-	 * How many of each notable drop this trip earned, keyed by {@link #dropKey} and in the order
-	 * each was first seen. A deep run really can roll the same unique twice, so these are counts
-	 * rather than a set.
-	 *
-	 * <p>Each count is the most the loot pile has been seen holding, not a running total of what
-	 * has been added to it. That is what makes the sources safe to overlap: the pile is read both
-	 * when the claim is clicked and when the game's claim script fires, and the pet arrives as a
-	 * chat line as well as possibly an item. Summing those reads would count one drop several
-	 * times over. Taking the largest cannot, because the pile never holds more than the run
-	 * earned.
-	 */
+	/** Claimed drops by {@link #dropKey}: the most the pile was seen holding, not a running sum. */
 	private final Map<Integer, Drop> loot = new LinkedHashMap<>();
 
 	private static final class Drop
@@ -128,12 +76,7 @@ class DelveRun
 		}
 	}
 
-	/**
-	 * A notable drop as it landed in the loot pile, placed on the delve it came off.
-	 *
-	 * <p>Kept apart from {@link #loot}, which is what was claimed: this is where each drop turned
-	 * up, whether or not the run went on to walk out with it.
-	 */
+	/** A notable drop as it landed in the loot pile, claimed or not. */
 	static final class Landed
 	{
 		/** The delve it came off. */
@@ -145,10 +88,7 @@ class DelveRun
 		/** How many landed on this delve at once - almost always one. */
 		final int quantity;
 
-		/**
-		 * How many of this item the pile held once these landed, so the second eye out of a run
-		 * reads 2 - which is what a claim has to reach for this one to have been walked out with.
-		 */
+		/** How many of this item the pile held once these landed. */
 		final int heldAfter;
 
 		Landed(int level, int itemId, String name, int quantity, int heldAfter)
@@ -161,124 +101,48 @@ class DelveRun
 		}
 	}
 
-	/** Every notable drop this trip has seen land, in the order they landed. */
 	private final List<Landed> landed = new ArrayList<>();
 
-	/**
-	 * How many of each notable drop the pile is known to hold, keyed by {@link #dropKey} - the
-	 * figure a new reading of the pile is measured against, so a pile that has not grown places
-	 * nothing.
-	 *
-	 * <p>The game puts up a warning about a unique every time you try to descend with it still in
-	 * the pile, and the pile itself is sent over again and again. Only a count going up is a drop.
-	 */
+	/** Known pile counts by {@link #dropKey}; only a count above this is a new drop. */
 	private final Map<Integer, Integer> held = new HashMap<>();
 
-	/**
-	 * How many "Your loot contains" warnings each item has had since the last descend was tried,
-	 * keyed by {@link #dropKey}.
-	 *
-	 * <p>The game puts up one warning per copy of a unique in the pile, one after another, each time
-	 * you try to go deeper. So the number of warnings one try brings up for an item is how many of
-	 * it the pile holds. Started over on every try, because backing out and trying again brings the
-	 * whole row of warnings up again from the first.
-	 */
+	/** "Your loot contains" warnings per item since the last descend try. */
 	private final Map<Integer, Integer> warned = new HashMap<>();
 
-	/**
-	 * Whether a warning can be trusted to be about a drop this run saw land. Not until a run joined
-	 * part way through has gone down a delve under our eyes: the first warnings it gets are about
-	 * whatever was already in the pile, from delves nobody watched. An untrusted warning still
-	 * names what the glow put up - see {@link #nameUnknown} - it just places nothing of its own.
-	 */
+	/** A joined run's first warnings are about the pile it inherited. */
 	private boolean trustWarnings;
 
-	/**
-	 * Whether the pet in the pile is one the hole glowed for, which decides whether it explains a
-	 * glow - see {@link #knowsOfGlowInPile}.
-	 *
-	 * <p>The three tradables light the hole whenever the pile holds one. The pet only lights it the
-	 * first a character is ever given: every duplicate after that drops into the pile, warns on
-	 * every descend like the rest, and leaves the hole plain. So which of the two this one is
-	 * cannot be read off the item, and is not something a client can look up.
-	 *
-	 * <p>It can be read off the glow, though. A pet that took over a mark the glow left is a pet
-	 * the hole glowed for; a pet that arrived with no mark outstanding is one it did not - see
-	 * {@link #nameUnknown}. Presumed false, which is the common case by far and the safe way round:
-	 * a pet wrongly taken as lighting the hole silently switches the marking off for the rest of
-	 * the run.
-	 */
+	/** Whether the pet in the pile lit the hole (only a character's first one does). */
 	private boolean petGlows;
 
-	/**
-	 * Bumped whenever a drop lands or a claim is read, so the detail window can tell that something
-	 * about the drops has changed without comparing them - see {@link RunDetail#keyFor}.
-	 */
+	/** Bumped whenever a drop lands or a claim is read - see {@link RunDetail#keyFor}. */
 	private int lootChanges;
 
-	/**
-	 * True from a clear until the game announces the next delve, which is what decides whether a
-	 * drop seen now came off the delve just cleared or the one still being fought - see
-	 * {@link #dropLevel}.
-	 */
+	/** From a clear until the game announces the next delve. */
 	private boolean betweenDelves;
 
-	/**
-	 * When each delve after the run's first began - the moment the game announced it - keyed by
-	 * delve number. Where the run detail window divides one delve from the next: see
-	 * {@link #fullTime}.
-	 */
+	/** When each delve after the first was announced, for {@link #fullTime}. */
 	private final Map<Integer, Instant> delveStarts = new HashMap<>();
 
-	/**
-	 * Bumped whenever something is counted in the wait after a kill, onto the delve just killed -
-	 * which the detail window already has a column for, and would otherwise not know has moved.
-	 * See {@link RunDetail#keyFor}.
-	 */
+	/** Bumped when something is counted onto a delve already killed - see {@link RunDetail#keyFor}. */
 	private int bankedCombatChanges;
 
-	/**
-	 * What this trip's gear and spellbook gave back: healing, prayer and spec damage, by source.
-	 * See {@link CombatTracker} for what does and does not get counted.
-	 */
 	private final CombatTotals combat = new CombatTotals();
 
-	/**
-	 * The same tally split by the delve it was earned on, keyed by delve number.
-	 *
-	 * <p>What decides which delve an amount belongs to is {@link #dropLevel} at the moment it is
-	 * credited: the delve being fought, or - from a kill until the game announces the next delve -
-	 * the delve just killed. So a delve's tally is its kill and everything counted in the wait after
-	 * it: the punish hits settled on the killing tick, a restore still on its way, and the specs
-	 * fired at whatever is left standing before going down again. That is the same division the run
-	 * detail window draws a delve's time with - see {@link #fullTime}.
-	 *
-	 * <p>A delve that earned nothing has no entry rather than an entry of zeroes, so a run that
-	 * never fires a spec costs this nothing at all. The sum of these is {@link #combat} by
-	 * construction - both are written by the same call - so the chart and the counters can never
-	 * disagree about what a run earned.
-	 */
+	/** The same tally by the delve it was earned on: its kill and the wait after it. */
 	private final Map<Integer, CombatTotals> combatByDelve = new LinkedHashMap<>();
 
-	/** What each counter gained in the last few seconds, for the figures that show a hit landing. */
 	private final RecentGains recent = new RecentGains();
 
 	private Instant startedAt;
 
-	/** True when the run was already underway when we started watching, so times are incomplete. */
+	/** Already underway when we started watching, so times are incomplete. */
 	private final boolean partial;
 
-	/**
-	 * A moment known to be no later than the real start of the run, used only for milestone
-	 * personal bests. Null when {@link #startedAt} is already exact.
-	 */
+	/** No later than the real start of a joined run, for personal bests. Null when exact. */
 	private final Instant pbAnchor;
 
-	/**
-	 * Whether the first delve cleared was watched from its start, and so has a segment that was
-	 * measured. Always so for a run watched from the start; a joined run earns it by being picked up
-	 * no later than the start of its first delve - see {@link #watchedFromDelveStart}.
-	 */
+	/** Whether the first clear was watched from its delve's start. */
 	private boolean firstClearTimed;
 
 	private Instant lastClearedAt;
@@ -303,15 +167,10 @@ class DelveRun
 		this.firstClearTimed = !partial;
 	}
 
-	/**
-	 * The game announced the delve we have just dropped into.
-	 *
-	 * @param at when it was announced, which is when the delve before it stops taking in its wait
-	 */
+	/** The game announced the delve we have just dropped into. */
 	void enterLevel(int level, Instant at)
 	{
-		// A joined run picked up in the wait between delves sees the next one start, so from here
-		// on it is timed like any other. A repeat of the delve it was picked up in is not a start.
+		// A joined run picked up between delves has now seen one start.
 		if (partial && splits.isEmpty() && level > currentLevel)
 		{
 			watchedFromDelveStart(at);
@@ -321,17 +180,10 @@ class DelveRun
 		betweenDelves = false;
 		warned.clear();
 		trustWarnings = true;
-		// The first announcement is when the delve began; one sent again is not a new start.
 		delveStarts.putIfAbsent(level, at);
 	}
 
-	/**
-	 * Moves a joined run that has not cleared a delve yet onto the start of the delve it is in,
-	 * because it was seen starting. Its first clear then has a measured segment, and is charged to
-	 * the rates like any other.
-	 *
-	 * @param at when the delve was announced
-	 */
+	/** A joined run with no clears saw its delve start, so its first clear is measured. */
 	void watchedFromDelveStart(Instant at)
 	{
 		if (!splits.isEmpty())
@@ -345,10 +197,8 @@ class DelveRun
 	}
 
 	/**
-	 * Moves the start of a run that has not banked a delve yet onto the moment the game says the
-	 * delve actually began. The chat line announcing a delve lands a couple of seconds before the
-	 * fight the game is timing starts, and without this the first segment carries that walk-in and
-	 * reads longer than the duration the game reports for the same delve.
+	 * Moves the start of a run with no clears onto the game's own delve start, a couple of seconds
+	 * after the chat line.
 	 *
 	 * @return true if the run was moved
 	 */
@@ -375,22 +225,13 @@ class DelveRun
 		return split;
 	}
 
-	/**
-	 * Whether the delve cleared last has a segment that was actually measured, and so can be
-	 * charged to a rate. Every clear of a run we watched from the start has one; the first clear
-	 * of a run we joined part way through does not, because its segment starts wherever we
-	 * happened to pick the run up - unless we picked it up no later than that delve's start.
-	 */
+	/** Whether the last clear's segment was measured, and so can be charged to a rate. */
 	boolean lastClearTimed()
 	{
 		return !splits.isEmpty() && (firstClearTimed || splits.size() > 1);
 	}
 
-	/**
-	 * The ticks the delve cleared last adds to a rate: its segment, rounded so that the clears of a
-	 * run always sum to exactly {@link #clearedElapsed} in ticks. Rounding each segment on its own
-	 * would drift from that by up to half a tick a delve.
-	 */
+	/** The last clear's segment in ticks, rounded so a run's clears sum to its total. */
 	long lastClearTicks()
 	{
 		if (splits.isEmpty())
@@ -403,13 +244,7 @@ class DelveRun
 		return DoomFormat.toTicks(through) - DoomFormat.toTicks(before);
 	}
 
-	/**
-	 * Notes that this trip has been seen holding {@code quantity} of a notable drop.
-	 *
-	 * <p>Reporting the same quantity again leaves the run as it was, so a caller never has to know
-	 * whether another source got there first. Reporting a larger one raises the count: that is how
-	 * a second cloth out of a deeper delve gets counted, and it is the only way a count ever moves.
-	 */
+	/** Records a claimed quantity. Repeats are harmless; only a larger count moves it. */
 	void recordLoot(int itemId, String name, int quantity)
 	{
 		if (name == null || quantity <= 0)
@@ -440,17 +275,9 @@ class DelveRun
 	}
 
 	/**
-	 * Notes that the loot pile has been seen holding {@code quantity} of a notable drop while the run
-	 * is going, and places however many that is more than before on the delve they came off.
+	 * The pile was seen holding {@code quantity}; whatever is more than before landed now.
 	 *
-	 * <p>A reading that holds no more than the last one places nothing, which is what makes it safe
-	 * to feed every copy of the pile the game sends, and to feed two copies of it: the first to show
-	 * a new drop places it, and the other finds nothing left to place. A reading holding fewer is a
-	 * pile being emptied, and changes nothing either - a drop that landed stays where it landed.
-	 *
-	 * @return the delve the drop was written down on, or {@link #NOT_RECORDED} if this recorded
-	 *         nothing. Not always the delve we are standing on: a drop the glow had already marked
-	 *         keeps the delve the glow put it on - see {@link #nameUnknown}.
+	 * @return the delve the drop was written down on, or {@link #NOT_RECORDED}
 	 */
 	int sawInPile(int itemId, String name, int quantity)
 	{
@@ -464,8 +291,6 @@ class DelveRun
 
 		held.put(key, quantity);
 
-		// A unique the game only signalled is this one, now that it has a name - see
-		// nameUnknown. Anything else is a drop landing where we stand.
 		int named = nameUnknown(key, name, quantity - before, quantity);
 
 		if (named != NOT_RECORDED)
@@ -478,22 +303,16 @@ class DelveRun
 		return dropLevel();
 	}
 
-	/**
-	 * A descend was tried: the hole clicked, or the button on the loot screen. Whatever warnings it
-	 * brings up are counted from nothing - see {@link #warned}.
-	 */
+	/** A descend was tried; its warnings are counted from nothing. */
 	void descending()
 	{
 		warned.clear();
 	}
 
 	/**
-	 * The game warned that the pile holds this item as you tried to go deeper. One warning is one
-	 * copy, so this try's count for the item is how many the pile holds, and anything over what the
-	 * run already knew about came off the delve just cleared.
+	 * A "Your loot contains" warning. One per copy, so this try's count is the pile's count.
 	 *
-	 * @return the delve the drop was written down on, or {@link #NOT_RECORDED} if this recorded
-	 *         nothing - see {@link #sawInPile}
+	 * @return the delve the drop was written down on, or {@link #NOT_RECORDED}
 	 */
 	int warnedOf(int itemId, String name)
 	{
@@ -502,9 +321,7 @@ class DelveRun
 		if (!trustWarnings)
 		{
 			pileAlreadyHeld(itemId, count);
-			// The warning is about a pile we inherited, so it places nothing - but it still names
-			// whatever the glow put up as unknown. Which delve that mark sits on is a joined run's
-			// guess either way, and the item's name is worth more than the question mark.
+			// About an inherited pile: places nothing, but can still name the glow's mark.
 			return nameUnknown(dropKey(itemId), name, 1, count);
 		}
 
@@ -512,28 +329,7 @@ class DelveRun
 	}
 
 	/**
-	 * The game signalled a unique without naming it: the cleared delve was left by the hole that
-	 * glows rather than the plain one, so the pile holds something and nothing yet says what.
-	 *
-	 * <p>Placed as an unknown unique, which turns into the real drop once a warning, the loot
-	 * screen or the claim names it - see {@link #sawInPile}. One that is never named was lost with
-	 * the run, because every way of walking out with it would have named it.
-	 *
-	 * <p>Placed only while the run knows of nothing in the pile that lights the hole, and only one
-	 * at a time. What the glow says is that the pile holds something worth glowing for, not that
-	 * this delve dropped it - a hole left glowing by a drop five delves back is the same hole - so
-	 * a signal over a drop already known about says nothing new. That leaves the rare second unique
-	 * of a run to the warning, the loot screen and the claim, which name it outright.
-	 *
-	 * <p>A duplicate pet is in the pile without lighting anything, and is not counted against a
-	 * later glow - see {@link #knowsOfGlowInPile}.
-	 *
-	 * <p>A run joined part way through marks the glow like any other, on the delve it was cleared
-	 * by. The drop may well have come off a delve nobody watched - the hole was already glowing
-	 * when we picked the run up - but the delve it was cleared by is the only one a joined run can
-	 * name, and a mark saying there is a unique down there is worth more than silence. Nothing is
-	 * placed when the pile was there to be read as the run was picked up, since then the run knows
-	 * what is in it - see {@link #pileAlreadyHeld}.
+	 * The glowing hole: marks an unknown unique, unless the run already knows what it glows for.
 	 *
 	 * @return true if this placed a drop
 	 */
@@ -549,15 +345,7 @@ class DelveRun
 		return true;
 	}
 
-	/**
-	 * Whether the run already knows what the hole is glowing for: something in the pile that lights
-	 * it, named or still only a mark.
-	 *
-	 * <p>Not the same question as whether the pile holds a notable drop. A duplicate pet is notable
-	 * and sits in the pile all run without ever lighting anything, so counting it would take the
-	 * marking away from every player who already owns one - which is most of the ones deep enough
-	 * to care. See {@link #petGlows} for how the two pets are told apart.
-	 */
+	/** A duplicate pet sits in the pile without lighting the hole, so it doesn't count. */
 	private boolean knowsOfGlowInPile()
 	{
 		for (Map.Entry<Integer, Integer> entry : held.entrySet())
@@ -572,17 +360,9 @@ class DelveRun
 	}
 
 	/**
-	 * Turns the unique the glow put up into the drop something has just named, keeping the delve
-	 * the glow put it on rather than taking the one we are on now: the glow said when, and the
-	 * naming says what. The two are the same delve when the naming is a warning on the way down,
-	 * and delves apart when it is a claim at the end of the run.
+	 * The first drop named after a glow takes over its mark, keeping the mark's delve.
 	 *
-	 * <p>The mark is spent by the <em>first</em> naming, not by a matching one - the glow never said
-	 * what it meant, so there is nothing to match against. A second unique named while the mark is
-	 * still outstanding therefore lands on the delve we are on, like any other drop.
-	 *
-	 * @return the delve the mark was sitting on, which this drop now keeps, or
-	 *         {@link #NOT_RECORDED} if there was no mark to name
+	 * @return the delve the mark was on, or {@link #NOT_RECORDED} if there was none
 	 */
 	private int nameUnknown(int key, String name, int quantity, int heldAfter)
 	{
@@ -597,13 +377,11 @@ class DelveRun
 		landed.set(unknown, new Landed(level, key, name, quantity, heldAfter));
 		lootChanges++;
 
-		// The mark is the hole having glowed, so whatever took it over is something the hole glows
-		// for - which for the pet is the one thing that cannot be read off the item - see petGlows.
 		petGlows |= key == ItemID.DOMPET;
 		return level;
 	}
 
-	/** Where the unique the glow placed and nothing has named sits in {@link #landed}, or -1. */
+	/** The index of the unnamed glow mark in {@link #landed}, or -1. */
 	private int outstandingUnknown()
 	{
 		for (int i = 0; i < landed.size(); i++)
@@ -623,56 +401,39 @@ class DelveRun
 		return held.getOrDefault(dropKey(itemId), 0);
 	}
 
-	/**
-	 * Takes what the pile already holds as having been there before we were watching, so a run
-	 * joined part way through does not place every drop already in it on the first delve we see.
-	 */
+	/** What a joined run's pile held before we were watching. */
 	void pileAlreadyHeld(int itemId, int quantity)
 	{
 		held.merge(dropKey(itemId), quantity, Math::max);
 	}
 
-	/**
-	 * The delve a drop seen now came off.
-	 *
-	 * <p>Loot only lands in the pile when a delve is cleared, so that is always the delve just
-	 * cleared - but the pile and the chat line clearing the delve can arrive either way round. Seen
-	 * after the clear, it is the delve before the one we are waiting to drop into; seen before, it
-	 * is the delve still being fought, whose clear is on its way.
-	 */
+	/** The delve a drop seen now came off: the one just cleared, or the one still being fought. */
 	int dropLevel()
 	{
 		return betweenDelves ? lastLevel() : currentLevel;
 	}
 
-	/** Whether a delve has been cleared and the game has not yet announced the next. */
 	boolean isBetweenDelves()
 	{
 		return betweenDelves;
 	}
 
-	/** Every notable drop this trip has seen land, in the order they landed. */
 	List<Landed> getLanded()
 	{
 		return Collections.unmodifiableList(landed);
 	}
 
-	/** Moves whenever a drop lands or a claim is read - see {@link #lootChanges}. */
 	int lootChanges()
 	{
 		return lootChanges;
 	}
 
-	/** Moves whenever something is counted onto a delve already killed - see the field. */
 	int bankedCombatChanges()
 	{
 		return bankedCombatChanges;
 	}
 
-	/**
-	 * The notable drops from this trip, by name, in the order each was first seen. A drop earned
-	 * twice is listed twice - the names are the record, so the count has to live in them.
-	 */
+	/** Claimed drops by name, a drop earned twice listed twice. */
 	List<String> getLoot()
 	{
 		List<String> names = new ArrayList<>();
@@ -688,17 +449,12 @@ class DelveRun
 		return names;
 	}
 
-	/**
-	 * Credits an attributed heal, prayer restore or hit to this trip, and to the delve.
-	 *
-	 * @param at when it was credited, which is what decides how long it shows as a gain
-	 */
+	/** Credits a heal, prayer restore or hit to this trip and to the delve. */
 	void recordCombat(CombatMetric metric, long amount, Instant at)
 	{
+		// Checked here so nothing leaves an empty tally on a delve.
 		if (amount <= 0)
 		{
-			// Tested here as well as in CombatTotals so nothing that would be discarded can leave
-			// an empty tally behind on a delve that earned nothing.
 			return;
 		}
 
@@ -712,33 +468,23 @@ class DelveRun
 		}
 	}
 
-	/** What {@code metric} has gained in the last few seconds, or 0 - see {@link RecentGains}. */
 	long recentGain(CombatMetric metric, Instant now)
 	{
 		return recent.get(metric, now);
 	}
 
-	/**
-	 * This trip's combat tally. Live while the run is, so the panel reads what has been counted so
-	 * far rather than waiting for the trip to end.
-	 */
 	CombatTotals getCombat()
 	{
 		return combat;
 	}
 
-	/**
-	 * What was earned on one delve - its kill and the wait after it, see {@link #combatByDelve} - or
-	 * an empty tally for a delve that earned nothing. Never null, so a caller walking every delve of
-	 * a run does not have to tell "no entry" from "no figures".
-	 */
+	/** What was earned on one delve; never null. */
 	CombatTotals combatOn(int level)
 	{
 		CombatTotals totals = combatByDelve.get(level);
 		return totals == null ? EMPTY_COMBAT : totals;
 	}
 
-	/** Every delve something has been counted on, cleared or not. */
 	Set<Integer> combatLevels()
 	{
 		return Collections.unmodifiableSet(combatByDelve.keySet());
@@ -782,33 +528,22 @@ class DelveRun
 		return splits.isEmpty() ? 0 : splits.get(splits.size() - 1).level;
 	}
 
-	/** The delve currently being fought. */
 	int currentLevel()
 	{
 		return currentLevel;
 	}
 
-	/**
-	 * Time from the start of the run to the moment the last delve was cleared. This is what both
-	 * pace figures and every reported total are built on, so a death part way into a delve simply
-	 * never contributes: the answer is already the time through the previous delve.
-	 */
+	/** From the run start to the last clear - what every total and pace is built on. */
 	Duration clearedElapsed()
 	{
 		return Duration.between(startedAt, lastClearedAt);
 	}
 
 	/**
-	 * What a milestone personal best is measured over: the same span as {@link #clearedElapsed},
-	 * except that a run we joined part way through is measured from the anchor instead.
+	 * The span a milestone personal best is measured over. A joined run is measured from its
+	 * login anchor, which can only make it too long.
 	 *
-	 * <p>A partial run's {@link #startedAt} is the moment we first saw it, which is later than the
-	 * truth and would hand out a personal best nobody earned. The anchor is a moment the run
-	 * provably had not started by - the login it happened in, see {@link LoginBound}. Measuring from
-	 * it can only ever make the time too long, and a time that is too long simply never wins.
-	 *
-	 * @return the span, or null for a run joined part way through with no anchor to measure from,
-	 *         whose personal bests cannot be timed at all
+	 * @return the span, or null for a joined run with no anchor
 	 */
 	Duration pbElapsed()
 	{
@@ -821,25 +556,17 @@ class DelveRun
 		return Duration.between(from, lastClearedAt);
 	}
 
-	/** Live wall clock time since the run started, including the delve in progress. */
 	Duration liveElapsed(Instant now)
 	{
 		return Duration.between(startedAt, now);
 	}
 
-	/**
-	 * What the timer should read: live while the run is going, and frozen on the time through the
-	 * last cleared delve once it is over, so the number always matches the pace denominator.
-	 */
+	/** Live while the run is going, frozen on {@link #clearedElapsed} once it is over. */
 	Duration displayElapsed(Instant now)
 	{
 		return isFinished() ? clearedElapsed() : liveElapsed(now);
 	}
 
-	/**
-	 * How many of {@code cleared} are at or past {@link #DEEP_DELVE_LEVEL} - what a deep delve rate
-	 * counts, whether that rate covers this run alone or a lifetime of them.
-	 */
 	private static int deepIn(List<Split> cleared)
 	{
 		int deep = 0;
@@ -855,25 +582,13 @@ class DelveRun
 		return deep;
 	}
 
-	/**
-	 * The clears a pace is built on: every one, less the first clear of a run joined part way into
-	 * a delve - see {@link #lastClearTimed}. That segment starts wherever we happened to pick the
-	 * run up, so it can be a few seconds long, and a delve credited to a few seconds reads as a
-	 * pace nobody could keep. These are the clears the session and lifetime rates take in too, so
-	 * a session holding one run reads what that run's own pace does, joined or not.
-	 */
+	/** Every clear less an unmeasured first one. */
 	private List<Split> timedSplits()
 	{
 		return firstClearTimed || splits.isEmpty() ? splits : splits.subList(1, splits.size());
 	}
 
-	/**
-	 * Deep delves completed per hour of run time, counting the shallow delves against you.
-	 * Delve 8 counts towards the numerator even though it is excluded from {@link #deepPace}.
-	 *
-	 * <p>A run joined part way into a delve is measured from that delve's clear, and leaves the
-	 * delve out - see {@link #timedSplits}. Until it clears another there is no pace to give.
-	 */
+	/** Deep delves per hour of run time, shallow delves counting against you. */
 	Double fullPace()
 	{
 		List<Split> timed = timedSplits();
@@ -889,18 +604,7 @@ class DelveRun
 		return deep * 3600.0 / seconds;
 	}
 
-	/**
-	 * The mean length of the delves at or past {@link #PACE_AVERAGE_FROM_LEVEL}, or null until one
-	 * has been cleared. Delve 8 is excluded because it has a different amount of health to 9 and
-	 * above, which would drag the average off the speed you are actually sustaining.
-	 *
-	 * <p>Both {@link #deepPace} and {@link #untilTarget} are built on this rather than working the
-	 * average out for themselves, so the time predicted to a target and the pace shown beside it
-	 * can never disagree about how long a delve is taking.
-	 *
-	 * <p>The first clear of a run joined part way into a delve is left out, for the reason {@link
-	 * #fullPace} leaves it out.
-	 */
+	/** The mean segment of delves 9 and deeper, or null until one has been cleared. */
 	Duration meanDeepSegment()
 	{
 		long count = 0;
@@ -918,35 +622,20 @@ class DelveRun
 		return count == 0 || millis <= 0 ? null : Duration.ofMillis(millis / count);
 	}
 
-	/** Pace implied by {@link #meanDeepSegment}, or null while there is no mean to imply one. */
 	Double deepPace()
 	{
 		Duration mean = meanDeepSegment();
 		return mean == null ? null : 3600.0 / (mean.toMillis() / 1000.0);
 	}
 
-	/** Whether this run has cleared the delve it was aiming for. */
 	boolean hasReached(int target)
 	{
 		return target > 0 && lastLevel() >= target;
 	}
 
 	/**
-	 * How much longer this run has to go to reach {@code target}, at the speed its deep delves have
-	 * been going. Null when there is no answer to give: no target set, the target already reached,
-	 * the run over, or no delve 9+ cleared yet to average over.
-	 *
-	 * <p>The delve in progress is charged against the estimate as it goes, so the figure counts
-	 * down second by second rather than sitting still between clears. A delve that overruns the
-	 * average would otherwise drive the estimate below what the delves still to come must take, so
-	 * it floors at exactly that: the figure stalls for as long as you are over, then resumes on the
-	 * clear. Without the floor it would count down into nothing and jump back up, which reads as
-	 * the estimate getting worse the closer you get.
-	 *
-	 * <p>Two things a flat average cannot know are left in deliberately, because every other figure
-	 * here is a flat average and a prediction that quietly corrected for them would be the odd one
-	 * out: delves 1-8 are quicker than the mean, so a target set during delves 1-8 reads long, and
-	 * delves get slower the deeper they go, so a distant target reads short.
+	 * Time left to clear {@code target} at the deep average, counting down through the current
+	 * delve but floored so an overrunning delve stalls it. Null when there is nothing to predict.
 	 */
 	Duration untilTarget(int target, Instant now)
 	{
@@ -967,18 +656,7 @@ class DelveRun
 		return Duration.ofMillis(Math.max(millis, (remaining - 1) * mean.toMillis()));
 	}
 
-	/**
-	 * How long this run takes from its start to clearing {@code target}: the real time once it has,
-	 * and the time so far plus {@link #untilTarget} until then. Null when there is no answer to
-	 * give: no target set, the run over short of it, no delve 9+ cleared yet to average over, or a
-	 * run joined already past the target, whose clear of it nobody saw.
-	 *
-	 * <p>The real time stays put however much deeper the run goes, and survives the run ending.
-	 *
-	 * <p>Built on {@link #untilTarget} rather than beside it, so the two rows can never disagree.
-	 * That also brings its floor along: the figure holds still while a delve runs to the average,
-	 * and counts up for as long as one overruns it, which is the run getting slower.
-	 */
+	/** Start to clearing {@code target}: the real time once reached, else elapsed + prediction. */
 	Duration runToTarget(int target, Instant now)
 	{
 		if (hasReached(target))
@@ -998,11 +676,7 @@ class DelveRun
 		return remaining == null ? null : liveElapsed(now).plus(remaining);
 	}
 
-	/**
-	 * The pace this run is read by: the one {@code configured} while the run is going, and full pace
-	 * once it is over. Deep pace says how fast more deep delves could be added, which a run that has
-	 * ended is not going to do - what is left to say is how fast it went, start to finish.
-	 */
+	/** A finished run is read by full pace. */
 	PaceMode paceMode(PaceMode configured)
 	{
 		return isFinished() ? PaceMode.RUN_THROUGHPUT : configured;
@@ -1019,19 +693,8 @@ class DelveRun
 	}
 
 	/**
-	 * How long the {@code index}th cleared delve took as the run detail window draws it: from the
-	 * delve starting to the next one starting, so its kill and the wait after it - the restock, and
-	 * the specs fired at whatever is left before going down again.
-	 *
-	 * <p>That is not how {@link Split#segment}, and every pace figure built on it, divides a run:
-	 * those charge a wait to the delve it comes before. Over a run the two come to the same time,
-	 * split at a different point. The window shows a delve as the player plays it, a kill and then
-	 * the getting ready for the next; the pace figures have to be final at the kill, which is when a
-	 * pace is announced and when the wait after it has not happened yet.
-	 *
-	 * <p>A delve still in its wait runs to its kill for now, and takes the wait in once the next
-	 * delve starts, or once the run ends there. One whose next delve went on without its start being
-	 * seen stops at its kill.
+	 * A cleared delve's time as the detail window draws it: from its start to the next delve's
+	 * start, so its kill and the wait after it.
 	 */
 	Duration fullTime(int index)
 	{
