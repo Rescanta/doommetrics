@@ -4,6 +4,7 @@ import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ClientShutdown;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.InfoBoxMenuClicked;
 import net.runelite.client.events.OverlayMenuClicked;
@@ -227,8 +229,38 @@ public class DoomMetricsPlugin extends Plugin
 		infoBoxPicture = null;
 		feed.stop();
 
+		recordUnfinishedRun();
 		totals.flushCombat();
 		reset();
+	}
+
+	/** Closing the client does not shut plugins down, so a run still going is written here. */
+	@Subscribe
+	public void onClientShutdown(ClientShutdown event)
+	{
+		CompletableFuture<Void> written = new CompletableFuture<>();
+		clientThread.invoke(() -> recordUnfinishedRun()
+			.whenComplete((ignored, error) -> written.complete(null)));
+		event.waitFor(written);
+	}
+
+	/**
+	 * Writes a run the plugin stops watching mid-way to the history as incomplete, its depth a
+	 * floor. One with no clear yet is dropped, as it would be at any other ending.
+	 */
+	private CompletableFuture<Void> recordUnfinishedRun()
+	{
+		DelveRun unfinished = run;
+
+		if (unfinished == null || unfinished.lastLevel() == 0)
+		{
+			return CompletableFuture.completedFuture(null);
+		}
+
+		run = null;
+		unfinished.end(EndReason.ABANDONED, Instant.now(), -1);
+		log.debug("Recording the run on delve {} as incomplete", unfinished.currentLevel());
+		return recordRun(unfinished, -1, true);
 	}
 
 	/** Package-private so the preview harness can hand over its own. */
@@ -849,7 +881,7 @@ public class DoomMetricsPlugin extends Plugin
 		lastRun = ended;
 		lastRunCleared = false;
 
-		recordRun(ended, diedOnLevel);
+		recordRun(ended, diedOnLevel, false);
 
 		if (!config.announceRunEnd() || ended.lastLevel() == 0)
 		{
@@ -868,8 +900,8 @@ public class DoomMetricsPlugin extends Plugin
 		return anchor;
 	}
 
-	/** Written for finished and died runs; never read back by the plugin. */
-	private void recordRun(DelveRun ended, int diedOnLevel)
+	/** Written for ended runs and incomplete ones; never read back by the plugin. */
+	private CompletableFuture<Void> recordRun(DelveRun ended, int diedOnLevel, boolean incomplete)
 	{
 		RunRecord record = new RunRecord();
 		record.at = ended.getEndedAt().getEpochSecond();
@@ -878,11 +910,12 @@ public class DoomMetricsPlugin extends Plugin
 		record.end = ended.getEndReason();
 		record.diedOn = Math.max(0, diedOnLevel);
 		record.partial = ended.isPartial();
+		record.incomplete = incomplete;
 		record.loot = ended.loot().getClaimed();
 		// Left out entirely for runs that attribute nothing.
 		record.combat = ended.getCombat().isEmpty() ? null : ended.getCombat().copy();
 
-		runHistoryStore.append(record,
+		return runHistoryStore.append(record,
 			runProfile != null ? runProfile : runHistoryStore.currentProfile());
 	}
 

@@ -3,8 +3,9 @@ package com.rescanta.doommetrics;
 import java.util.List;
 
 /**
- * One finished run as written to the history file. The field names are the file format; {@link #v}
- * versions it. Only runs with a seen ending and at least one clear are written.
+ * One run as written to the history file. The field names are the file format; {@link #v}
+ * versions it. Only runs with at least one clear are written: those with a seen ending, and those
+ * still going when the plugin stopped watching - see {@link #incomplete}.
  */
 class RunRecord
 {
@@ -30,7 +31,10 @@ class RunRecord
 	/** Joined part way through, so {@link #ticks} is an over-estimate. */
 	boolean partial;
 
-	/** The plugin stopped watching before the run ended, so {@link #delve} is only a floor. */
+	/**
+	 * The plugin stopped watching before the run ended - it was turned off, or the client closed -
+	 * so {@link #delve} is only a floor and {@link #end} is {@link EndReason#ABANDONED}.
+	 */
 	boolean incomplete;
 
 	/**

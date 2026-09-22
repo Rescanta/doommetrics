@@ -10,6 +10,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import javax.inject.Inject;
@@ -59,18 +60,18 @@ class RunHistoryStore
 	 * Appends one run to the named character's history - the one who made it, not whoever is logged
 	 * in now.
 	 */
-	void append(RunRecord record, String profileKey)
+	CompletableFuture<Void> append(RunRecord record, String profileKey)
 	{
 		File file = fileFor(profileKey);
 
 		if (file == null)
 		{
 			log.debug("No profile to record a run against, dropping it");
-			return;
+			return CompletableFuture.completedFuture(null);
 		}
 
 		String line = encode(record);
-		executor.execute(() -> appendLine(file, line));
+		return CompletableFuture.runAsync(() -> appendLine(file, line), executor);
 	}
 
 	/**
