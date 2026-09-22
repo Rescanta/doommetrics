@@ -29,16 +29,16 @@ enum CombatMetric implements CombatSeries
 {
 	// Each counter drawn has a palette slot to itself - see seriesColor. The catch-alls are drawn
 	// nowhere, and their colours are only there because every constant needs one.
-	BLOOD_BARRAGE_HEAL(Group.SPELL_HEAL, "bloodBarrage", "Blood barrage", "Barrage", Unit.HITPOINTS,
+	BLOOD_BARRAGE_HEAL(Group.HEALING, "bloodBarrage", "Blood barrage", "Barrage", Unit.HITPOINTS,
 		new Color(0x3987E5)),
-	OTHER_SPELL_HEAL(Group.SPELL_HEAL, "otherSpell", "Other spells", "Other spells", Unit.HITPOINTS,
+	OTHER_SPELL_HEAL(Group.HEALING, "otherSpell", "Other spells", "Other spells", Unit.HITPOINTS,
 		new Color(0xD95926)),
 
-	AGS_HEAL(Group.SPEC_HEAL, "agsHeal", "Ancient godsword", "AGS", Unit.HITPOINTS,
+	AGS_HEAL(Group.HEALING, "agsHeal", "Ancient godsword", "AGS", Unit.HITPOINTS,
 		new Color(0xD95926)),
-	BLOWPIPE_HEAL(Group.SPEC_HEAL, "bpHeal", "Blowpipe", "BP", Unit.HITPOINTS,
+	BLOWPIPE_HEAL(Group.HEALING, "bpHeal", "Blowpipe", "BP", Unit.HITPOINTS,
 		new Color(0x199E70)),
-	OTHER_SPEC_HEAL(Group.SPEC_HEAL, "otherSpecHeal", "Other specs", "Other specs", Unit.HITPOINTS,
+	OTHER_SPEC_HEAL(Group.HEALING, "otherSpecHeal", "Other specs", "Other specs", Unit.HITPOINTS,
 		new Color(0xD55181)),
 
 	ELDRITCH_PRAYER(Group.PRAYER, "eldritchPrayer", "Eldritch staff", "Eldritch", Unit.PRAYER,
@@ -49,13 +49,13 @@ enum CombatMetric implements CombatSeries
 	OTHER_SPEC_DAMAGE(Group.DAMAGE, "otherSpecDamage", "Other specs", "Other dmg", Unit.DAMAGE,
 		new Color(0xE66767)),
 
-	SCYTHE_PUNISH(Group.PUNISH, "scythePunish", "Scythe of vitur", "Scythe", Unit.DAMAGE,
+	SCYTHE_PUNISH(Group.DAMAGE, "scythePunish", "Scythe of vitur", "Scythe", Unit.DAMAGE,
 		new Color(0x008300)),
-	NOXIOUS_HALBERD_PUNISH(Group.PUNISH, "noxiousHalberdPunish", "Noxious halberd", "Nox halb",
+	NOXIOUS_HALBERD_PUNISH(Group.DAMAGE, "noxiousHalberdPunish", "Noxious halberd", "Nox halb",
 		Unit.DAMAGE, new Color(0x9085E9)),
-	CRYSTAL_HALBERD_PUNISH(Group.PUNISH, "crystalHalberdPunish", "Crystal halberd", "Crystal halb",
+	CRYSTAL_HALBERD_PUNISH(Group.DAMAGE, "crystalHalberdPunish", "Crystal halberd", "Crystal halb",
 		Unit.DAMAGE, new Color(0xE66767)),
-	OTHER_MELEE_PUNISH(Group.PUNISH, "otherMeleePunish", "Other melee", "Other melee", Unit.DAMAGE,
+	OTHER_MELEE_PUNISH(Group.DAMAGE, "otherMeleePunish", "Other melee", "Other melee", Unit.DAMAGE,
 		new Color(0xC98500));
 
 	/**
@@ -80,19 +80,26 @@ enum CombatMetric implements CombatSeries
 	/**
 	 * Which heading a metric sits under, so the panel groups like with like - and, where the
 	 * counters are drawn as one line per heading, the line itself.
+	 *
+	 * <p>One heading per unit, and so per thing a reader asks of a run: did I heal enough, did my
+	 * prayer hold, how hard did I hit. The headings were once split by how the figure arrived as
+	 * well - spell heals apart from spec heals, spec damage apart from punish damage - and folding
+	 * the counters into five headings saved three lines out of eight while spending every icon, so
+	 * whoever folded them got about as many lines back, each saying less. Three headings fold eight
+	 * counters into three lines, which is what folding them was for.
 	 */
 	enum Group implements CombatSeries
 	{
-		SPELL_HEAL("Spell healing", "Spell heals", Unit.HITPOINTS, new Color(0x3987E5)),
-		SPEC_HEAL("Spec healing", "Spec heals", Unit.HITPOINTS, new Color(0xD95926)),
-		PRAYER("Prayer restored", "Prayer", Unit.PRAYER, new Color(0x199E70)),
-		DAMAGE("Spec damage", "Spec dmg", Unit.DAMAGE, new Color(0xC98500)),
+		/** Every heal, spell or spec: what kept your hitpoints up. */
+		HEALING("Healing", "Healing", Unit.HITPOINTS, new Color(0x3987E5)),
+		PRAYER("Prayer restored", "Prayer", Unit.PRAYER, new Color(0xD95926)),
 
 		/**
-		 * What a melee punish hit for: the swing itself and the strength-bonus hitsplats the boss
-		 * takes on top of it, credited to the weapon that swung - see {@link PunishTracker}.
+		 * What your specs hit for, and what a melee punish hit for: the swing itself and the
+		 * strength-bonus hitsplats the boss takes on top of it, credited to the weapon that swung
+		 * - see {@link PunishTracker}.
 		 */
-		PUNISH("Punish damage", "Punish dmg", Unit.DAMAGE, new Color(0xD55181));
+		DAMAGE("Spec & punish damage", "Damage", Unit.DAMAGE, new Color(0x199E70));
 
 		private final String heading;
 		private final String overlayHeading;
@@ -122,7 +129,7 @@ enum CombatMetric implements CombatSeries
 		/**
 		 * The colour a heading's line is drawn in when the chart is grouped.
 		 *
-		 * <p>The first five slots of the palette {@link CombatMetric#seriesColor} documents, in
+		 * <p>The first three slots of the palette {@link CombatMetric#seriesColor} documents, in
 		 * declaration order and skipping none, for the reason given there: only slots that sit
 		 * side by side were measured against each other, so a set drawn together has to be a run
 		 * of them from the first. That a heading's hue is one a counter also wears is no
@@ -130,7 +137,7 @@ enum CombatMetric implements CombatSeries
 		 * which of them is drawn.
 		 *
 		 * <p>It does mean a heading's colour says nothing about what it is counted in: prayer's
-		 * line is green here and the eldritch staff's is amber under separate lines. The unit is
+		 * line is orange here and the eldritch staff's is amber under separate lines. The unit is
 		 * carried by the stripe down the side of the row either way, which is where a reader
 		 * looking for it already looks.
 		 */
@@ -205,21 +212,25 @@ enum CombatMetric implements CombatSeries
 			if (unnamed > 0)
 			{
 				text.append("<br><br>Includes ").append(DoomFormat.count(unnamed))
-					.append(" from ").append(String.join(" and ", unnamedLabels()))
+					.append(" from ").append(String.join(" and ", unnamedLabels(totals)))
 					.append(",<br>counted but not listed on its own.");
 			}
 
 			return text.append("</html>").toString();
 		}
 
-		/** The names of the catch-alls under this heading - what the tooltip owns up to. */
-		private List<String> unnamedLabels()
+		/**
+		 * The names of the catch-alls under this heading that counted something - what the
+		 * tooltip owns up to. One that counted nothing is left out, so a heading with two of them
+		 * does not name a source that played no part in the figure.
+		 */
+		private List<String> unnamedLabels(CombatTotals totals)
 		{
 			List<String> labels = new ArrayList<>();
 
 			for (CombatMetric metric : metrics())
 			{
-				if (!metric.displayed())
+				if (!metric.displayed() && totals.get(metric) > 0)
 				{
 					labels.add(metric.label());
 				}
@@ -254,7 +265,7 @@ enum CombatMetric implements CombatSeries
 
 		/**
 		 * What the group's figures are counted in. Every metric under a heading shares it, which
-		 * is what makes a combined line addable at all - and what lets that line be drawn in the
+		 * is what makes a total line addable at all - and what lets that line be drawn in the
 		 * same colour as the separate lines it stands in for.
 		 */
 		@Override
@@ -413,12 +424,6 @@ enum CombatMetric implements CombatSeries
 	String overlayLabel()
 	{
 		return overlayLabel;
-	}
-
-	/** How the metric reads on its own, where there is no heading to qualify it. */
-	String qualifiedLabel()
-	{
-		return group.heading() + ": " + label;
 	}
 
 	@Override

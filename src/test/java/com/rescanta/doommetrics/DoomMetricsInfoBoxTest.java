@@ -56,7 +56,7 @@ public class DoomMetricsInfoBoxTest
 			DoomFormat.compactDuration(Duration.ofHours(10)));
 		assertFits(metrics, InfoBoxFigure.PACE, DoomFormat.compactPace(999.9));
 		assertFits(metrics, InfoBoxFigure.ZCB_DAMAGE, DoomFormat.compact(WIDEST_COUNTER));
-		assertFits(metrics, InfoBoxFigure.ALL_PUNISH_DAMAGE, "+" + DoomFormat.compact(WIDEST_GAIN));
+		assertFits(metrics, InfoBoxFigure.ALL_DAMAGE, "+" + DoomFormat.compact(WIDEST_GAIN));
 
 		// The target figure has one reading that is not a clock, and the deepest target anyone can
 		// set is a long way off at the pace the shallow delves are going.
@@ -115,16 +115,17 @@ public class DoomMetricsInfoBoxTest
 		assertEquals("hitpoints, and the colour says so", CombatMetric.Unit.HITPOINTS.color(),
 			box.getTextColor());
 
-		// The two spec heals, summed under their heading.
-		config.infoboxFigure = InfoBoxFigure.ALL_SPEC_HEALING;
-		assertEquals("105", box.getText());
+		// The spells and the two spec heals, summed under their heading.
+		config.infoboxFigure = InfoBoxFigure.ALL_HEALING;
+		assertEquals("1.0k", box.getText());
+		assertTrue(box.getTooltip(), box.getTooltip().contains("1,035 hitpoints healed"));
 
 		// A catch-all has no counter of its own to point the square at, and a heading's figure is
 		// what the heading counted, so this is the only place that heal is ever shown.
 		// Counted a while back, so the square is reading the run's total rather than the gain it
 		// shows for five ticks after one lands.
 		plugin.run.recordCombat(CombatMetric.OTHER_SPEC_HEAL, 40, Instant.now().minusSeconds(60));
-		assertEquals("145", box.getText());
+		assertTrue(box.getTooltip(), box.getTooltip().contains("1,075 hitpoints healed"));
 
 		plugin.run = new DelveRun(Instant.now().minusSeconds(60), 1, false);
 		config.infoboxFigure = InfoBoxFigure.AGS_HEAL;
@@ -250,7 +251,7 @@ public class DoomMetricsInfoBoxTest
 			now.plus(RecentGains.SHOWN_FOR)));
 
 		// A heading's square reads the gain of everything under it.
-		assertEquals("+97", InfoBoxFigure.ALL_PUNISH_DAMAGE.text(run, config, now));
+		assertEquals("+97", InfoBoxFigure.ALL_DAMAGE.text(run, config, now));
 		assertEquals("0", InfoBoxFigure.CRYSTAL_HALBERD_PUNISH.text(run, config, now));
 	}
 
@@ -265,7 +266,7 @@ public class DoomMetricsInfoBoxTest
 		config.displayStyle = DisplayStyle.INFOBOX;
 
 		config.infoboxFigure = InfoBoxFigure.ZCB_DAMAGE;
-		assertEquals("Spec damage: Zaryte crossbow</br>1,502 damage dealt", box.getTooltip());
+		assertEquals("ZCB damage</br>1,502 damage dealt", box.getTooltip());
 
 		config.infoboxFigure = InfoBoxFigure.PACE;
 		assertTrue("the unit the square dropped belongs in the tooltip",
@@ -296,13 +297,13 @@ public class DoomMetricsInfoBoxTest
 
 		assertSame("icons are off unless switched on", own, box.getImage());
 
-		config.counterIcons = true;
+		config.counterStyle = CounterStyle.ICONS;
 		assertSame(PreviewIcons.INSTANCE.counter(CombatMetric.ZCB_DAMAGE), box.getImage());
 
 		config.infoboxFigure = InfoBoxFigure.BLOOD_BARRAGE_HEAL;
 		assertSame(PreviewIcons.INSTANCE.counter(CombatMetric.BLOOD_BARRAGE_HEAL), box.getImage());
 
-		config.infoboxFigure = InfoBoxFigure.ALL_SPEC_DAMAGE;
+		config.infoboxFigure = InfoBoxFigure.ALL_DAMAGE;
 		assertSame("a heading sums several counters", own, box.getImage());
 
 		config.infoboxFigure = InfoBoxFigure.DELVE;
@@ -324,7 +325,7 @@ public class DoomMetricsInfoBoxTest
 		BufferedImage own = PreviewRender.icon();
 		DoomMetricsInfoBox box = new DoomMetricsInfoBox(own, plugin, config);
 
-		config.counterIcons = true;
+		config.counterStyle = CounterStyle.ICON_GRID;
 		config.infoboxFigure = InfoBoxFigure.ZCB_DAMAGE;
 
 		assertSame(own, box.getImage());

@@ -65,7 +65,7 @@ interface CombatSeries
 	 * The picture drawn beside the name, or null when there is none to draw.
 	 *
 	 * <p>A heading has none by default: it sums several sources and no one picture stands for all
-	 * of them, which is the same reason the overlay's combined lines are drawn by name.
+	 * of them, which is the same reason the overlay's total lines are drawn by name.
 	 */
 	default BufferedImage icon(Icons icons)
 	{

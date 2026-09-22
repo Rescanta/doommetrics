@@ -3,6 +3,7 @@ package com.rescanta.doommetrics;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -128,7 +129,7 @@ public class RunLegendPanelTest
 
 	/**
 	 * A heading's line counts what no counter under it names, so a run that only ever punished
-	 * with a weapon the plugin does not name has a punish line grouped and none separately.
+	 * with a weapon the plugin does not name has a damage line grouped and none separately.
 	 */
 	@Test
 	public void aHeadingIsOnTheChartForCountersWithNoLineOfTheirOwn()
@@ -143,7 +144,7 @@ public class RunLegendPanelTest
 		assertEquals("no counter counted anything", allDrawnBut(), offChart.get());
 
 		legend.setGrouped(true);
-		assertEquals(allGroupsBut(CombatMetric.Group.PUNISH), offChart.get());
+		assertEquals(allGroupsBut(CombatMetric.Group.DAMAGE), offChart.get());
 	}
 
 	/** Which lines are off is asked of the way being read, so switching back finds it as it was. */
@@ -160,11 +161,56 @@ public class RunLegendPanelTest
 		assertEquals("a counter clicked off is not a heading clicked off",
 			Collections.emptySet(), offChart.get());
 
-		legend.toggle(CombatMetric.Group.PUNISH);
+		legend.toggle(CombatMetric.Group.DAMAGE);
 		legend.setGrouped(false);
 
 		assertEquals("the counter clicked off is still the only line off",
 			Collections.singleton(CombatMetric.ZCB_DAMAGE), offChart.get());
+	}
+
+	/**
+	 * Folding a heading takes its rows out of the column and leaves the heading, and the chart is
+	 * told nothing: which lines are drawn is not what folding is for.
+	 */
+	@Test
+	public void foldingAHeadingTakesDownItsRowsAndLeavesTheChart()
+	{
+		AtomicReference<Set<CombatMetric.Group>> folded = new AtomicReference<>();
+		legend.setToggleListener(offChart::set);
+		legend.setFoldListener(folded::set);
+		legend.setHideEmpty(false);
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+		int unfolded = legend.getComponentCount();
+
+		offChart.set(null);
+		legend.toggleFold(CombatMetric.Group.DAMAGE);
+
+		assertEquals("the four damage rows are folded away", unfolded - 4,
+			legend.getComponentCount());
+		assertEquals(EnumSet.of(CombatMetric.Group.DAMAGE), folded.get());
+		assertNull("the chart keeps its lines", offChart.get());
+
+		legend.toggleFold(CombatMetric.Group.DAMAGE);
+		assertEquals(unfolded, legend.getComponentCount());
+		assertEquals(Collections.emptySet(), folded.get());
+	}
+
+	/**
+	 * Grouped, the headings are the rows and there is nothing under them to fold - and a fold made
+	 * while reading separately is still there on coming back.
+	 */
+	@Test
+	public void aFoldOnlyAppliesReadingSeparately()
+	{
+		legend.setFolded(EnumSet.of(CombatMetric.Group.HEALING));
+		int folded = legend.getComponentCount();
+
+		legend.setGrouped(true);
+		assertEquals("the top row and a row per heading",
+			1 + CombatMetric.Group.values().length, legend.getComponentCount());
+
+		legend.setGrouped(false);
+		assertEquals(folded, legend.getComponentCount());
 	}
 
 	/** Two delves, with the crossbow's spec on the first and nothing else counted. */
