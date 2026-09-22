@@ -17,7 +17,7 @@ final class RunDetail
 		/** The delve number the game announced. */
 		final int level;
 
-		/** From this delve starting to the next one starting - see {@link DelveRun#fullTime}. */
+		/** From this delve starting to the next one starting - see {@link DelveRun#timeline}. */
 		final Duration fullTime;
 
 		/** The fight length the game reported, or null if we never saw it. */
@@ -26,12 +26,21 @@ final class RunDetail
 		/** What this delve alone earned. Never null; empty for a delve that earned nothing. */
 		final CombatTotals combat;
 
-		Delve(int level, Duration fullTime, Duration fight, CombatTotals combat)
+		/** False for a delve cleared while the plugin was off, which has a time and nothing else. */
+		final boolean watched;
+
+		/** Whether {@link #fullTime} is an even share of a stretch nobody watched. */
+		final boolean estimated;
+
+		Delve(int level, Duration fullTime, Duration fight, CombatTotals combat, boolean watched,
+			boolean estimated)
 		{
 			this.level = level;
 			this.fullTime = fullTime;
 			this.fight = fight;
 			this.combat = combat;
+			this.watched = watched;
+			this.estimated = estimated;
 		}
 	}
 
@@ -133,11 +142,19 @@ final class RunDetail
 			}
 		}
 
-		for (int i = 0; i < splits.size(); i++)
+		for (CombatTotals each : earned)
 		{
-			DelveRun.Split split = splits.get(i);
-			totals.addAll(earned.get(i));
-			delves.add(new Delve(split.level, run.fullTime(i), split.fight, earned.get(i)));
+			totals.addAll(each);
+		}
+
+		int column = 0;
+
+		for (DelveRun.DelveTime time : run.timeline())
+		{
+			delves.add(time.split == null
+				? new Delve(time.level, time.fullTime, null, new CombatTotals(), false, true)
+				: new Delve(time.level, time.fullTime, time.split.fight, earned.get(column++), true,
+					time.estimated));
 		}
 
 		boolean died = run.isFinished() && run.getEndReason() == EndReason.DIED;
@@ -236,6 +253,22 @@ final class RunDetail
 	}
 
 	/** The first delve cleared, or 1 for a run that has cleared none. */
+	/** The delves with counters to plot: every one but those cleared while the plugin was off. */
+	List<Delve> watchedDelves()
+	{
+		List<Delve> watched = new ArrayList<>(delves.size());
+
+		for (Delve delve : delves)
+		{
+			if (delve.watched)
+			{
+				watched.add(delve);
+			}
+		}
+
+		return watched;
+	}
+
 	int shallowest()
 	{
 		return delves.isEmpty() ? 1 : delves.get(0).level;

@@ -586,4 +586,79 @@ public class RunDetailTest
 		run.end(reason, Instant.EPOCH.plusSeconds(90), diedOn);
 		return run;
 	}
+
+	/** Delves 1-3 watched, the plugin off until part way into delve 7, then delve 8 watched. */
+	private static DelveRun resumedMidDelve()
+	{
+		DelveRun run = new DelveRun(Instant.EPOCH, 1, false);
+		run.complete(1, Instant.EPOCH.plusSeconds(60), null);
+		run.enterLevel(2, Instant.EPOCH.plusSeconds(70));
+		run.complete(2, Instant.EPOCH.plusSeconds(120), null);
+		run.enterLevel(3, Instant.EPOCH.plusSeconds(130));
+		run.complete(3, Instant.EPOCH.plusSeconds(180), null);
+		run.resumeOn(7, Instant.EPOCH.plusSeconds(500));
+		run.complete(7, Instant.EPOCH.plusSeconds(580), Duration.ofSeconds(64));
+		run.enterLevel(8, Instant.EPOCH.plusSeconds(600));
+		run.complete(8, Instant.EPOCH.plusSeconds(700), null);
+		return run;
+	}
+
+	/**
+	 * The time between delve 3's kill and delve 8's start is shared evenly by 4-7, rather than all
+	 * of it landing on delve 7, whose start was not seen.
+	 */
+	@Test
+	public void unwatchedDelvesShareTheirTimeEvenly()
+	{
+		List<RunDetail.Delve> delves = RunDetail.of(resumedMidDelve()).delves();
+
+		assertEquals(8, delves.size());
+		assertEquals(Duration.ofSeconds(50), delves.get(2).fullTime);
+
+		for (int level = 4; level <= 7; level++)
+		{
+			RunDetail.Delve delve = delves.get(level - 1);
+			assertEquals(level, delve.level);
+			assertEquals(Duration.ofSeconds(105), delve.fullTime);
+			assertTrue(delve.estimated);
+			assertEquals(level == 7, delve.watched);
+		}
+
+		assertEquals(Duration.ofSeconds(64), delves.get(6).fight);
+		assertNull(delves.get(3).fight);
+		assertEquals(Duration.ofSeconds(100), delves.get(7).fullTime);
+		assertFalse(delves.get(7).estimated);
+	}
+
+	/** Counters are only plotted where they were counted. */
+	@Test
+	public void unwatchedDelvesHaveNoCounterColumn()
+	{
+		List<RunDetail.Delve> watched = RunDetail.of(resumedMidDelve()).watchedDelves();
+
+		assertEquals(5, watched.size());
+		assertEquals(7, watched.get(3).level);
+	}
+
+	/** Picked up between delves, the next delve's start was seen, so its time is its own. */
+	@Test
+	public void aDelveSeenStartingAfterAGapKeepsItsOwnTime()
+	{
+		DelveRun run = new DelveRun(Instant.EPOCH, 1, false);
+		run.complete(1, Instant.EPOCH.plusSeconds(60), null);
+		run.enterLevel(2, Instant.EPOCH.plusSeconds(70));
+		run.complete(2, Instant.EPOCH.plusSeconds(120), null);
+		run.enterLevel(3, Instant.EPOCH.plusSeconds(130));
+		run.complete(3, Instant.EPOCH.plusSeconds(180), null);
+		run.resumeOn(6, Instant.EPOCH.plusSeconds(450));
+		run.enterLevel(7, Instant.EPOCH.plusSeconds(480));
+		run.complete(7, Instant.EPOCH.plusSeconds(600), null);
+
+		List<RunDetail.Delve> delves = RunDetail.of(run).delves();
+
+		assertEquals(Duration.ofSeconds(100), delves.get(3).fullTime);
+		assertEquals(Duration.ofSeconds(100), delves.get(5).fullTime);
+		assertEquals(Duration.ofSeconds(120), delves.get(6).fullTime);
+		assertFalse(delves.get(6).estimated);
+	}
 }

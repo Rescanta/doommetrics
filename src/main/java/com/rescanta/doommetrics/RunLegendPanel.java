@@ -302,7 +302,9 @@ class RunLegendPanel extends JPanel
 			}
 		}
 
-		heading.setText(delve > 0 ? "Delve " + delve : "This run");
+		RunDetail.Delve at = delve > 0 ? detail.at(delve) : null;
+		heading.setText(delve <= 0 ? "This run"
+			: at != null && !at.watched ? "Delve " + delve + " - not watched" : "Delve " + delve);
 	}
 
 	/**
