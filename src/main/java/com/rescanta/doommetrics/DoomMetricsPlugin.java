@@ -151,6 +151,16 @@ public class DoomMetricsPlugin extends Plugin
 	/** The character {@link #run} was started on. */
 	private String runProfile;
 
+	/**
+	 * A run the plugin was turned off during, kept to carry on if it is turned back on in the same
+	 * trip. Its incomplete record is held by {@link RunHistoryStore#holdPending} meanwhile.
+	 */
+	private DelveRun suspended;
+	private String suspendedProfile;
+
+	/** {@code TOTAL_DOM_LEVELS} when {@link #suspended} was: it goes up one per delve cleared. */
+	private int suspendedClears;
+
 	/** The first login seen since the plugin started - see {@link LoginBound}. */
 	private Instant loginAt;
 
@@ -207,6 +217,12 @@ public class DoomMetricsPlugin extends Plugin
 		reset();
 		milestones.load();
 		loadTotals();
+
+		// Held by a run from before the client last closed, which cannot be carried on now.
+		if (suspended == null)
+		{
+			runHistoryStore.releasePending();
+		}
 	}
 
 	@Override
@@ -229,7 +245,7 @@ public class DoomMetricsPlugin extends Plugin
 		infoBoxPicture = null;
 		feed.stop();
 
-		recordUnfinishedRun();
+		suspendRun();
 		totals.flushCombat();
 		reset();
 	}
@@ -258,9 +274,79 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		run = null;
-		unfinished.end(EndReason.ABANDONED, Instant.now(), -1);
 		log.debug("Recording the run on delve {} as incomplete", unfinished.currentLevel());
-		return recordRun(unfinished, -1, true);
+		return runHistoryStore.append(incompleteRecord(unfinished), profileOf(runProfile));
+	}
+
+	/**
+	 * The plugin is being turned off mid-run: keeps the run to carry on if it is turned back on in
+	 * the same trip, and holds its record as incomplete in case it is not.
+	 */
+	private void suspendRun()
+	{
+		DelveRun unfinished = run;
+
+		if (unfinished == null || unfinished.lastLevel() == 0)
+		{
+			return;
+		}
+
+		runHistoryStore.holdPending(incompleteRecord(unfinished), profileOf(runProfile));
+
+		// Logged out, the delve counter cannot be read, so the run could never be matched again.
+		if (client.getGameState() == GameState.LOGGED_IN)
+		{
+			suspended = unfinished;
+			suspendedProfile = profileOf(runProfile);
+			suspendedClears = client.getVarpValue(VarPlayerID.TOTAL_DOM_LEVELS);
+			log.debug("Suspending the run on delve {}", unfinished.currentLevel());
+		}
+	}
+
+	/**
+	 * Carries the suspended run on if the player on {@code level} is still in it: nothing else fits
+	 * the delves cleared since. Otherwise it stays suspended.
+	 */
+	private boolean tryResume(int level)
+	{
+		if (suspended == null || suspendedProfile == null
+			|| !suspendedProfile.equals(runHistoryStore.currentProfile()))
+		{
+			return false;
+		}
+
+		int clearsSince = client.getVarpValue(VarPlayerID.TOTAL_DOM_LEVELS) - suspendedClears;
+
+		if (!suspended.continuesAt(level, clearsSince))
+		{
+			return false;
+		}
+
+		DelveRun resumed = suspended;
+		String profile = suspendedProfile;
+		suspended = null;
+		suspendedProfile = null;
+		runHistoryStore.dropPending();
+
+		Instant now = Instant.now();
+		resumed.resumeOn(level, now);
+		watch(resumed, profile, now, true);
+		log.debug("Carried the run on at delve {}, {} delves cleared unwatched", level, clearsSince);
+		return true;
+	}
+
+	/** The suspended run was not carried on, so its held record goes to the history. */
+	private void settleSuspended()
+	{
+		if (suspended == null)
+		{
+			return;
+		}
+
+		log.debug("The run suspended on delve {} was not carried on", suspended.currentLevel());
+		suspended = null;
+		suspendedProfile = null;
+		runHistoryStore.releasePending();
 	}
 
 	/** Package-private so the preview harness can hand over its own. */
@@ -326,6 +412,7 @@ public class DoomMetricsPlugin extends Plugin
 	void resetSession()
 	{
 		log.debug("Session reset from the panel");
+		settleSuspended();
 		totals.flushCombat();
 		forgetRuns();
 
@@ -461,7 +548,11 @@ public class DoomMetricsPlugin extends Plugin
 		if (level <= 1 || run == null)
 		{
 			Instant now = Instant.now();
-			startRun(now, level, level > 1);
+
+			if (level <= 1 || !tryResume(level))
+			{
+				startRun(now, level, level > 1);
+			}
 
 			if (level > 1)
 			{
@@ -478,7 +569,7 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void delveCleared(int level, Duration fight)
 	{
-		if (run == null)
+		if (run == null && !tryResume(level))
 		{
 			// First thing we saw was a clear, so back-date the start to when that fight began.
 			startRun(Instant.now().minus(fight), level, true);
@@ -731,7 +822,17 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		startRun(Instant.now(), descended + 1, true);
+		// The delve counter arrives with the login varps; until then a match cannot be judged.
+		if (suspended != null && client.getVarpValue(VarPlayerID.TOTAL_DOM_LEVELS) <= 0)
+		{
+			return;
+		}
+
+		if (!tryResume(descended + 1))
+		{
+			startRun(Instant.now(), descended + 1, true);
+		}
+
 		feed.refreshLive();
 	}
 
@@ -841,17 +942,29 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void startRun(Instant startedAt, int level, boolean partial)
 	{
-		run = new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null);
+		settleSuspended();
+		watch(new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null),
+			runHistoryStore.currentProfile(), startedAt, partial);
+		log.debug("Doom run started on delve {} (partial={})", level, partial);
+	}
+
+	/**
+	 * Makes {@code started} the run in progress.
+	 *
+	 * @param missedDelves whether delves of it went by unwatched
+	 */
+	private void watch(DelveRun started, String profile, Instant sessionFrom, boolean missedDelves)
+	{
+		run = started;
 		lastRun = null;
 		lastRunCleared = false;
 		resumeCheck = null;
-		runProfile = runHistoryStore.currentProfile();
+		runProfile = profile;
 		pickUpPending = false;
 		ticksWithoutBoss = 0;
 		combat.runStarted();
-		loot.runStarted(run);
-		totals.runStarted(startedAt);
-		log.debug("Doom run started on delve {} (partial={})", level, partial);
+		loot.runStarted(started, missedDelves);
+		totals.runStarted(sessionFrom);
 	}
 
 	private void endRun(EndReason reason, int diedOnLevel)
@@ -881,7 +994,8 @@ public class DoomMetricsPlugin extends Plugin
 		lastRun = ended;
 		lastRunCleared = false;
 
-		recordRun(ended, diedOnLevel, false);
+		runHistoryStore.append(recordOf(ended, ended.getEndedAt(), reason, diedOnLevel, false),
+			profileOf(runProfile));
 
 		if (!config.announceRunEnd() || ended.lastLevel() == 0)
 		{
@@ -900,23 +1014,34 @@ public class DoomMetricsPlugin extends Plugin
 		return anchor;
 	}
 
-	/** Written for ended runs and incomplete ones; never read back by the plugin. */
-	private CompletableFuture<Void> recordRun(DelveRun ended, int diedOnLevel, boolean incomplete)
+	/** A run the plugin stopped watching, ending now as far as the history can tell. */
+	private static RunRecord incompleteRecord(DelveRun unfinished)
+	{
+		return recordOf(unfinished, Instant.now(), EndReason.ABANDONED, -1, true);
+	}
+
+	/** The history line for a run; never read back by the plugin. */
+	private static RunRecord recordOf(DelveRun run, Instant endedAt, EndReason reason,
+		int diedOnLevel, boolean incomplete)
 	{
 		RunRecord record = new RunRecord();
-		record.at = ended.getEndedAt().getEpochSecond();
-		record.delve = ended.lastLevel();
-		record.ticks = ended.isPartial() ? 0 : DoomFormat.toTicks(ended.clearedElapsed());
-		record.end = ended.getEndReason();
+		record.at = endedAt.getEpochSecond();
+		record.delve = run.lastLevel();
+		record.ticks = run.isPartial() ? 0 : DoomFormat.toTicks(run.clearedElapsed());
+		record.end = reason;
 		record.diedOn = Math.max(0, diedOnLevel);
-		record.partial = ended.isPartial();
+		record.partial = run.isPartial();
 		record.incomplete = incomplete;
-		record.loot = ended.loot().getClaimed();
+		record.loot = run.loot().getClaimed();
 		// Left out entirely for runs that attribute nothing.
-		record.combat = ended.getCombat().isEmpty() ? null : ended.getCombat().copy();
+		record.combat = run.getCombat().isEmpty() ? null : run.getCombat().copy();
+		return record;
+	}
 
-		return runHistoryStore.append(record,
-			runProfile != null ? runProfile : runHistoryStore.currentProfile());
+	/** The character a run belongs to: the one it started on, or whoever is logged in. */
+	private String profileOf(String startedOn)
+	{
+		return startedOn != null ? startedOn : runHistoryStore.currentProfile();
 	}
 
 	private void announceClear(int level)

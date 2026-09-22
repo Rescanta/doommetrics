@@ -80,11 +80,14 @@ class LootWatcher
 		claimRequested = false;
 	}
 
-	void runStarted(DelveRun started)
+	/**
+	 * @param missedDelves whether delves went by unwatched, so the pile may already hold drops
+	 */
+	void runStarted(DelveRun started, boolean missedDelves)
 	{
 		claimRequested = false;
 
-		if (started.isPartial())
+		if (missedDelves)
 		{
 			// Already in the pile, from delves we did not see.
 			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE))

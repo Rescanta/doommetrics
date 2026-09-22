@@ -519,4 +519,65 @@ public class DelveRunTest
 		assertEquals(20.48, run.fullPace(), DELTA);
 		assertEquals(33.20, run.deepPace(), DELTA);
 	}
+
+	/** Turned off on delve 4, back on at delve 10: every delve cleared since is accounted for. */
+	@Test
+	public void aRunContinuesOnlyWhereTheClearsSinceWouldHaveTakenIt()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.complete(2, at(120), null);
+		run.complete(3, at(180), null);
+
+		// On delve 4 when suspended; six clears later it is on delve 10, or reads 9 between delves.
+		assertTrue(run.continuesAt(10, 6));
+		assertTrue(run.continuesAt(9, 6));
+		assertFalse("a new trip would be on delve 7", run.continuesAt(7, 6));
+		assertFalse(run.continuesAt(11, 6));
+		assertFalse(run.continuesAt(4, -1));
+	}
+
+	/** The clear after the unwatched delves has no measured segment, so pace leaves it out. */
+	@Test
+	public void theFirstClearAfterAResumeIsNotTimed()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+
+		for (int level = 1; level <= 9; level++)
+		{
+			run.complete(level, at(level * 60), null);
+		}
+
+		// Delves 10-14 go by unwatched; picked up again part way into delve 15.
+		run.resumeOn(15, at(1500));
+		run.complete(15, at(1560), null);
+
+		assertFalse(run.lastClearTimed());
+		assertEquals(15, run.lastLevel());
+		assertEquals(Duration.ofSeconds(1560), run.clearedElapsed());
+
+		run.complete(16, at(1650), null);
+
+		assertTrue(run.lastClearTimed());
+		// Deep delves 8, 9 and 16 over the measured 9 x 60 + 90 seconds, leaving out the gap.
+		assertEquals(3 * 3600.0 / 630, run.fullPace(), DELTA);
+		// Delves 9 and 16 average 75 seconds.
+		assertEquals(Duration.ofSeconds(75), run.meanDeepSegment());
+	}
+
+	/** Picked up between delves, the next delve is seen to start, so its clear is timed. */
+	@Test
+	public void aRunResumedBetweenDelvesTimesTheNextOne()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		run.resumeOn(5, at(600));
+		run.enterLevel(6, at(620));
+		run.complete(6, at(700), null);
+
+		assertTrue(run.lastClearTimed());
+		assertEquals(Duration.ofSeconds(80), run.getSplits().get(1).segment);
+		assertEquals(Duration.ofSeconds(700), run.clearedElapsed());
+	}
 }

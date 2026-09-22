@@ -30,6 +30,15 @@ class RunHistoryStore
 {
 	static final String DIRECTORY = "doommetrics";
 
+	/** Config key for a record held back while its run might still be carried on. */
+	private static final String KEY_PENDING = "pendingRun";
+
+	private static final class Pending
+	{
+		private String profile;
+		private RunRecord run;
+	}
+
 	private final Gson gson;
 	private final ScheduledExecutorService executor;
 	private final ConfigManager configManager;
@@ -72,6 +81,57 @@ class RunHistoryStore
 
 		String line = encode(record);
 		return CompletableFuture.runAsync(() -> appendLine(file, line), executor);
+	}
+
+	/**
+	 * Holds a record back from the file, in config so it survives the client closing. Replaces,
+	 * and writes out, any record already held.
+	 */
+	void holdPending(RunRecord record, String profileKey)
+	{
+		releasePending();
+
+		Pending pending = new Pending();
+		pending.profile = profileKey;
+		pending.run = record;
+		configManager.setConfiguration(DoomMetricsConfig.GROUP, KEY_PENDING, gson.toJson(pending));
+	}
+
+	/** Writes the held record to its file, if there is one. */
+	CompletableFuture<Void> releasePending()
+	{
+		Pending pending = takePending();
+		return pending == null || pending.run == null
+			? CompletableFuture.completedFuture(null)
+			: append(pending.run, pending.profile);
+	}
+
+	/** Forgets the held record: its run carried on and will be written whole. */
+	void dropPending()
+	{
+		takePending();
+	}
+
+	private Pending takePending()
+	{
+		String stored = configManager.getConfiguration(DoomMetricsConfig.GROUP, KEY_PENDING);
+
+		if (stored == null)
+		{
+			return null;
+		}
+
+		configManager.unsetConfiguration(DoomMetricsConfig.GROUP, KEY_PENDING);
+
+		try
+		{
+			return gson.fromJson(stored, Pending.class);
+		}
+		catch (RuntimeException e)
+		{
+			log.debug("Dropping an unreadable held run: {}", stored);
+			return null;
+		}
 	}
 
 	/**
