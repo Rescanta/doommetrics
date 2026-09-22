@@ -61,8 +61,8 @@ class MilestoneTable
 	}
 
 	/**
-	 * Marks milestones up to {@code deepest} as reached, with no kill count or time. Real rows are left
-	 * alone.
+	 * Marks milestones up to {@code deepest} as reached, with no kill count or time. Real rows are
+	 * left alone.
 	 *
 	 * @return true if any row was added
 	 */

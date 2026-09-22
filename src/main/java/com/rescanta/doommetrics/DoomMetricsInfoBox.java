@@ -29,8 +29,8 @@ class DoomMetricsInfoBox extends InfoBox
 	}
 
 	/**
-	 * The counter's icon when it shows one counter and icons are on, otherwise the plugin's. The client
-	 * only rescales it when told, which the plugin does each tick.
+	 * The counter's icon when it shows one counter and icons are on, otherwise the plugin's. The
+	 * client only rescales it when told, which the plugin does each tick.
 	 */
 	@Override
 	public BufferedImage getImage()

@@ -18,8 +18,8 @@ class PunishTracker
 	}
 
 	/**
-	 * How long after the swing a punish's hitsplats may land, in ticks. Nothing the player does after
-	 * the punish can land inside it.
+	 * How long after the swing a punish's hitsplats may land, in ticks. Nothing the player does
+	 * after the punish can land inside it.
 	 */
 	static final int HIT_WINDOW = 3;
 
@@ -93,10 +93,13 @@ class PunishTracker
 		return praying;
 	}
 
-	/** The player started an animation; it's a swing only if a melee weapon is in hand at tick end. */
+	/**
+	 * The player started an animation; it's a swing only if a melee weapon is in hand at tick end.
+	 */
 	void swung(int tick)
 	{
-		// Only the first animation of a tick counts, and nothing inside a punish's window moves it on.
+		// Only the first animation of a tick counts, and nothing inside a punish's window moves it
+		// on.
 		if (swungAt != NONE && (weapon == null || (tick - swungAt <= HIT_WINDOW && isPunish())))
 		{
 			return;
@@ -121,7 +124,8 @@ class PunishTracker
 	/**
 	 * A hitsplat on the boss held until the tick ends.
 	 *
-	 * @param mine whether it is plainly ours (a strength-bonus splat is not); only those are handed back
+	 * @param mine whether it is plainly ours (a strength-bonus splat is not); only those are handed
+	 * back
 	 */
 	void hit(int amount, boolean mine, int tick)
 	{
@@ -193,7 +197,10 @@ class PunishTracker
 		}
 	}
 
-	/** Whether the swing the window is open for was a punish - see the class notes for the two signs. */
+	/**
+	 * Whether the swing the window is open for was a punish - see the class notes for the two
+	 * signs.
+	 */
 	private boolean isPunish()
 	{
 		boolean underPrayer = raisedAt != NONE && swungAt >= raisedAt

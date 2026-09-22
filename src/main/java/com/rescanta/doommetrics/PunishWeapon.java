@@ -3,8 +3,8 @@ package com.rescanta.doommetrics;
 import net.runelite.api.gameval.ItemID;
 
 /**
- * The melee weapons a punish is told apart by. Other melee lands in {@link #OTHER}. A halberd's spec
- * is credited here, not as spec damage, since it is only fired at a punish.
+ * The melee weapons a punish is told apart by. Other melee lands in {@link #OTHER}. A halberd's
+ * spec is credited here, not as spec damage, since it is only fired at a punish.
  */
 enum PunishWeapon
 {
@@ -12,7 +12,9 @@ enum PunishWeapon
 	NOXIOUS_HALBERD(CombatMetric.NOXIOUS_HALBERD_PUNISH),
 	CRYSTAL_HALBERD(CombatMetric.CRYSTAL_HALBERD_PUNISH),
 
-	/** Any other melee weapon. Which ones are melee is the caller's to say - see {@link #isMelee}. */
+	/**
+	 * Any other melee weapon. Which ones are melee is the caller's to say - see {@link #isMelee}.
+	 */
 	OTHER(CombatMetric.OTHER_MELEE_PUNISH);
 
 	private final CombatMetric metric;

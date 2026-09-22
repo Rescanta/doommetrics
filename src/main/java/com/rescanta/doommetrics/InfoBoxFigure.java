@@ -111,7 +111,10 @@ public enum InfoBoxFigure
 		}
 	}
 
-	/** The unit's colour, dimmed while there is nothing behind the figure. The run figures are plain. */
+	/**
+	 * The unit's colour, dimmed while there is nothing behind the figure. The run figures are
+	 * plain.
+	 */
 	Color color(DelveRun run, DoomMetricsConfig config, Instant now)
 	{
 		switch (this)

@@ -33,8 +33,8 @@ final class SessionClock
 	}
 
 	/**
-	 * Notes a dropped connection without stopping the clock; one that ends at the login screen was a
-	 * logout from the start - see {@link #pause}.
+	 * Notes a dropped connection without stopping the clock; one that ends at the login screen was
+	 * a logout from the start - see {@link #pause}.
 	 */
 	void connectionLost(Instant at)
 	{

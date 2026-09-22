@@ -61,7 +61,9 @@ class RunDetailWindow extends JFrame
 	private final JLabel[] rowValues = new JLabel[DoomMetricsPanel.Live.ROWS];
 	private final JPanel[] rows = new JPanel[DoomMetricsPanel.Live.ROWS];
 
-	/** Which of {@link #rows} are up, a bit per index, or -1 for the idle line. Starts as neither. */
+	/**
+	 * Which of {@link #rows} are up, a bit per index, or -1 for the idle line. Starts as neither.
+	 */
 	private int shownRows = Integer.MIN_VALUE;
 
 	/**
@@ -87,7 +89,8 @@ class RunDetailWindow extends JFrame
 			}
 		});
 
-		// Hovering a delve moves the legend and drops list onto it; hovering a name brings a line forward.
+		// Hovering a delve moves the legend and drops list onto it; hovering a name brings a line
+		// forward.
 		chart.setHoverListener(level ->
 		{
 			legend.setDelve(level);
@@ -134,7 +137,10 @@ class RunDetailWindow extends JFrame
 		dropsSection.setVisible(!detail.drops().isEmpty());
 	}
 
-	/** @param onFoldChanged handed the folded headings whenever a click changes them, on the Swing thread */
+	/**
+	 * @param onFoldChanged handed the folded headings whenever a click changes them, on the Swing
+	 * thread
+	 */
 	void setFolding(Set<CombatMetric.Group> folded, Consumer<Set<CombatMetric.Group>> onFoldChanged)
 	{
 		legend.setFolded(folded);
@@ -324,8 +330,8 @@ class RunDetailWindow extends JFrame
 		stack.add(PanelStyle.section("This run", PanelStyle.card(summary)), BorderLayout.NORTH);
 		stack.add(lower, BorderLayout.CENTER);
 
-		// Wrapped so rows aren't stretched to the viewport height, and held to the sidebar width so a
-		// wide row squeezes its name rather than having its digits clipped.
+		// Wrapped so rows aren't stretched to the viewport height, and held to the sidebar width so
+		// a wide row squeezes its name rather than having its digits clipped.
 		JPanel top = new ColumnWidth();
 		top.setBackground(PanelStyle.BACKGROUND);
 		top.add(stack, BorderLayout.NORTH);

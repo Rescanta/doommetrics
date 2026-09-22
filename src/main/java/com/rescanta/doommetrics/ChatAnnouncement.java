@@ -37,14 +37,19 @@ final class ChatAnnouncement
 		this.parts = Collections.unmodifiableList(parts);
 	}
 
-	/** Every {@code interval}th delve past the shallow ones, and always exactly the target delve. */
+	/**
+	 * Every {@code interval}th delve past the shallow ones, and always exactly the target delve.
+	 */
 	static boolean isDue(int level, int interval, int target)
 	{
 		return level == target
 			|| interval > 0 && level >= DelveRun.DEEP_DELVE_LEVEL && level % interval == 0;
 	}
 
-	/** The line for a delve just cleared. A target of 0 is none. The game posts the delve's time itself. */
+	/**
+	 * The line for a delve just cleared. A target of 0 is none. The game posts the delve's time
+	 * itself.
+	 */
 	static ChatAnnouncement delveCleared(DelveRun run, int level, int target, PaceMode mode)
 	{
 		return of((level == target

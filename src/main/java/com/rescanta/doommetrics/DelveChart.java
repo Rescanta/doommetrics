@@ -533,8 +533,8 @@ class DelveChart extends JPanel
 	// -- the plots --------------------------------------------------------------------------
 
 	/**
-	 * Full time and kill time, with the wait between them filled. Ink, not a colour: every colour here
-	 * names a counter.
+	 * Full time and kill time, with the wait between them filled. Ink, not a colour: every colour
+	 * here names a counter.
 	 */
 	private void drawTimes(Graphics2D g2)
 	{
@@ -805,7 +805,10 @@ class DelveChart extends JPanel
 
 	// -- the drops ----------------------------------------------------------------------------
 
-	/** Places every drop's icon over its delve and sizes the lane. Depends on the width, so per paint. */
+	/**
+	 * Places every drop's icon over its delve and sizes the lane. Depends on the width, so per
+	 * paint.
+	 */
 	private void layoutDrops()
 	{
 		List<RunDetail.Drop> drops = detail.drops();
@@ -837,7 +840,9 @@ class DelveChart extends JPanel
 		}
 	}
 
-	/** The lowest lane row each icon fits in without overlap, or the last row when none has room. */
+	/**
+	 * The lowest lane row each icon fits in without overlap, or the last row when none has room.
+	 */
 	static int[] stackRows(int[] lefts, int spacing, int maxRows)
 	{
 		Integer[] order = new Integer[lefts.length];
@@ -1037,7 +1042,9 @@ class DelveChart extends JPanel
 		return over == 0 ? value : value + step - over;
 	}
 
-	/** The smallest 1-2-5 step that divides {@code span} into at most {@code maxTicks} intervals. */
+	/**
+	 * The smallest 1-2-5 step that divides {@code span} into at most {@code maxTicks} intervals.
+	 */
 	static int niceStep(int span, int maxTicks)
 	{
 		for (int decade = 1; ; decade *= 10)

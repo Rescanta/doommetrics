@@ -77,7 +77,9 @@ final class SpecEffect
 		return ticksSince >= from && ticksSince <= to;
 	}
 
-	/** Whether an effect of this size could be the one expected; always true when the size varies. */
+	/**
+	 * Whether an effect of this size could be the one expected; always true when the size varies.
+	 */
 	boolean isSized(long amount)
 	{
 		return exactly == ANY_AMOUNT || amount == exactly;

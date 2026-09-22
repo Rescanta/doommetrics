@@ -13,12 +13,16 @@ enum SpecWeapon
 {
 	ZARYTE_CROSSBOW("Zaryte crossbow", projectile(CombatMetric.ZCB_DAMAGE, 1)),
 
-	/** Dragon knife. Duality throws two knives at once, each rolling its own hit, and heals nothing. */
+	/**
+	 * Dragon knife. Duality throws two knives at once, each rolling its own hit, and heals nothing.
+	 */
 	DRAGON_KNIFE("Dragon knife", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 2)),
 
 	DRAGON_THROWNAXE("Dragon thrownaxe", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1)),
 
-	/** Rosewood blowpipe. Rapid Burst fires two darts that land on the same tick, and heals nothing. */
+	/**
+	 * Rosewood blowpipe. Rapid Burst fires two darts that land on the same tick, and heals nothing.
+	 */
 	ROSEWOOD_BLOWPIPE("Rosewood blowpipe", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 2)),
 
 	/** Toxic blowpipe. One dart, healing half of what it hits for, both landing together. */
@@ -88,7 +92,9 @@ enum SpecWeapon
 		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, 0, RESTORE, budget);
 	}
 
-	/** Blood Sacrifice's hit, pinned to the 25 it always deals so a hit landing first isn't taken. */
+	/**
+	 * Blood Sacrifice's hit, pinned to the 25 it always deals so a hit landing first isn't taken.
+	 */
 	private static SpecEffect sacrificeDamage()
 	{
 		return new SpecEffect(SpecEffect.Kind.DAMAGE, CombatMetric.OTHER_SPEC_DAMAGE,
@@ -107,7 +113,9 @@ enum SpecWeapon
 		return effects;
 	}
 
-	/** The weapon's name as the panel lists it, or null for {@link #OTHER}, which is no one weapon. */
+	/**
+	 * The weapon's name as the panel lists it, or null for {@link #OTHER}, which is no one weapon.
+	 */
 	String label()
 	{
 		return label;
@@ -172,8 +180,8 @@ enum SpecWeapon
 	}
 
 	/**
-	 * The weapon held, falling back to its name for ids we don't list. The toxic blowpipe is matched by
-	 * its own name, not the word blowpipe, which non-healing Sailing blowpipes carry.
+	 * The weapon held, falling back to its name for ids we don't list. The toxic blowpipe is
+	 * matched by its own name, not the word blowpipe, which non-healing Sailing blowpipes carry.
 	 *
 	 * @param name the item's name from the cache, or null if it could not be read
 	 */

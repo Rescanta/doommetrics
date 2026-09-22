@@ -38,8 +38,8 @@ final class IconArt
 	}
 
 	/**
-	 * A gold question mark on a dark badge, for a unique the game signalled without naming. Drawn at
-	 * the size it is shown.
+	 * A gold question mark on a dark badge, for a unique the game signalled without naming. Drawn
+	 * at the size it is shown.
 	 */
 	static BufferedImage unknownUnique(int width, int height)
 	{
@@ -105,7 +105,10 @@ final class IconArt
 		}
 	}
 
-	/** The interface sprite a counter is pictured by, or -1 for one pictured by an item or not at all. */
+	/**
+	 * The interface sprite a counter is pictured by, or -1 for one pictured by an item or not at
+	 * all.
+	 */
 	static int spriteFor(CombatMetric metric)
 	{
 		switch (metric)
@@ -119,7 +122,8 @@ final class IconArt
 	}
 
 	/**
-	 * Trims a picture to what is drawn in it, then shrinks it to a {@code box} square. Never enlarges.
+	 * Trims a picture to what is drawn in it, then shrinks it to a {@code box} square. Never
+	 * enlarges.
 	 *
 	 * @return the picture, or null when nothing is drawn in it (a sprite still loading)
 	 */
@@ -157,7 +161,9 @@ final class IconArt
 		return faded;
 	}
 
-	/** The smallest rectangle holding every pixel that is not fully transparent, or null for none. */
+	/**
+	 * The smallest rectangle holding every pixel that is not fully transparent, or null for none.
+	 */
 	private static Rectangle drawnBounds(BufferedImage image)
 	{
 		int left = image.getWidth();
