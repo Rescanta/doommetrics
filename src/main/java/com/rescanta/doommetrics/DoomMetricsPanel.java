@@ -9,6 +9,8 @@ import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -426,6 +428,18 @@ class DoomMetricsPanel extends PluginPanel
 	void setIcons(Icons icons)
 	{
 		combatPanel.setIcons(icons);
+	}
+
+	/**
+	 * @param folded        the combat headings to fold down to their totals, as last left
+	 * @param onFoldChanged handed the headings folded down whenever a click changes them, on the
+	 *                      Swing thread, so the choice can be kept for next time
+	 */
+	void setCombatFolding(Set<CombatMetric.Group> folded,
+		Consumer<Set<CombatMetric.Group>> onFoldChanged)
+	{
+		combatPanel.setFolded(folded);
+		combatPanel.setFoldListener(onFoldChanged);
 	}
 
 	/** Rebuilds the milestone table. Called only when a row actually changed. */

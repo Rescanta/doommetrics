@@ -8,6 +8,8 @@ import java.awt.Rectangle;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
+import java.util.Set;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -163,6 +165,17 @@ class RunDetailWindow extends JFrame
 		legend.setDetail(detail);
 		drops.setDetail(detail);
 		dropsSection.setVisible(!detail.drops().isEmpty());
+	}
+
+	/**
+	 * @param folded        the legend's headings to fold down to their totals, as last left
+	 * @param onFoldChanged handed the headings folded down whenever a click changes them, on the
+	 *                      Swing thread, so the choice can be kept for next time
+	 */
+	void setFolding(Set<CombatMetric.Group> folded, Consumer<Set<CombatMetric.Group>> onFoldChanged)
+	{
+		legend.setFolded(folded);
+		legend.setFoldListener(onFoldChanged);
 	}
 
 	/** @param hideEmpty whether a counter the run has not counted anything on is left out */
@@ -363,7 +376,7 @@ class RunDetailWindow extends JFrame
 
 	/**
 	 * The run's own figures over its drops and the legend, stacked and scrolled together. Their
-	 * height is eight counters under five headings and a drop or two, so they scroll only when
+	 * height is eight counters under three headings and a drop or two, so they scroll only when
 	 * the window is made short enough to need it.
 	 */
 	private JScrollPane sidebar()
@@ -399,7 +412,7 @@ class RunDetailWindow extends JFrame
 		// The sidebar plus a lane for the scrollbar, which is kept clear whether or not the bar is
 		// in it. A scrollbar that takes its width out of the rows relays every one of them as it
 		// appears, and it appears on a window short enough that the counters listed one per source
-		// do not fit while the same counters grouped into five do - so switching between the two
+		// do not fit while the same counters grouped into three do - so switching between the two
 		// moved every figure in the column sideways, twice, for a bar neither of them asked about.
 		// Given a lane of its own it comes and goes in the gap between the sidebar and the chart,
 		// where there was nothing to disturb, and the rows do not move at all.

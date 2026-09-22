@@ -4,7 +4,10 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -26,9 +29,13 @@ import net.runelite.client.ui.DynamicGridLayout;
  * comparing one sitting with another is after.
  *
  * <p>Every row is built once and only ever retexted. The rows never change: eight metrics under
- * five headings, whether or not any of them has fired. A metric that has counted nothing reads zero
- * in the muted colour rather than vanishing, so the table does not reflow as a run goes on and so
- * the reader can see that a source they expected to fire has not.
+ * three headings, whether or not any of them has fired. A metric that has counted nothing reads
+ * zero in the muted colour rather than vanishing, so the table does not reflow as a run goes on and
+ * so the reader can see that a source they expected to fire has not.
+ *
+ * <p>A click on a heading folds its rows away, leaving the heading's total - see
+ * {@link #setFolded}. Which headings are folded is the reader's to choose and nothing else moves
+ * them, so the table still never reflows by itself.
  *
  * <p>Each row carries a meter behind its figure, filled against the largest figure counted in the
  * same unit - see {@link #setTotals}. Eight numbers in a column say what each source gave you but
@@ -48,11 +55,19 @@ class CombatTablePanel extends JPanel
 	/** The pictures drawn beside the rows' names, or none while they are still on their way. */
 	private Icons icons = Icons.NONE;
 
+	/** The headings whose rows are folded away. */
+	private final Set<CombatMetric.Group> folded = EnumSet.noneOf(CombatMetric.Group.class);
+
+	private Consumer<Set<CombatMetric.Group>> onFoldChanged = groups ->
+	{
+	};
+
 	CombatTablePanel()
 	{
 		super(new DynamicGridLayout(0, 1, 0, 1));
 		setBackground(PanelStyle.BACKGROUND);
 		build();
+		layOut();
 		setTotals(null);
 	}
 
@@ -65,21 +80,90 @@ class CombatTablePanel extends JPanel
 		{
 			if (metric.group() != heading)
 			{
-				heading = metric.group();
-				GroupHeading row = new GroupHeading(heading);
-				headings[heading.ordinal()] = row;
-				add(row);
+				CombatMetric.Group group = metric.group();
+				GroupHeading row = new GroupHeading(group);
+				row.foldable(() -> toggle(group));
+				headings[group.ordinal()] = row;
+				heading = group;
 
 				// Restarted under each heading so the stripes read as a block per group rather
 				// than as one run of alternating rows the headings happen to interrupt.
 				striped = 0;
 			}
 
-			MeterRow row = new MeterRow(metric,
+			rows[metric.ordinal()] = new MeterRow(metric,
 				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE);
-			rows[metric.ordinal()] = row;
-			add(row);
 		}
+	}
+
+	/**
+	 * Puts up every heading, and the rows under the ones not folded.
+	 *
+	 * <p>Taken down and put back rather than hidden, because the grid lays out a hidden component
+	 * as a gap the height of the tallest row.
+	 */
+	private void layOut()
+	{
+		removeAll();
+
+		for (CombatMetric.Group group : CombatMetric.Group.values())
+		{
+			GroupHeading heading = headings[group.ordinal()];
+			heading.setFolded(folded.contains(group));
+			add(heading);
+
+			if (folded.contains(group))
+			{
+				continue;
+			}
+
+			for (CombatMetric metric : group.metrics())
+			{
+				if (metric.displayed())
+				{
+					add(rows[metric.ordinal()]);
+				}
+			}
+		}
+
+		revalidate();
+		repaint();
+	}
+
+	/**
+	 * @param groups the headings to fold down to their totals, as the reader last left them
+	 *
+	 * <p>Tells no listener: this is the table being told what it already was, not a click.
+	 */
+	void setFolded(Set<CombatMetric.Group> groups)
+	{
+		folded.clear();
+		folded.addAll(groups);
+		layOut();
+	}
+
+	/** @param onFoldChanged handed the headings folded down, whenever a click changes them */
+	void setFoldListener(Consumer<Set<CombatMetric.Group>> onFoldChanged)
+	{
+		this.onFoldChanged = onFoldChanged;
+	}
+
+	/** Folds a heading's rows away, or brings them back. */
+	void toggle(CombatMetric.Group group)
+	{
+		if (!folded.remove(group))
+		{
+			folded.add(group);
+		}
+
+		layOut();
+		onFoldChanged.accept(EnumSet.copyOf(folded));
+	}
+
+	/** Whether the rows under a heading are folded away, for the tests. */
+	boolean isFolded(CombatMetric.Group group)
+	{
+		return folded.contains(group);
 	}
 
 	/**

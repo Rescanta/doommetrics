@@ -41,6 +41,9 @@ public class DoomMetricsOverlayTest
 	 */
 	private static final int GAP = 6;
 
+	/** Between a counter's icon and its figure - see {@code DoomMetricsOverlay.ICON_GAP}. */
+	private static final int ICON_GAP = 4;
+
 	/** What a row has to fit into: the standard overlay width, less its border on both sides. */
 	private static final int ROW_WIDTH =
 		ComponentConstants.STANDARD_WIDTH - ComponentConstants.STANDARD_BORDER * 2;
@@ -58,12 +61,42 @@ public class DoomMetricsOverlayTest
 			assertFits(metrics, metric.overlayLabel(), gain);
 		}
 
-		// Combined, the counters are drawn under these instead, and reach the same figures.
+		// As totals, the counters are drawn under these instead, and reach the same figures.
 		for (CombatMetric.Group group : CombatMetric.Group.values())
 		{
 			assertFits(metrics, group.overlayHeading(), figure);
 			assertFits(metrics, group.overlayHeading(), gain);
 		}
+
+		// Two to a line, an icon and a figure have half a line each - less the gap between them.
+		int column = OverlayColumns.columnWidth(ROW_WIDTH, DoomMetricsOverlay.GRID_COLUMNS,
+			DoomMetricsOverlay.GRID_GAP);
+
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		{
+			int icon = PreviewIcons.INSTANCE.smallCounter(metric).getWidth() + ICON_GAP;
+
+			// The widest figure each length of number comes out as, whole or shortened.
+			for (long widest : new long[]{9_999, 99_999, 999_999, 9_999_999})
+			{
+				String total = DoomMetricsOverlay.figure(widest, 0, true);
+				String gained = DoomMetricsOverlay.figure(widest, widest, true);
+
+				assertTrue(metric + "'s icon beside " + total + " needs more than a column's "
+					+ column + "px", icon + metrics.stringWidth(total) <= column);
+				assertTrue(metric + "'s icon beside " + gained + " needs more than a column's "
+					+ column + "px", icon + metrics.stringWidth(gained) <= column);
+			}
+		}
+
+		assertEquals("a figure that fits is kept whole", "9,999",
+			DoomMetricsOverlay.figure(9_999, 0, true));
+		assertEquals("a gain that fits is kept whole", "+999",
+			DoomMetricsOverlay.figure(9_999, 999, true));
+		assertEquals("25k", DoomMetricsOverlay.figure(25_400, 0, true));
+		assertEquals("+1.2k", DoomMetricsOverlay.figure(25_400, 1_234, true));
+		assertEquals("a whole line never shortens", "25,400",
+			DoomMetricsOverlay.figure(25_400, 0, false));
 
 		// The rows above the counters, at the widest each of them gets: a delve deeper than anyone
 		// has reached, a run longer than anyone sits through, and a pace nobody will ever hold.
@@ -111,39 +144,144 @@ public class DoomMetricsOverlayTest
 	}
 
 	/**
-	 * The catch-alls never get a line of their own, and a combined line always counts them.
+	 * The catch-alls never get a line of their own, and a total line always counts them.
 	 *
-	 * <p>The two halves are the same rule read from either end: there is no counter to tick for
-	 * "some other melee weapon", so a separate line for it is a line nobody asked for, while a
-	 * punish figure that left it out would be short by every punish thrown with a weapon this
-	 * plugin does not name.
+	 * <p>The two halves are the same rule read from either end: there is no counter for "some
+	 * other melee weapon", so a line for it is a line nobody asked for, while a damage total that
+	 * left it out would be short by every punish thrown with a weapon this plugin does not name.
 	 */
 	@Test
-	public void countsTheCatchAllsOnlyIntoACombinedLine()
+	public void countsTheCatchAllsOnlyIntoATotalLine()
 	{
 		PreviewConfig config = new PreviewConfig();
 		PreviewPlugin plugin = new PreviewPlugin();
 		Instant now = Instant.now();
 		DelveRun run = new DelveRun(now.minusSeconds(600), 5, false);
 		plugin.run = run;
-		config.allCounters(true);
 		config.hideEmptyCounters = true;
 
-		BufferedImage separate = draw(plugin, config);
-		config.grouping = MetricDisplay.COMBINED;
-		BufferedImage combined = draw(plugin, config);
+		config.allModes(CounterMode.EACH);
+		BufferedImage each = draw(plugin, config);
+		config.allModes(CounterMode.TOTAL);
+		BufferedImage total = draw(plugin, config);
 
 		run.recordCombat(CombatMetric.OTHER_SPELL_HEAL, 90, now.minusSeconds(60));
-		run.recordCombat(CombatMetric.OTHER_SPEC_HEAL, 90, now.minusSeconds(60));
-		run.recordCombat(CombatMetric.OTHER_SPEC_DAMAGE, 90, now.minusSeconds(60));
 		run.recordCombat(CombatMetric.OTHER_MELEE_PUNISH, 90, now.minusSeconds(60));
 
-		assertTrue("the four catch-alls should give the four headings they feed a line each",
-			draw(plugin, config).getHeight() > combined.getHeight());
+		assertEquals("the catch-alls should give the two headings they feed a line each",
+			total.getHeight() + 2 * lineHeight(), draw(plugin, config).getHeight());
 
-		config.grouping = MetricDisplay.SEPARATE;
+		config.allModes(CounterMode.EACH);
 		assertEquals("no catch-all has a line of its own",
-			separate.getHeight(), draw(plugin, config).getHeight());
+			each.getHeight(), draw(plugin, config).getHeight());
+	}
+
+	/**
+	 * Each heading is drawn its own way: one can be a total while the next is a line per counter
+	 * and the third is not drawn at all.
+	 */
+	@Test
+	public void drawsEachHeadingTheWayItIsSetTo()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin();
+		Instant now = Instant.now();
+		DelveRun run = new DelveRun(now.minusSeconds(600), 5, false);
+		run.recordCombat(CombatMetric.BLOOD_BARRAGE_HEAL, 300, now.minusSeconds(60));
+		run.recordCombat(CombatMetric.AGS_HEAL, 40, now.minusSeconds(60));
+		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 90, now.minusSeconds(60));
+		run.recordCombat(CombatMetric.ZCB_DAMAGE, 300, now.minusSeconds(60));
+		run.recordCombat(CombatMetric.SCYTHE_PUNISH, 200, now.minusSeconds(60));
+		plugin.run = run;
+
+		config.allModes(CounterMode.OFF);
+		int none = draw(plugin, config).getHeight();
+
+		config.allModes(CounterMode.EACH);
+		assertEquals("a line for each of the five counters that has counted",
+			none + 5 * lineHeight(), draw(plugin, config).getHeight());
+
+		config.allModes(CounterMode.TOTAL);
+		assertEquals("a line for each heading", none + 3 * lineHeight(),
+			draw(plugin, config).getHeight());
+
+		config.mode(CombatMetric.Group.HEALING, CounterMode.TOTAL);
+		config.mode(CombatMetric.Group.PRAYER, CounterMode.OFF);
+		config.mode(CombatMetric.Group.DAMAGE, CounterMode.EACH);
+		assertEquals("healing as one line, prayer not at all, and damage by weapon",
+			none + 3 * lineHeight(), draw(plugin, config).getHeight());
+	}
+
+	/**
+	 * Two to a line, the counters drawn by icon take half the lines, and a total keeps a whole line
+	 * of its own between them.
+	 */
+	@Test
+	public void theIconGridPutsTwoCountersToALine()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin();
+		Instant now = Instant.now();
+		DelveRun run = new DelveRun(now.minusSeconds(600), 5, false);
+		plugin.run = run;
+		config.hideEmptyCounters = false;
+
+		config.allModes(CounterMode.OFF);
+		int none = draw(plugin, config).getHeight();
+
+		config.allModes(CounterMode.EACH);
+		config.counterStyle = CounterStyle.ICONS;
+		int icons = draw(plugin, config).getHeight();
+
+		config.counterStyle = CounterStyle.ICON_GRID;
+		BufferedImage grid = draw(plugin, config);
+
+		assertEquals("eight counters, a line each", none + 8 * lineHeight(), icons);
+		assertEquals("the grid keeps the overlay's width", ComponentConstants.STANDARD_WIDTH,
+			grid.getWidth());
+		assertEquals("eight counters, two to a line", none + 4 * lineHeight(), grid.getHeight());
+
+		// Healing's three counters take two lines, the second only half full; prayer's total
+		// takes one of its own; the four damage counters take two more.
+		config.mode(CombatMetric.Group.PRAYER, CounterMode.TOTAL);
+		assertEquals(none + 5 * lineHeight(), draw(plugin, config).getHeight());
+
+		// Without the total between them, the eldritch staff fills the half line healing left.
+		config.mode(CombatMetric.Group.PRAYER, CounterMode.EACH);
+		config.mode(CombatMetric.Group.DAMAGE, CounterMode.OFF);
+		assertEquals("blood barrage, AGS, blowpipe and eldritch - two lines",
+			none + 2 * lineHeight(), draw(plugin, config).getHeight());
+
+		// An odd one out has a line to itself, in the first column.
+		config.mode(CombatMetric.Group.PRAYER, CounterMode.OFF);
+		assertEquals("three healing counters - two lines, the second half full",
+			none + 2 * lineHeight(), draw(plugin, config).getHeight());
+	}
+
+	/**
+	 * A counter whose picture has not arrived from the game is drawn by name, and a name needs the
+	 * whole line - so the grid falls back to a line each rather than wrapping a name into half one.
+	 */
+	@Test
+	public void theIconGridDrawsCountersWithNoIconYetOneToALine()
+	{
+		PreviewConfig config = new PreviewConfig();
+		PreviewPlugin plugin = new PreviewPlugin()
+		{
+			@Override
+			Icons getIcons()
+			{
+				return Icons.NONE;
+			}
+		};
+		plugin.run = new DelveRun(Instant.now().minusSeconds(600), 5, false);
+		config.hideEmptyCounters = false;
+
+		config.counterStyle = CounterStyle.NAMES;
+		int names = draw(plugin, config).getHeight();
+
+		config.counterStyle = CounterStyle.ICON_GRID;
+		assertEquals(names, draw(plugin, config).getHeight());
 	}
 
 	/** A line per counter that has counted something, and none for one still at 0. */
@@ -157,7 +295,7 @@ public class DoomMetricsOverlayTest
 		run.recordCombat(CombatMetric.ZCB_DAMAGE, 300, now.minusSeconds(60));
 		plugin.run = run;
 
-		config.allCounters(true);
+		config.allModes(CounterMode.EACH);
 		int hidden = draw(plugin, config).getHeight();
 
 		config.hideEmptyCounters = false;
@@ -166,20 +304,19 @@ public class DoomMetricsOverlayTest
 		assertEquals("every counter drawn but the crossbow is still at 0",
 			(CombatMetric.DISPLAYED.size() - 1) * lineHeight(), drawn - hidden);
 
-		// Combined, a group with nothing counted under it has no line either.
-		config.grouping = MetricDisplay.COMBINED;
-		int combinedDrawn = draw(plugin, config).getHeight();
+		// As totals, a heading with nothing counted under it has no line either.
+		config.allModes(CounterMode.TOTAL);
+		int totalDrawn = draw(plugin, config).getHeight();
 
 		config.hideEmptyCounters = true;
-		int combinedHidden = draw(plugin, config).getHeight();
+		int totalHidden = draw(plugin, config).getHeight();
 
-		assertEquals("only the spec damage line has counted anything",
-			(CombatMetric.Group.values().length - 1) * lineHeight(),
-			combinedDrawn - combinedHidden);
+		assertEquals("only the damage line has counted anything",
+			(CombatMetric.Group.values().length - 1) * lineHeight(), totalDrawn - totalHidden);
 
 		// The line arrives with the first thing it counts.
-		run.recordCombat(CombatMetric.SCYTHE_PUNISH, 40, now.minusSeconds(30));
-		assertEquals(combinedHidden + lineHeight(), draw(plugin, config).getHeight());
+		run.recordCombat(CombatMetric.ELDRITCH_PRAYER, 40, now.minusSeconds(30));
+		assertEquals(totalHidden + lineHeight(), draw(plugin, config).getHeight());
 	}
 
 	/** How much taller one more line makes the overlay: the line and the gap under it. */
@@ -188,7 +325,7 @@ public class DoomMetricsOverlayTest
 		PreviewConfig config = new PreviewConfig();
 		PreviewPlugin plugin = new PreviewPlugin();
 		plugin.run = new DelveRun(Instant.now().minusSeconds(60), 5, false);
-		config.allCounters(false);
+		config.allModes(CounterMode.OFF);
 
 		config.showPace = false;
 		int without = draw(plugin, config).getHeight();
@@ -225,21 +362,21 @@ public class DoomMetricsOverlayTest
 	@Test
 	public void iconsTakeTheNamesPlaceWithoutResizingTheOverlay()
 	{
-		for (MetricDisplay grouping : MetricDisplay.values())
+		for (CounterMode mode : new CounterMode[]{CounterMode.EACH, CounterMode.TOTAL})
 		{
 			// A run walked out of, so its clock has stopped and the two drawings differ only where
 			// the icons do.
 			PreviewScene scene = PreviewScene.named("lingering");
-			scene.config.grouping = grouping;
+			scene.config.allModes(mode);
 			BufferedImage names = draw(scene);
 
-			scene.config.counterIcons = true;
+			scene.config.counterStyle = CounterStyle.ICONS;
 			BufferedImage icons = draw(scene);
 
-			assertEquals(grouping + " width", names.getWidth(), icons.getWidth());
-			assertEquals(grouping + " height", names.getHeight(), icons.getHeight());
-			assertEquals(grouping + ": only separate counters have an icon each",
-				grouping == MetricDisplay.SEPARATE, !samePixels(names, icons));
+			assertEquals(mode + " width", names.getWidth(), icons.getWidth());
+			assertEquals(mode + " height", names.getHeight(), icons.getHeight());
+			assertEquals(mode + ": only a line per counter has an icon each",
+				mode == CounterMode.EACH, !samePixels(names, icons));
 		}
 	}
 

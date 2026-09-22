@@ -13,47 +13,50 @@ import java.util.Map;
  */
 class PreviewConfig implements DoomMetricsConfig
 {
-	private final Map<CombatMetric, Boolean> counters = new EnumMap<>(CombatMetric.class);
+	private final Map<CombatMetric.Group, CounterMode> modes =
+		new EnumMap<>(CombatMetric.Group.class);
 
 	DisplayStyle displayStyle = DisplayStyle.PANEL;
 	InfoBoxFigure infoboxFigure = InfoBoxFigure.DELVE;
 	PaceMode paceMode = PaceMode.DEEP_AVERAGE;
-	MetricDisplay grouping = MetricDisplay.SEPARATE;
 	boolean hidePluginName = false;
 	boolean showDelveNumber = true;
 	boolean showRunTimer = true;
 	boolean showPace = true;
 	boolean showTargetDelve = false;
-	boolean counterIcons = false;
+	CounterStyle counterStyle = CounterStyle.NAMES;
 	boolean hideEmptyCounters = true;
 	int targetDelve = 50;
 	TargetPrediction targetPrediction = TargetPrediction.FULL_RUN;
 
+	/** What the side panel was last told to keep folded, for a test to read back. */
+	String foldedCombatGroups = "";
+
+	/** The same for the run detail window's legend. */
+	String foldedDetailGroups = "";
+
 	PreviewConfig()
 	{
-		for (CombatMetric metric : CombatMetric.values())
+		allModes(CounterMode.EACH);
+	}
+
+	/** How one heading is drawn. Keyed by group so a control can be built per heading. */
+	CounterMode mode(CombatMetric.Group group)
+	{
+		return modes.get(group);
+	}
+
+	void mode(CombatMetric.Group group, CounterMode mode)
+	{
+		modes.put(group, mode);
+	}
+
+	/** Sets every heading at once, for the states worth looking at as a whole. */
+	void allModes(CounterMode mode)
+	{
+		for (CombatMetric.Group group : CombatMetric.Group.values())
 		{
-			counters.put(metric, true);
-		}
-	}
-
-	/** Whether one counter is ticked on. Keyed by metric so a control can be built per metric. */
-	boolean counter(CombatMetric metric)
-	{
-		return Boolean.TRUE.equals(counters.get(metric));
-	}
-
-	void counter(CombatMetric metric, boolean shown)
-	{
-		counters.put(metric, shown);
-	}
-
-	/** Ticks every counter on or off at once, for the two states worth looking at as a whole. */
-	void allCounters(boolean shown)
-	{
-		for (CombatMetric metric : CombatMetric.values())
-		{
-			counters.put(metric, shown);
+			modes.put(group, mode);
 		}
 	}
 
@@ -63,7 +66,6 @@ class PreviewConfig implements DoomMetricsConfig
 		displayStyle = other.displayStyle;
 		infoboxFigure = other.infoboxFigure;
 		paceMode = other.paceMode;
-		grouping = other.grouping;
 		hidePluginName = other.hidePluginName;
 		showDelveNumber = other.showDelveNumber;
 		showRunTimer = other.showRunTimer;
@@ -71,13 +73,9 @@ class PreviewConfig implements DoomMetricsConfig
 		showTargetDelve = other.showTargetDelve;
 		targetDelve = other.targetDelve;
 		targetPrediction = other.targetPrediction;
-		counterIcons = other.counterIcons;
+		counterStyle = other.counterStyle;
 		hideEmptyCounters = other.hideEmptyCounters;
-
-		for (CombatMetric metric : CombatMetric.values())
-		{
-			counter(metric, other.counter(metric));
-		}
+		modes.putAll(other.modes);
 	}
 
 	@Override
@@ -96,12 +94,6 @@ class PreviewConfig implements DoomMetricsConfig
 	public PaceMode paceMode()
 	{
 		return paceMode;
-	}
-
-	@Override
-	public MetricDisplay metricGrouping()
-	{
-		return grouping;
 	}
 
 	@Override
@@ -147,9 +139,27 @@ class PreviewConfig implements DoomMetricsConfig
 	}
 
 	@Override
-	public boolean counterIcons()
+	public CounterMode healingCounters()
 	{
-		return counterIcons;
+		return mode(CombatMetric.Group.HEALING);
+	}
+
+	@Override
+	public CounterMode prayerCounters()
+	{
+		return mode(CombatMetric.Group.PRAYER);
+	}
+
+	@Override
+	public CounterMode damageCounters()
+	{
+		return mode(CombatMetric.Group.DAMAGE);
+	}
+
+	@Override
+	public CounterStyle counterStyle()
+	{
+		return counterStyle;
 	}
 
 	@Override
@@ -159,50 +169,26 @@ class PreviewConfig implements DoomMetricsConfig
 	}
 
 	@Override
-	public boolean showBloodBarrage()
+	public String foldedCombatGroups()
 	{
-		return counter(CombatMetric.BLOOD_BARRAGE_HEAL);
+		return foldedCombatGroups;
 	}
 
 	@Override
-	public boolean showAgsHeal()
+	public void foldedCombatGroups(String groups)
 	{
-		return counter(CombatMetric.AGS_HEAL);
+		foldedCombatGroups = groups;
 	}
 
 	@Override
-	public boolean showBpHeal()
+	public String foldedDetailGroups()
 	{
-		return counter(CombatMetric.BLOWPIPE_HEAL);
+		return foldedDetailGroups;
 	}
 
 	@Override
-	public boolean showEldritchPrayer()
+	public void foldedDetailGroups(String groups)
 	{
-		return counter(CombatMetric.ELDRITCH_PRAYER);
-	}
-
-	@Override
-	public boolean showZcbDamage()
-	{
-		return counter(CombatMetric.ZCB_DAMAGE);
-	}
-
-	@Override
-	public boolean showScythePunish()
-	{
-		return counter(CombatMetric.SCYTHE_PUNISH);
-	}
-
-	@Override
-	public boolean showNoxiousHalberdPunish()
-	{
-		return counter(CombatMetric.NOXIOUS_HALBERD_PUNISH);
-	}
-
-	@Override
-	public boolean showCrystalHalberdPunish()
-	{
-		return counter(CombatMetric.CRYSTAL_HALBERD_PUNISH);
+		foldedDetailGroups = groups;
 	}
 }

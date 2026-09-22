@@ -152,19 +152,6 @@ public class CombatTotalsTest
 		assertNull(CombatMetric.byKey("nothingStoredUnderThis"));
 	}
 
-	/** Two metrics under one heading may share a label, so the dropdown uses the qualified one. */
-	@Test
-	public void qualifiedLabelsAreDistinct()
-	{
-		Set<String> labels = new HashSet<>();
-
-		for (CombatMetric metric : CombatMetric.values())
-		{
-			assertTrue("duplicate label " + metric.qualifiedLabel(),
-				labels.add(metric.qualifiedLabel()));
-		}
-	}
-
 	/** The overlay draws these with no heading over them, so each has to stand on its own. */
 	@Test
 	public void overlayLabelsAreDistinct()

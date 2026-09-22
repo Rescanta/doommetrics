@@ -22,12 +22,33 @@ public interface DoomMetricsConfig extends Config
 	int MAX_DELVE = 1000;
 
 	@ConfigSection(
+		name = "Overlay",
+		description = "What is drawn over the game while a run is on",
+		position = 10
+	)
+	String overlaySection = "overlay";
+
+	@ConfigSection(
+		name = "Pace & target",
+		description = "How pace is measured, and the delve you are aiming for",
+		position = 20
+	)
+	String paceSection = "pace";
+
+	@ConfigSection(
 		name = "Counters",
-		description = "Extra overlay lines for what your gear gives back",
-		position = 50,
-		closedByDefault = true
+		description = "Overlay lines for what your gear gives back",
+		position = 30
 	)
 	String countersSection = "counters";
+
+	@ConfigSection(
+		name = "Chat",
+		description = "Messages posted to chat during and after a run",
+		position = 40,
+		closedByDefault = true
+	)
+	String chatSection = "chat";
 
 	@ConfigSection(
 		name = "Advanced",
@@ -38,65 +59,16 @@ public interface DoomMetricsConfig extends Config
 	String advancedSection = "advanced";
 
 	@ConfigItem(
-		keyName = "paceMode",
-		name = "Pace",
-		description = "Deep pace averages your delve 9+ times."
-			+ "<br>Full pace counts deep delves completed per hour of the whole run, shallow delves"
-			+ " included.",
-		position = 1
-	)
-	default PaceMode paceMode()
-	{
-		return PaceMode.DEEP_AVERAGE;
-	}
-
-	@ConfigItem(
-		keyName = "chatIntervalDelves",
-		name = "Chat every N delves",
-		description = "Post elapsed time and pace to chat whenever the delve number is a multiple"
-			+ " of this."
-			+ "<br>Shallow delves are skipped, so 5 reports at delve 10, 15, 20 and so on."
-			+ "<br>Set to 0 to turn the messages off.",
-		position = 2
-	)
-	@Range(min = 0, max = 100)
-	default int chatIntervalDelves()
-	{
-		return 5;
-	}
-
-	@ConfigItem(
-		keyName = "announceRunEnd",
-		name = "Announce run end",
-		description = "Post a summary to chat when you claim loot, leave, or die.",
-		position = 3
-	)
-	default boolean announceRunEnd()
-	{
-		return true;
-	}
-
-	@ConfigItem(
-		keyName = "hidePluginName",
-		name = "Hide plugin name",
-		description = "Leave the Doom Metrics title off the top of the overlay.",
-		position = 7
-	)
-	default boolean hidePluginName()
-	{
-		return false;
-	}
-
-	@ConfigItem(
 		keyName = "displayStyle",
 		name = "Display",
 		description = "What the plugin draws over the game while a run is on."
-			+ "<br>Panel is the overlay of lines, built from the switches below."
+			+ "<br>Panel is the overlay of lines, built from the switches in this section."
 			+ "<br>Infobox is a single square holding the one figure picked underneath,"
 			+ "<br>with the rest of it in the tooltip."
 			+ "<br>Off draws nothing. Delves are still timed and everything is still counted,"
 			+ "<br>and the side panel and the chat messages carry on as they were.",
-		position = 8
+		position = 11,
+		section = overlaySection
 	)
 	default DisplayStyle displayStyle()
 	{
@@ -108,13 +80,14 @@ public interface DoomMetricsConfig extends Config
 		name = "Infobox figure",
 		description = "Which single figure the infobox square holds."
 			+ "<br>Only used when Display is set to Infobox."
-			+ "<br>The counters here are independent of the counter checkboxes below,"
+			+ "<br>The counters here are independent of the Counters settings,"
 			+ "<br>which choose what the panel draws."
 			+ "<br>Time to target counts down to the delve set under Target delve,"
 			+ "<br>whether or not Show target delve is switched on."
 			+ "<br>Predicted run time is the time from delve 1 to that delve,"
 			+ "<br>and the real time once you reach it.",
-		position = 9
+		position = 12,
+		section = overlaySection
 	)
 	default InfoBoxFigure infoboxFigure()
 	{
@@ -122,10 +95,23 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "hidePluginName",
+		name = "Hide plugin name",
+		description = "Leave the Doom Metrics title off the top of the overlay.",
+		position = 13,
+		section = overlaySection
+	)
+	default boolean hidePluginName()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "showDelveNumber",
 		name = "Show delve number",
 		description = "Show the delve you are currently on in the overlay.",
-		position = 10
+		position = 14,
+		section = overlaySection
 	)
 	default boolean showDelveNumber()
 	{
@@ -136,7 +122,8 @@ public interface DoomMetricsConfig extends Config
 		keyName = "showRunTimer",
 		name = "Show run timer",
 		description = "Show total elapsed time for the current run in the overlay.",
-		position = 11
+		position = 15,
+		section = overlaySection
 	)
 	default boolean showRunTimer()
 	{
@@ -147,11 +134,42 @@ public interface DoomMetricsConfig extends Config
 		keyName = "showPace",
 		name = "Show pace",
 		description = "Show the pace figure in the overlay.",
-		position = 12
+		position = 16,
+		section = overlaySection
 	)
 	default boolean showPace()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		keyName = "resultLingerMinutes",
+		name = "Keep result for",
+		description = "Minutes the overlay keeps showing a finished run after you die or leave,"
+			+ "<br>so the numbers are still there when you get back."
+			+ "<br>Set to 0 to hide it straight away."
+			+ "<br>Right-click the overlay and pick Clear to dismiss it early.",
+		position = 17,
+		section = overlaySection
+	)
+	@Range(min = 0, max = 180)
+	default int resultLingerMinutes()
+	{
+		return 30;
+	}
+
+	@ConfigItem(
+		keyName = "paceMode",
+		name = "Pace",
+		description = "Deep pace averages your delve 9+ times."
+			+ "<br>Full pace counts deep delves completed per hour of the whole run, shallow delves"
+			+ " included.",
+		position = 21,
+		section = paceSection
+	)
+	default PaceMode paceMode()
+	{
+		return PaceMode.DEEP_AVERAGE;
 	}
 
 	@ConfigItem(
@@ -160,7 +178,8 @@ public interface DoomMetricsConfig extends Config
 		description = "Show the delve you are aiming for and how long it is predicted to take,"
 			+ "<br>in the overlay and the side panel. Prediction picks which times are shown."
 			+ "<br>Reaching it is always announced in chat, whatever the chat interval is set to.",
-		position = 14
+		position = 22,
+		section = paceSection
 	)
 	default boolean showTargetDelve()
 	{
@@ -174,7 +193,8 @@ public interface DoomMetricsConfig extends Config
 			+ "<br>The predicted time is what your delve 9+ average says the delves between here"
 			+ "<br>and there will take, so it appears once this run has cleared a delve 9."
 			+ "<br>Delves get slower the deeper they go, so a distant target reads short.",
-		position = 15
+		position = 23,
+		section = paceSection
 	)
 	@Range(min = 10, max = MAX_DELVE)
 	default int targetDelve()
@@ -190,7 +210,8 @@ public interface DoomMetricsConfig extends Config
 			+ "<br>Full run is Total, the time from delve 1 to the target delve."
 			+ "<br>Both shows the two."
 			+ "<br>Once the target is reached, To go is dropped and the Target row says so.",
-		position = 16
+		position = 24,
+		section = paceSection
 	)
 	default TargetPrediction targetPrediction()
 	{
@@ -198,48 +219,77 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "resultLingerMinutes",
-		name = "Keep result for",
-		description = "Minutes the overlay keeps showing a finished run after you die or leave,"
-			+ "<br>so the numbers are still there when you get back."
-			+ "<br>Set to 0 to hide it straight away."
-			+ "<br>Right-click the overlay and pick Clear to dismiss it early.",
-		position = 13
+		keyName = "healingCounters",
+		name = "Healing",
+		description = "Overlay lines for the hitpoints healed: blood spells and the ancient godsword"
+			+ "<br>and blowpipe specs."
+			+ "<br>Total is one line with everything healed, other spells and specs included."
+			+ "<br>Each is a line per source. Off draws none.",
+		position = 31,
+		section = countersSection
 	)
-	@Range(min = 0, max = 180)
-	default int resultLingerMinutes()
+	default CounterMode healingCounters()
 	{
-		return 30;
+		return CounterMode.OFF;
 	}
 
 	@ConfigItem(
-		keyName = "counterIcons",
-		name = "Icons for counters",
-		description = "Draw each counter as the icon of what it counts - the Zaryte crossbow,"
-			+ "<br>the blood barrage spell - in place of its name on the overlay."
-			+ "<br>The side panel and the run detail window always list counters by icon;"
-			+ "<br>hover a row there for its name."
-			+ "<br>The infobox takes the same icon when it holds a single counter."
-			+ "<br>Counters grouped into one line keep their heading, since a group has no one icon.",
-		position = 50,
+		keyName = "prayerCounters",
+		name = "Prayer",
+		description = "Overlay lines for the prayer points the eldritch staff spec has restored."
+			+ "<br>Total and Each are the same figure; Each draws it as the staff's icon"
+			+ "<br>when Counter style is set to icons. Off draws none.",
+		position = 32,
 		section = countersSection
 	)
-	default boolean counterIcons()
+	default CounterMode prayerCounters()
 	{
-		return false;
+		return CounterMode.OFF;
+	}
+
+	@ConfigItem(
+		keyName = "damageCounters",
+		name = "Damage",
+		description = "Overlay lines for the damage the zaryte crossbow spec dealt, and what your"
+			+ "<br>scythe and halberds dealt punishing the boss's prayer, strength-bonus hitsplats"
+			+ "<br>and halberd specs included."
+			+ "<br>Total is one line with all of it, other specs and melee weapons included."
+			+ "<br>Each is a line per weapon. Off draws none.",
+		position = 33,
+		section = countersSection
+	)
+	default CounterMode damageCounters()
+	{
+		return CounterMode.OFF;
+	}
+
+	@ConfigItem(
+		keyName = "counterStyle",
+		name = "Counter style",
+		description = "How each counter's overlay line is led."
+			+ "<br>Names spells out what it counts. Icons draws the weapon or spell in its place,"
+			+ "<br>and Icon grid fits two of those to a line."
+			+ "<br>A Total line keeps its name and a line of its own, since it has no one icon."
+			+ "<br>The infobox takes the icon when it holds a single counter and this is not Names."
+			+ "<br>The side panel and the run detail window always list counters by icon.",
+		position = 34,
+		section = countersSection
+	)
+	default CounterStyle counterStyle()
+	{
+		return CounterStyle.NAMES;
 	}
 
 	@ConfigItem(
 		keyName = "hideEmptyCounters",
 		name = "Hide counters at 0",
-		description = "Leave a ticked counter off the overlay until it has counted something,"
-			+ "<br>so you can tick everything your gear might use and only see what is firing."
-			+ "<br>The overlay grows a line when a counter first counts,"
-			+ "<br>and a combined line appears once anything under it has."
+		description = "Leave a counter off the overlay until it has counted something,"
+			+ "<br>so Each only draws the gear you are actually using."
+			+ "<br>A line appears when its counter first counts."
 			+ "<br>The run detail window starts those counters switched off,"
 			+ "<br>so their flat lines are not on the chart. Click one there to put it back."
 			+ "<br>Untick to draw every counter from the start, greyed at 0.",
-		position = 51,
+		position = 35,
 		section = countersSection
 	)
 	default boolean hideEmptyCounters()
@@ -248,119 +298,67 @@ public interface DoomMetricsConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "metricGrouping",
-		name = "Group counters",
-		description = "How the counters ticked below are drawn."
-			+ "<br>Combined sums them into one line per heading,"
-			+ "<br>so ticking the ancient godsword and the blowpipe gives a single Spec healing figure."
-			+ "<br>A combined line also counts the sources with no tick of their own,"
-			+ "<br>such as a melee weapon punishing without a counter listed here."
-			+ "<br>Separate gives each its own line.",
-		position = 52,
-		section = countersSection
+		keyName = "foldedCombatGroups",
+		name = "",
+		description = "The side panel's combat headings folded down to their totals.",
+		hidden = true
 	)
-	default MetricDisplay metricGrouping()
+	default String foldedCombatGroups()
 	{
-		return MetricDisplay.SEPARATE;
+		return "";
 	}
 
 	@ConfigItem(
-		keyName = "showBloodBarrage",
-		name = "Blood barrage heal",
-		description = "Count the hitpoints blood spells have healed you for.",
-		position = 53,
-		section = countersSection
+		keyName = "foldedCombatGroups",
+		name = "",
+		description = ""
 	)
-	default boolean showBloodBarrage()
+	void foldedCombatGroups(String groups);
+
+	@ConfigItem(
+		keyName = "foldedDetailGroups",
+		name = "",
+		description = "The run detail window's counter headings folded down to their totals.",
+		hidden = true
+	)
+	default String foldedDetailGroups()
 	{
-		return false;
+		return "";
 	}
 
 	@ConfigItem(
-		keyName = "showAgsHeal",
-		name = "AGS heal",
-		description = "Count the hitpoints the ancient godsword spec has healed you for.",
-		position = 55,
-		section = countersSection
+		keyName = "foldedDetailGroups",
+		name = "",
+		description = ""
 	)
-	default boolean showAgsHeal()
+	void foldedDetailGroups(String groups);
+
+	@ConfigItem(
+		keyName = "chatIntervalDelves",
+		name = "Chat every N delves",
+		description = "Post elapsed time and pace to chat whenever the delve number is a multiple"
+			+ " of this."
+			+ "<br>Shallow delves are skipped, so 5 reports at delve 10, 15, 20 and so on."
+			+ "<br>Set to 0 to turn the messages off.",
+		position = 41,
+		section = chatSection
+	)
+	@Range(min = 0, max = 100)
+	default int chatIntervalDelves()
 	{
-		return false;
+		return 5;
 	}
 
 	@ConfigItem(
-		keyName = "showBpHeal",
-		name = "Blowpipe heal",
-		description = "Count the hitpoints the blowpipe spec has healed you for.",
-		position = 56,
-		section = countersSection
+		keyName = "announceRunEnd",
+		name = "Announce run end",
+		description = "Post a summary to chat when you claim loot, leave, or die.",
+		position = 42,
+		section = chatSection
 	)
-	default boolean showBpHeal()
+	default boolean announceRunEnd()
 	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "showEldritchPrayer",
-		name = "Eldritch prayer",
-		description = "Count the prayer points the eldritch staff spec has restored.",
-		position = 58,
-		section = countersSection
-	)
-	default boolean showEldritchPrayer()
-	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "showZcbDamage",
-		name = "ZCB damage",
-		description = "Count the damage the zaryte crossbow spec has dealt.",
-		position = 59,
-		section = countersSection
-	)
-	default boolean showZcbDamage()
-	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "showScythePunish",
-		name = "Scythe punish",
-		description = "Count the damage your scythe has dealt punishing the boss's prayer, its"
-			+ " strength-bonus hitsplats included.",
-		position = 61,
-		section = countersSection
-	)
-	default boolean showScythePunish()
-	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "showNoxiousHalberdPunish",
-		name = "Noxious halberd punish",
-		description = "Count the damage your noxious halberd has dealt punishing the boss's prayer,"
-			+ " its spec and strength-bonus hitsplats included.",
-		position = 62,
-		section = countersSection
-	)
-	default boolean showNoxiousHalberdPunish()
-	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "showCrystalHalberdPunish",
-		name = "Crystal halberd punish",
-		description = "Count the damage your crystal halberd has dealt punishing the boss's prayer,"
-			+ " its spec and strength-bonus hitsplats included.",
-		position = 63,
-		section = countersSection
-	)
-	default boolean showCrystalHalberdPunish()
-	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(
@@ -370,7 +368,7 @@ public interface DoomMetricsConfig extends Config
 			+ "<br>credited, at debug level. Around a delve's end it also logs the sounds, objects,"
 			+ "<br>menu clicks, interface text, varbits and scripts the game sends."
 			+ "<br>Useful for reporting a problem; leave it off otherwise.",
-		position = 103,
+		position = 101,
 		section = advancedSection
 	)
 	default boolean debugLogging()
