@@ -229,6 +229,12 @@ final class RunDetail
 		return diedOn;
 	}
 
+	/** How a drop the run did not walk out with was lost. */
+	String lostHow()
+	{
+		return diedOn > 0 ? "Lost when you died" : "Lost when the run ended unclaimed";
+	}
+
 	/** The first delve cleared, or 1 for a run that has cleared none. */
 	int shallowest()
 	{

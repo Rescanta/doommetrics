@@ -567,4 +567,23 @@ public class RunDetailTest
 		run.loot().recordLoot(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
 		assertNotEquals(landed, RunDetail.keyFor(run));
 	}
+
+	/** A drop lost to a death says so, rather than that the run was left without claiming it. */
+	@Test
+	public void aLostDropSaysHowItWasLost()
+	{
+		assertEquals("Lost when you died",
+			RunDetail.of(ended(EndReason.DIED, 2)).lostHow());
+		assertEquals("Lost when the run ended unclaimed",
+			RunDetail.of(ended(EndReason.FINISHED, -1)).lostHow());
+	}
+
+	/** A run that cleared delve 1 and then ended as {@code reason} says. */
+	private static DelveRun ended(EndReason reason, int diedOn)
+	{
+		DelveRun run = new DelveRun(Instant.EPOCH, 1, false);
+		run.complete(1, Instant.EPOCH.plusSeconds(60), null);
+		run.end(reason, Instant.EPOCH.plusSeconds(90), diedOn);
+		return run;
+	}
 }

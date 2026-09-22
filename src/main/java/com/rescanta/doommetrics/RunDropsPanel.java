@@ -136,13 +136,13 @@ class RunDropsPanel extends JPanel
 		if (drop.isUnknown())
 		{
 			panel.setToolTipText("<html>" + text + "<br>" + RunDetail.UNKNOWN_UNIQUE_CANDIDATES
-				+ (drop.kept ? "" : "<br>" + DelveChart.lostHow(detail)) + "</html>");
+				+ (drop.kept ? "" : "<br>" + detail.lostHow()) + "</html>");
 		}
 		else
 		{
 			panel.setToolTipText(drop.kept
 				? text
-				: "<html>" + text + "<br>" + DelveChart.lostHow(detail) + "</html>");
+				: "<html>" + text + "<br>" + detail.lostHow() + "</html>");
 		}
 
 		return panel;

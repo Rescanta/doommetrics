@@ -1,14 +1,11 @@
 package com.rescanta.doommetrics;
 
-import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
-import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Stroke;
 import java.awt.event.MouseAdapter;
@@ -17,7 +14,6 @@ import java.awt.event.MouseMotionAdapter;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -25,7 +21,6 @@ import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
 import javax.swing.JPanel;
 import javax.swing.ToolTipManager;
-import net.runelite.api.Constants;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
@@ -69,9 +64,6 @@ class DelveChart extends JPanel
 
 	private static final int RAW_ALPHA = 60;
 
-	/** Past this many delves the counters are drawn as a rolling average over the raw lines. */
-	private static final int TREND_FROM_DELVES = 80;
-
 	private static final int PAD_LEFT = 48;
 	private static final int PAD_RIGHT = 14;
 
@@ -97,25 +89,6 @@ class DelveChart extends JPanel
 
 	private static final int DELVE_TICKS = 10;
 
-	/** Clock-friendly gridline steps, in seconds. */
-	private static final int[] TIME_STEPS = {5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600};
-
-	private static final int ICON_WIDTH = Constants.ITEM_SPRITE_WIDTH;
-	private static final int ICON_HEIGHT = Constants.ITEM_SPRITE_HEIGHT;
-
-	private static final int ICON_GAP = 3;
-
-	/** Past this many rows, icons overlap in the top row. */
-	private static final int MAX_ICON_ROWS = 3;
-
-	private static final float LOST_ALPHA = 0.35f;
-
-	private static final Color DROP_TICK = new Color(0xFF, 0xFF, 0xFF, 50);
-
-	private static final Color STACK_COLOR = new Color(0xFF, 0xFF, 0x00);
-
-	private static final BufferedImage UNKNOWN_ICON = IconArt.unknownUnique(ICON_WIDTH, ICON_HEIGHT);
-
 	private RunDetail detail = RunDetail.empty();
 
 	/** One line per counter, or per heading when grouped. */
@@ -138,11 +111,7 @@ class DelveChart extends JPanel
 	/** The delve at the left edge: the first delve seen for a joined run. */
 	private int shallowest = 1;
 
-	private IntFunction<BufferedImage> itemIcons = itemId -> null;
-
-	private Rectangle[] dropBounds = new Rectangle[0];
-
-	private int iconRows;
+	private final DropLane lane = new DropLane();
 
 	/** Delves averaged over, or 0 for none. */
 	private int window;
@@ -162,7 +131,7 @@ class DelveChart extends JPanel
 			@Override
 			public void mouseMoved(MouseEvent event)
 			{
-				RunDetail.Drop drop = dropAt(event.getX(), event.getY());
+				RunDetail.Drop drop = lane.at(event.getX(), event.getY());
 				hover(drop != null ? drop.level : nearestDelve(event.getX(), event.getY()));
 			}
 		});
@@ -183,7 +152,7 @@ class DelveChart extends JPanel
 	/** Item icons, or null while there is none. Called on every paint. */
 	void setItemIcons(IntFunction<BufferedImage> itemIcons)
 	{
-		this.itemIcons = itemIcons;
+		lane.setItemIcons(itemIcons);
 		repaint();
 	}
 
@@ -197,7 +166,7 @@ class DelveChart extends JPanel
 		this.detail = detail;
 		this.deepest = detail.deepest();
 		this.shallowest = detail.shallowest();
-		this.window = windowFor(detail.delves().size());
+		this.window = ChartMath.windowFor(detail.delves().size());
 		this.hovered = 0;
 		rescale();
 		repaint();
@@ -247,11 +216,11 @@ class DelveChart extends JPanel
 			longest = Math.max(longest, (int) delve.fullTime.getSeconds());
 		}
 
-		countStep = Math.max(1, niceStep(highest, COUNT_TICKS));
-		countMax = topFor(highest, countStep);
+		countStep = Math.max(1, ChartMath.niceStep(highest, COUNT_TICKS));
+		countMax = ChartMath.topFor(highest, countStep);
 
-		timeStep = timeStep(longest, TIME_TICKS);
-		timeMax = topFor(longest, timeStep);
+		timeStep = ChartMath.timeStep(longest, TIME_TICKS);
+		timeMax = ChartMath.topFor(longest, timeStep);
 	}
 
 	private void hover(int level)
@@ -281,14 +250,13 @@ class DelveChart extends JPanel
 
 			if (detail.isEmpty() || getWidth() < PAD_LEFT + PAD_RIGHT + 40)
 			{
-				iconRows = 0;
-				dropBounds = new Rectangle[0];
+				lane.clear();
 				drawEmpty(g2);
 				return;
 			}
 
 			// First: the lane's height decides where the counters begin.
-			layoutDrops();
+			lane.layout(detail.drops(), this::xFor, getWidth(), PAD_TOP);
 
 			drawCountGrid(g2);
 			drawTimeGrid(g2);
@@ -296,7 +264,7 @@ class DelveChart extends JPanel
 			drawTimes(g2);
 			drawCounters(g2);
 			drawTimeLegend(g2);
-			drawDrops(g2);
+			lane.draw(g2, this::xFor, countTop());
 			drawCrosshair(g2);
 			drawHeader(g2);
 		}
@@ -342,12 +310,7 @@ class DelveChart extends JPanel
 
 	private int countTop()
 	{
-		return PAD_TOP + laneHeight();
-	}
-
-	private int laneHeight()
-	{
-		return iconRows * (ICON_HEIGHT + ICON_GAP);
+		return PAD_TOP + lane.height();
 	}
 
 	private int countBottom()
@@ -511,9 +474,9 @@ class DelveChart extends JPanel
 		g2.drawLine(left(), bottom, right(), bottom);
 		g2.drawLine(left(), countBottom(), right(), countBottom());
 
-		int step = niceStep(deepest - shallowest + 1, DELVE_TICKS);
+		int step = ChartMath.niceStep(deepest - shallowest + 1, DELVE_TICKS);
 
-		for (int level = ceilTo(shallowest, step); level <= deepest; level += step)
+		for (int level = ChartMath.ceilTo(shallowest, step); level <= deepest; level += step)
 		{
 			int x = xFor(level);
 			String text = Integer.toString(level);
@@ -650,7 +613,7 @@ class DelveChart extends JPanel
 
 			g2.setColor(color);
 			g2.setStroke(stroke);
-			g2.draw(line(delves, rollingAverage(values, window)));
+			g2.draw(line(delves, ChartMath.rollingAverage(values, window)));
 			return;
 		}
 
@@ -673,24 +636,14 @@ class DelveChart extends JPanel
 
 	private Path2D.Double line(List<RunDetail.Delve> delves, long[] values)
 	{
-		Path2D.Double path = new Path2D.Double();
+		double[] exact = new double[values.length];
 
-		for (int i = 0; i < delves.size(); i++)
+		for (int i = 0; i < values.length; i++)
 		{
-			int x = xFor(delves.get(i).level);
-			int y = yForCount(values[i]);
-
-			if (i == 0)
-			{
-				path.moveTo(x, y);
-			}
-			else
-			{
-				path.lineTo(x, y);
-			}
+			exact[i] = values[i];
 		}
 
-		return path;
+		return line(delves, exact);
 	}
 
 	private Path2D.Double line(List<RunDetail.Delve> delves, double[] values)
@@ -732,38 +685,6 @@ class DelveChart extends JPanel
 			Math.min(alpha, color.getAlpha()));
 	}
 
-	/**
-	 * The rolling average window: 0 below {@link #TREND_FROM_DELVES}, else delves/10 within 9..25.
-	 * Always odd, since the average is centred.
-	 */
-	static int windowFor(int delves)
-	{
-		return delves < TREND_FROM_DELVES ? 0 : (Math.max(9, Math.min(25, delves / 10)) | 1);
-	}
-
-	/** A centred mean over {@code window} delves; the ends average over what is there. */
-	static double[] rollingAverage(long[] values, int window)
-	{
-		double[] out = new double[values.length];
-		int half = window / 2;
-
-		for (int i = 0; i < values.length; i++)
-		{
-			int from = Math.max(0, i - half);
-			int to = Math.min(values.length - 1, i + half);
-			long sum = 0;
-
-			for (int j = from; j <= to; j++)
-			{
-				sum += values[j];
-			}
-
-			out[i] = (double) sum / (to - from + 1);
-		}
-
-		return out;
-	}
-
 	/** Names the time strip's two lines. The counters' legend is the table beside the chart. */
 	private void drawTimeLegend(Graphics2D g2)
 	{
@@ -803,198 +724,11 @@ class DelveChart extends JPanel
 		g2.drawLine(x, stripTop(), x, stripBottom());
 	}
 
-	// -- the drops ----------------------------------------------------------------------------
-
-	/**
-	 * Places every drop's icon over its delve and sizes the lane. Depends on the width, so per
-	 * paint.
-	 */
-	private void layoutDrops()
-	{
-		List<RunDetail.Drop> drops = detail.drops();
-		int[] lefts = new int[drops.size()];
-
-		for (int i = 0; i < drops.size(); i++)
-		{
-			// Kept inside the component so an edge drop isn't cut in half.
-			int centred = xFor(drops.get(i).level) - ICON_WIDTH / 2;
-			lefts[i] = Math.max(0, Math.min(getWidth() - ICON_WIDTH, centred));
-		}
-
-		int[] rows = stackRows(lefts, ICON_WIDTH + ICON_GAP, MAX_ICON_ROWS);
-		iconRows = 0;
-
-		for (int row : rows)
-		{
-			iconRows = Math.max(iconRows, row + 1);
-		}
-
-		// Row 0 is nearest the plot.
-		dropBounds = new Rectangle[drops.size()];
-		int nearest = countTop() - ICON_GAP - ICON_HEIGHT;
-
-		for (int i = 0; i < drops.size(); i++)
-		{
-			int y = nearest - rows[i] * (ICON_HEIGHT + ICON_GAP);
-			dropBounds[i] = new Rectangle(lefts[i], y, ICON_WIDTH, ICON_HEIGHT);
-		}
-	}
-
-	/**
-	 * The lowest lane row each icon fits in without overlap, or the last row when none has room.
-	 */
-	static int[] stackRows(int[] lefts, int spacing, int maxRows)
-	{
-		Integer[] order = new Integer[lefts.length];
-
-		for (int i = 0; i < order.length; i++)
-		{
-			order[i] = i;
-		}
-
-		Arrays.sort(order, (a, b) -> Integer.compare(lefts[a], lefts[b]));
-
-		int[] rows = new int[lefts.length];
-		int[] free = new int[maxRows];
-		Arrays.fill(free, Integer.MIN_VALUE);
-
-		for (int i : order)
-		{
-			int row = maxRows - 1;
-
-			for (int r = 0; r < maxRows; r++)
-			{
-				if (lefts[i] >= free[r])
-				{
-					row = r;
-					break;
-				}
-			}
-
-			rows[i] = row;
-			free[row] = lefts[i] + spacing;
-		}
-
-		return rows;
-	}
-
-	private void drawDrops(Graphics2D g2)
-	{
-		List<RunDetail.Drop> drops = detail.drops();
-
-		// Hairlines first, so no icon is crossed out by another's line.
-		g2.setStroke(HAIRLINE);
-		g2.setColor(DROP_TICK);
-
-		for (int i = 0; i < drops.size(); i++)
-		{
-			Rectangle at = dropBounds[i];
-			int x = xFor(drops.get(i).level);
-			g2.drawLine(x, at.y + at.height, x, countTop());
-		}
-
-		for (int i = 0; i < drops.size(); i++)
-		{
-			drawDrop(g2, drops.get(i), dropBounds[i]);
-		}
-	}
-
-	private void drawDrop(Graphics2D g2, RunDetail.Drop drop, Rectangle at)
-	{
-		Composite composite = g2.getComposite();
-
-		if (!drop.kept)
-		{
-			g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, LOST_ALPHA));
-		}
-
-		BufferedImage image = drop.isUnknown() ? UNKNOWN_ICON : itemIcons.apply(drop.itemId);
-
-		if (image != null && image.getWidth() > 0 && image.getHeight() > 0)
-		{
-			// Never enlarged: sprites are pixel art.
-			double scale = Math.min(1, Math.min((double) at.width / image.getWidth(),
-				(double) at.height / image.getHeight()));
-			int width = (int) Math.round(image.getWidth() * scale);
-			int height = (int) Math.round(image.getHeight() * scale);
-
-			g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-				RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-			g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-			g2.drawImage(image, at.x + (at.width - width) / 2, at.y + (at.height - height) / 2,
-				width, height, null);
-		}
-		else
-		{
-			// No icon to draw (no game): a box with the item's initial.
-			FontMetrics metrics = g2.getFontMetrics();
-			String initial = drop.name.isEmpty() ? "?" : drop.name.substring(0, 1);
-
-			g2.setStroke(HAIRLINE);
-			g2.setColor(LABEL_COLOR);
-			g2.drawRoundRect(at.x + 2, at.y + 1, at.width - 5, at.height - 3, 6, 6);
-			g2.drawString(initial, at.x + (at.width - metrics.stringWidth(initial)) / 2,
-				at.y + (at.height + metrics.getAscent()) / 2 - 1);
-		}
-
-		if (drop.quantity > 1)
-		{
-			// Drawn where and how the game draws a stack's count.
-			String count = Integer.toString(drop.quantity);
-			int baseline = at.y + g2.getFontMetrics().getAscent() - 2;
-
-			g2.setColor(Color.BLACK);
-			g2.drawString(count, at.x + 1, baseline + 1);
-			g2.setColor(STACK_COLOR);
-			g2.drawString(count, at.x, baseline);
-		}
-
-		g2.setComposite(composite);
-	}
-
-	/** The drop whose icon is under the pointer, or null for none. */
-	private RunDetail.Drop dropAt(int px, int py)
-	{
-		List<RunDetail.Drop> drops = detail.drops();
-
-		// Last drawn is on top.
-		for (int i = Math.min(drops.size(), dropBounds.length) - 1; i >= 0; i--)
-		{
-			if (dropBounds[i].contains(px, py))
-			{
-				return drops.get(i);
-			}
-		}
-
-		return null;
-	}
-
 	@Override
 	public String getToolTipText(MouseEvent event)
 	{
-		RunDetail.Drop drop = dropAt(event.getX(), event.getY());
-
-		if (drop == null)
-		{
-			return null;
-		}
-
-		if (drop.isUnknown())
-		{
-			return "<html>" + drop.name + " - delve " + drop.level + "<br>"
-				+ RunDetail.UNKNOWN_UNIQUE_CANDIDATES
-				+ (drop.kept ? "" : "<br>" + lostHow(detail)) + "</html>";
-		}
-
-		String name = drop.quantity > 1 ? drop.quantity + " x " + drop.name : drop.name;
-		return drop.kept
-			? name + " - delve " + drop.level
-			: "<html>" + name + " - delve " + drop.level + "<br>" + lostHow(detail) + "</html>";
-	}
-
-	static String lostHow(RunDetail detail)
-	{
-		return detail.diedOn() > 0 ? "Lost when you died" : "Lost when the run ended unclaimed";
+		RunDetail.Drop drop = lane.at(event.getX(), event.getY());
+		return drop == null ? null : DropLane.tooltip(drop, detail);
 	}
 
 	/** The delve nearest the pointer, or 0 outside both plots. */
@@ -1016,62 +750,5 @@ class DelveChart extends JPanel
 		double fraction = (double) (px - left()) / Math.max(1, right() - left());
 		int level = shallowest + (int) Math.round(fraction * (deepest - shallowest));
 		return Math.max(shallowest, Math.min(deepest, level));
-	}
-
-	// -- axis arithmetic --------------------------------------------------------------------
-
-	/**
-	 * Where an axis stops: the next gridline strictly above {@code highest}, so a line on a round
-	 * number isn't drawn along the top edge.
-	 */
-	static int topFor(int highest, int step)
-	{
-		int top = ceilTo(highest, step);
-		return top <= highest ? top + step : Math.max(step, top);
-	}
-
-	/** The next multiple of {@code step} at or above {@code value}. */
-	static int ceilTo(int value, int step)
-	{
-		if (step <= 0 || value <= 0)
-		{
-			return 0;
-		}
-
-		int over = value % step;
-		return over == 0 ? value : value + step - over;
-	}
-
-	/**
-	 * The smallest 1-2-5 step that divides {@code span} into at most {@code maxTicks} intervals.
-	 */
-	static int niceStep(int span, int maxTicks)
-	{
-		for (int decade = 1; ; decade *= 10)
-		{
-			for (int mantissa : new int[]{1, 2, 5})
-			{
-				int step = mantissa * decade;
-
-				if (span / step <= maxTicks)
-				{
-					return step;
-				}
-			}
-		}
-	}
-
-	/** {@link #niceStep} for a clock, off {@link #TIME_STEPS}. */
-	static int timeStep(int spanSeconds, int maxTicks)
-	{
-		for (int step : TIME_STEPS)
-		{
-			if (spanSeconds / step <= maxTicks)
-			{
-				return step;
-			}
-		}
-
-		return TIME_STEPS[TIME_STEPS.length - 1];
 	}
 }
