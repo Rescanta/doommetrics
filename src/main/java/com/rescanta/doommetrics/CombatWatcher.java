@@ -19,6 +19,7 @@ import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
+import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 
@@ -57,8 +58,9 @@ class CombatWatcher
 	/** Held from its spawn; the same NPC across its standing, shielded and burrowed forms. */
 	private NPC boss;
 
+	private final SpecEnergy specEnergy = new SpecEnergy();
+
 	// Last seen values, so a change can be read as a difference.
-	private int specEnergy;
 	private int prayerPoints;
 	private int hitpoints;
 
@@ -85,7 +87,7 @@ class CombatWatcher
 	{
 		stopTracking();
 		boss = null;
-		specEnergy = 0;
+		specEnergy.forget();
 		prayerPoints = 0;
 		hitpoints = 0;
 		prayerRegeneration.reset();
@@ -99,10 +101,16 @@ class CombatWatcher
 		punishTracker.reset();
 	}
 
-	/** A spec fired on the way in must not swallow the first heal of the trip. */
+	/**
+	 * A spec fired on the way in must not swallow the first heal of the trip. The levels are read
+	 * afresh: after the plugin is turned on, or a run is carried on, the energy is only sent again
+	 * once it changes, and at full energy that change is the first spec - read against zero, it
+	 * would look like a rise and go uncounted.
+	 */
 	void runStarted()
 	{
 		stopTracking();
+		specEnergy.seed(client.getVarpValue(VarPlayerID.SA_ENERGY));
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
 	}
@@ -445,10 +453,9 @@ class CombatWatcher
 	/** A drop in special attack energy is a spec. Tracked outside runs too. */
 	void specEnergyChanged(int energy)
 	{
-		int was = specEnergy;
-		specEnergy = energy;
+		boolean spent = specEnergy.spent(energy);
 
-		if (run.get() == null || energy >= was)
+		if (run.get() == null || !spent)
 		{
 			return;
 		}
