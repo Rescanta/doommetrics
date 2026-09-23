@@ -59,25 +59,29 @@ what the game posts in chat, and what the run detail's time strip draws as the k
 
 ## Overlay
 
-While a run is going:
+While a run is going, the delve is the one large figure, with the clock beside it and the rest
+in lines underneath:
 
 ```
 Doom Metrics
-Delve             14
-Time           21:40
+Delve           Time
+14             21:40
 Deep pace    40.0/hr
 ```
 
 Once it ends the panel stays up for 30 minutes rather than vanishing, so the numbers are still
-there when you get back from your gravestone:
+there when you get back from your gravestone. A death puts the delve you died on in red where the
+delve was:
 
 ```
 Doom Metrics
-Died on      Delve 7
+Died on         Time
+7              11:17
 Cleared            6
-Time           11:17
 Deep pace          -
 ```
+
+With the delve number switched off, the clock takes the large place instead.
 
 The time shown for a finished run is the time through the last delve you cleared, so it always
 matches the pace beside it. Right click the overlay and pick **Clear** to dismiss it early, or set
@@ -128,12 +132,16 @@ longer this run has to go; `Both` shows the two.
 
 ```
 Doom Metrics
-Delve             14
-Time           21:40
+Delve           Time
+14             21:40
+[=====---------------]
 Deep pace    40.0/hr
 Target            50
 Total        1:15:40
 ```
+
+The bar under the large figures fills as delves are cleared towards the target, and turns green
+once it is reached.
 
 The prediction is what your delve 9+ average says the delves between here and there will take, so
 it reads `-` until this run has cleared a delve 9. The delve in progress is charged against it as it
@@ -282,29 +290,33 @@ A pace of `-` means there is nothing to average yet - Deep pace needs a delve 9 
 
 ## Side panel
 
-Behind the chevron icon, top to bottom:
+Behind the chevron icon, a stack of cards, top to bottom:
 
-- **Current run** - the same rows as the overlay, so the numbers are somewhere other than over the
-  game world.
-- **This session** - how long this sitting has been going, its deep pace, how many deep delves it
+- **Current run** - the same figures as the overlay, so the numbers are somewhere other than over
+  the game world: the delve and the clock large, a bar filling towards the target delve when one is
+  set, and the pace and predictions as tiles under them. A pill on the card's title says whether
+  the run is live, ended or died.
+- **Session & lifetime** - a tile each. **Session** is how long this sitting has been going, its deep pace, how many deep delves it
   has completed. A session lasts until you close the client, log
   in as a different character, or press **Reset session**; logging out and back in carries it on,
   and its length does not count the time spent logged out. After half an hour without a run the
   rows go blank so they do not look current, and the next run brings the session back.
-- **Lifetime** - the same rate and delve count over everything this character has ever done.
-  Both columns, and the lifetime combat counters under them, are added to as each delve is
+  **Lifetime** is the same rate and delve count over everything this character has ever done.
+  A bar under each rate is filled against the faster of the two, so the longer bar says whether
+  tonight is beating your usual. Both tiles, and the lifetime combat counters under them, are added to as each delve is
   cleared rather than when the run ends, so closing the client mid-run keeps every delve cleared
   before it. A run picked up part way into a delve leaves that clear out of the rates, since
   nobody saw when that delve began.
-- **Combat** - what your gear gave back, a row per source under the heading it belongs to, with a
-  meter behind each figure filled against the largest figure counted in the same unit. Each heading
-  carries its group's total - everything counted under it, including the sources with no row - so
-  the block answers how much sustain there was as well as which source found it. The
-  **Session** and **Lifetime** tabs put the same rows on this sitting's tally and on the
-  character's; the meters refill against whichever is on show, so each tab says which source is
-  carrying it on its own terms. The lifetime tab is worth reading between runs - it is the one
-  figure here that does not go quiet when a sitting ends. Click a heading to fold its rows away
-  and leave just its total; the fold is remembered across restarts.
+- **Combat** - what your gear gave back. Three tiles lead it with each heading's total -
+  everything counted under it, including the sources with no row - so the card answers how much
+  sustain there was before it says which source found it. Under them is a row per source, beneath
+  the heading it belongs to, with a slim bar under each figure filled against the largest figure
+  counted in the same unit. The **Session** and **Lifetime** switch on the card's title puts the
+  same figures on this sitting's tally and on the character's; the bars refill against whichever is
+  on show, so each says which source is carrying it on its own terms. Lifetime is worth reading
+  between runs - it is the one figure here that does not go quiet when a sitting ends. Click a
+  heading to fold its rows away; its total stays in the tile, and the fold is remembered across
+  restarts.
 - **Milestones** - the lifetime table, below.
 - **Open run detail** - this run, delve by delve, in a window of its own.
 - **Reset session** - starts the session over and drops the run in progress, after asking, letting
@@ -367,21 +379,25 @@ quietly fails to set one.
 finished - broken down delve by delve. A side panel has no room for a chart; this does.
 
 ```
-This run              Per delve
-Delve      Time       Counted per delve
-  24      21:02       140 |            ZCB /\   /\
-Deep pace  58.1/hr        |  __       /  \_/  \
-                       70 | /  \_ Barrage      \
-Counters                  |/     \__/‾‾\__/‾‾\__\
-  Sources | Grouped     0 |__Eldritch__________
-             This run     |
-Healing         1,035     | 2:00
- ■ Blood barrage  806     | ▁▂▃▃▄▄▅▅▆▆▇▇  Full time
- ■ Ancient godsword 58    | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
- ■ Blowpipe        47   0:00
- ...                      1     5    10    15
-                                  Delve
+[Delve] [Time ] [Deep pace] [Target ] [Total] [Healing] [Prayer] [Damage]
+[ 24  ] [21:02] [ 58.1/hr ] [23 / 50] [48:36] [ 1,035 ] [  210 ] [ 2,925]
+
+Per delve                                      Counters  Sources | Grouped
+Counted per delve                                                This run
+140 |            ZCB /\   /\                    | Healing           1,035
+    |  __       /  \_/  \                      o Blood barrage       806
+ 70 | /  \_ Barrage      \                     o Ancient godsword     58
+    |/     \__/--\__/--\__\                    o Blowpipe             47
+  0 |__Eldritch__________                     ...
+    |
+2:00| Full time                                Drops
+    | Kill time                                    Delve 7
+0:00  1     5    10    15                          Delve 10
+                 Delve
 ```
+
+The run's figures run across the top as tiles, the three counter headings' totals for the run
+among them, with the chart as the main card under them and its legend and the drops beside it.
 
 The upper plot is the counters, a line each, over the delves the run has completed. They share one
 scale because none of them clears a few hundred on a single delve, so a barrage heal and a Zaryte
