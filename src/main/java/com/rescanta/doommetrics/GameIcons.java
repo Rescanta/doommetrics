@@ -48,6 +48,13 @@ final class GameIcons implements Icons
 		{
 			askItem(itemId);
 		}
+
+		for (CombatMetric.Unit unit : CombatMetric.Unit.values())
+		{
+			askSprite(IconArt.spriteFor(unit));
+		}
+
+		askSprite(IconArt.BOSS);
 	}
 
 	@Override
@@ -74,6 +81,20 @@ final class GameIcons implements Icons
 	{
 		askItem(itemId);
 		return smallItems.get(itemId);
+	}
+
+	@Override
+	public BufferedImage sprite(int spriteId)
+	{
+		askSprite(spriteId);
+		return sprites.get(spriteId);
+	}
+
+	@Override
+	public BufferedImage smallSprite(int spriteId)
+	{
+		askSprite(spriteId);
+		return smallSprites.get(spriteId);
 	}
 
 	private BufferedImage picture(CombatMetric metric, Map<Integer, BufferedImage> byItem,
@@ -111,7 +132,7 @@ final class GameIcons implements Icons
 
 	private void askSprite(int spriteId)
 	{
-		if (!askedSprites.add(spriteId))
+		if (spriteId < 0 || !askedSprites.add(spriteId))
 		{
 			return;
 		}

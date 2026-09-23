@@ -1,6 +1,7 @@
 package com.rescanta.doommetrics;
 
 import java.awt.image.BufferedImage;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import javax.swing.SwingUtilities;
@@ -11,6 +12,9 @@ import javax.swing.SwingUtilities;
  */
 class PanelFeed
 {
+	/** A sitting shorter than this has no resets-per-hour yet: one quick reset is not a rate. */
+	private static final Duration MIN_RATE_SPAN = Duration.ofMinutes(10);
+
 	private final DoomMetricsPlugin plugin;
 	private final DoomMetricsConfig config;
 	private final Totals totals;
@@ -50,6 +54,7 @@ class PanelFeed
 		panel = new DoomMetricsPanel(this::openDetailWindow, onReset);
 		panel.setCombatFolding(GroupHeading.parseFolded(config.foldedCombatGroups()),
 			folded -> config.foldedCombatGroups(GroupHeading.formatFolded(folded)));
+		panel.setHideEmpty(config.hideEmptyCounters());
 		return panel;
 	}
 
@@ -83,12 +88,19 @@ class PanelFeed
 		}
 	}
 
-	/** The overlay reads the setting every frame; the window only when told. */
+	/** The overlay reads the setting every frame; the panel and the window only when told. */
 	void hideEmptyChanged()
 	{
 		boolean hideEmpty = config.hideEmptyCounters();
+		DoomMetricsPanel shown = panel;
+
 		SwingUtilities.invokeLater(() ->
 		{
+			if (shown != null)
+			{
+				shown.setHideEmpty(hideEmpty);
+			}
+
 			if (detailWindow != null)
 			{
 				detailWindow.setHideEmpty(hideEmpty);
@@ -123,8 +135,12 @@ class PanelFeed
 		Instant now = Instant.now();
 		boolean showSession = totals.sessionShown(plugin.isRunInProgress(), now);
 		DoomMetricsPanel.Stats stats = totals.stats(showSession, now);
+		ResetSummary resets = milestones.summary();
+		Double resetsPerHour = showSession ? perHour(resets.sessionResets, totals.sessionElapsed(now))
+			: null;
 		String key = (live == null ? "" : live.key())
 			+ "|" + stats.key() + "|" + totals.combatKey(showSession)
+			+ "|" + resets.key() + "|" + DoomFormat.pace(resetsPerHour)
 			+ (detailLive == live ? "" : "|" + (detailLive == null ? "" : detailLive.key()));
 
 		if (key.equals(lastLiveKey))
@@ -142,6 +158,7 @@ class PanelFeed
 			target.setLive(live);
 			target.setStats(stats);
 			target.setCombat(combat, lifetimeShown);
+			target.setResets(resets, resetsPerHour);
 
 			windowLive = detailLive;
 
@@ -152,8 +169,20 @@ class PanelFeed
 		});
 	}
 
+	/** A count over a sitting as an hourly rate, or null while the sitting is too short to say. */
+	private static Double perHour(int count, Duration elapsed)
+	{
+		if (count == 0 || elapsed == null || elapsed.compareTo(MIN_RATE_SPAN) < 0)
+		{
+			return null;
+		}
+
+		return count * 3600.0 / elapsed.getSeconds();
+	}
+
 	void refreshTable()
 	{
+
 		DoomMetricsPanel target = panel;
 
 		if (target == null)

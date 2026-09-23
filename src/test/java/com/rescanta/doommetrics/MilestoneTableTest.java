@@ -114,7 +114,127 @@ public class MilestoneTableTest
 		assertTrue(table.isEmpty());
 	}
 
-	private static List<Integer> rows(int from, int to)
+	@Test
+	public void aDeathCountsTowardsTheMilestoneBeingFoughtFor()
+	{
+		assertEquals(10, MilestoneTable.milestoneTowards(1));
+		assertEquals(10, MilestoneTable.milestoneTowards(10));
+		assertEquals(100, MilestoneTable.milestoneTowards(91));
+		assertEquals(100, MilestoneTable.milestoneTowards(100));
+		assertEquals(110, MilestoneTable.milestoneTowards(101));
+	}
+
+	/** Dying on the target itself is short of it; dying past it is not. */
+	@Test
+	public void diedShortCountsEveryDeathUpToAndOnTheTarget()
+	{
+		MilestoneTable table = new MilestoneTable();
+		table.died(3);
+		table.died(57);
+		table.died(100);
+		table.died(101);
+
+		assertEquals(3, table.summary(100, 0).diedShort);
+		assertEquals(1, table.summary(10, 0).diedShort);
+	}
+
+	@Test
+	public void theReachRateIsClearsCountedOverRunsStarted()
+	{
+		MilestoneTable table = new MilestoneTable();
+
+		for (int i = 0; i < 4; i++)
+		{
+			table.runStarted();
+		}
+
+		table.record(100, 60_000);
+		table.record(100, 62_000);
+		table.record(100, 64_000);
+
+		ResetSummary summary = table.summary(100, 2);
+		assertEquals(4, summary.runs);
+		assertEquals(3, summary.reached);
+		assertEquals(0.75, summary.reachRate(), 1e-9);
+		assertEquals(62_000, summary.averageTicks);
+		assertEquals(60_000, summary.bestTicks);
+		assertEquals(2, summary.sessionResets);
+	}
+
+	/**
+	 * Kill counts from before the reset counters began are kept but not set against runs, which
+	 * those counters never saw.
+	 */
+	@Test
+	public void clearsFromBeforeTheCountersDoNotInflateTheReachRate()
+	{
+		MilestoneTable.Saved old = new MilestoneTable.Saved();
+		MilestoneTable.Row row = new MilestoneTable.Row();
+		row.kc = 500;
+		row.pbTicks = 55_000;
+		old.rows = new java.util.TreeMap<>();
+		old.rows.put(100, row);
+
+		MilestoneTable table = new MilestoneTable();
+		table.replaceAll(old);
+		table.runStarted();
+		table.record(100, 61_000);
+
+		ResetSummary summary = table.summary(100, 0);
+		assertEquals(501, table.getRows().get(100).kc);
+		assertEquals(1, summary.reached);
+		assertEquals(1.0, summary.reachRate(), 1e-9);
+		assertEquals(61_000, summary.averageTicks);
+		assertEquals(55_000, summary.bestTicks);
+	}
+
+	/**
+	 * A joined run can set a best and adds to the kill count, but it may be a trip already counted,
+	 * picked up again after a reset, so it stays out of the reach rate and the average.
+	 */
+	@Test
+	public void aJoinedRunCountsTowardsKcAndBestButNotTheCard()
+	{
+		MilestoneTable table = new MilestoneTable();
+		table.record(100, 70_000, true);
+		table.record(100, 65_000, false);
+
+		ResetSummary summary = table.summary(100, 0);
+		assertEquals(2, table.getRows().get(100).kc);
+		assertEquals(65_000, summary.bestTicks);
+		assertEquals(1, summary.reached);
+		assertEquals(70_000, summary.averageTicks);
+	}
+
+	@Test
+	public void theRecentAverageKeepsTheLatestTenAndStartsOverForANewTarget()
+	{
+		MilestoneTable table = new MilestoneTable();
+
+		for (int i = 1; i <= 12; i++)
+		{
+			table.recordRecent(100, i * 1_000);
+		}
+
+		ResetSummary summary = table.summary(100, 0);
+		assertEquals(MilestoneTable.RECENT, summary.recentCount);
+		// 3,000 to 12,000.
+		assertEquals(7_500, summary.recentTicks);
+
+		assertEquals("another target has no recent times", 0, table.summary(50, 0).recentCount);
+
+		table.recordRecent(50, 4_000);
+		assertEquals(1, table.summary(50, 0).recentCount);
+		assertEquals("the old target's list is gone", 0, table.summary(100, 0).recentCount);
+	}
+
+	@Test
+	public void nothingCountedHasNoReachRate()
+	{
+		assertEquals(-1, new MilestoneTable().summary(100, 0).reachRate(), 1e-9);
+	}
+
+		private static List<Integer> rows(int from, int to)
 	{
 		List<Integer> expected = new ArrayList<>();
 

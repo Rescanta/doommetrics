@@ -11,6 +11,7 @@ import java.awt.font.GlyphVector;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.awt.image.RescaleOp;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.SpriteID;
 import net.runelite.client.util.ImageUtil;
@@ -20,6 +21,9 @@ final class IconArt
 {
 	/** A line of text high. */
 	static final int SMALL = 16;
+
+	/** The boss's own icon, from the hiscores and the collection log. */
+	static final int BOSS = SpriteID.IconBoss25x25.DOOM_OF_MOKHAIOTL;
 
 	/** The gold of the glowing hole, which is the one thing an unknown unique is known by. */
 	private static final Color GLOW = new Color(0xFF, 0xC8, 0x40);
@@ -121,6 +125,22 @@ final class IconArt
 		}
 	}
 
+	/** The skill whose icon stands for a unit: what the figures are counted in. */
+	static int spriteFor(CombatMetric.Unit unit)
+	{
+		switch (unit)
+		{
+			case HITPOINTS:
+				return SpriteID.Staticons.HITPOINTS;
+
+			case PRAYER:
+				return SpriteID.Staticons.PRAYER;
+
+			default:
+				return SpriteID.Staticons.STRENGTH;
+		}
+	}
+
 	/**
 	 * Trims a picture to what is drawn in it, then shrinks it to a {@code box} square. Never
 	 * enlarges.
@@ -159,6 +179,15 @@ final class IconArt
 		graphics.drawImage(image, 0, 0, null);
 		graphics.dispose();
 		return faded;
+	}
+
+	/** A picture with its colours brought down to {@code brightness}, its shape kept. */
+	static BufferedImage darken(BufferedImage image, float brightness)
+	{
+		BufferedImage dark = copy(image);
+		new RescaleOp(new float[]{brightness, brightness, brightness, 1f}, new float[4], null)
+			.filter(dark, dark);
+		return dark;
 	}
 
 	/**

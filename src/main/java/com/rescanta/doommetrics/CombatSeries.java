@@ -44,7 +44,7 @@ interface CombatSeries
 	 */
 	List<String> sources();
 
-	/** The picture drawn beside the name, or null. Headings have none. */
+	/** The picture drawn beside the name, or null: a weapon or spell, or a heading's skill. */
 	default BufferedImage icon(Icons icons)
 	{
 		return null;

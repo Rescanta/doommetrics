@@ -204,7 +204,11 @@ class Totals
 	}
 
 	/** Whether the logged in character is the one the run was started on. */
-	private boolean lifetimeBelongsToRun()
+	/**
+	 * Whether what the run in progress banks may be written to the character logged in: false once
+	 * the client has come back as another one, or while there is none.
+	 */
+	boolean lifetimeBelongsToRun()
 	{
 		String profile = runProfile.get();
 		return totalsStore.hasProfile()
@@ -257,6 +261,12 @@ class Totals
 			lifetime.isEmpty() ? null : DoomFormat.count(lifetime.deep),
 			live == null ? null : live.kph(),
 			lifetime.kph());
+	}
+
+	/** How long this sitting has been going, or null before its first run. */
+	Duration sessionElapsed(Instant now)
+	{
+		return sessionClock.elapsed(now);
 	}
 
 	private String sessionLength(Instant now)

@@ -608,6 +608,26 @@ final class PreviewScene
 		return rows(50);
 	}
 
+	/** The target every scene aims for, which is also the resets card's milestone. */
+	private static final int RESET_TARGET = 50;
+
+	/**
+	 * The resets card: a character a few hundred runs in, or nothing at all for one whose table is
+	 * empty.
+	 */
+	ResetSummary resets()
+	{
+		if (rows.isEmpty())
+		{
+			return new ResetSummary(RESET_TARGET, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+		}
+
+		return new ResetSummary(RESET_TARGET, 297, 184, 41, 12_900, 11_600, 10, 12_450, 6, 3);
+	}
+
+	/** Resets an hour for the card's session line. */
+	static final double RESETS_PER_HOUR = 2.1;
+
 	/** A milestone row every ten delves down to {@code deepest}, one of them freshly beaten. */
 	private static List<MilestoneTablePanel.Row> rows(int deepest)
 	{
@@ -616,7 +636,8 @@ final class PreviewScene
 
 		for (int delve = MilestoneTable.INTERVAL; delve <= deepest; delve += MilestoneTable.INTERVAL)
 		{
-			rows.add(new MilestoneTablePanel.Row(delve, kc, 1_100 + delve * 210, delve == 30));
+			rows.add(new MilestoneTablePanel.Row(delve, kc, 1_100 + delve * 210, delve == 30,
+				delve == RESET_TARGET));
 			kc = Math.max(1, kc / 3);
 		}
 

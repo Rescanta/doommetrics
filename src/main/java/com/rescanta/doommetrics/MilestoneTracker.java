@@ -2,17 +2,22 @@ package com.rescanta.doommetrics;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.gameval.VarPlayerID;
 
-/** Keeps the character's milestone table: banks milestone clears, loads and seeds it. */
+/**
+ * Keeps the character's milestone table: banks milestone clears, and the runs, deaths and uniques
+ * the resets card counts; loads and seeds it.
+ */
 @Slf4j
 class MilestoneTracker
 {
@@ -24,25 +29,43 @@ class MilestoneTracker
 
 	private final MilestoneTable milestones = new MilestoneTable();
 
+	/** The milestone runs are being reset at: the target delve, rounded down to a row. */
+	private final IntSupplier resetTarget;
+
+	/**
+	 * Whether the run in progress belongs to the character logged in. A run held open across a
+	 * lost connection can end after the client comes back as an alt, and saving then would write
+	 * this character's table over the alt's.
+	 */
+	private final BooleanSupplier belongsToRun;
+
 	/** Milestones whose personal best has been beaten since the client started. */
 	private final Set<Integer> improvedThisSession = new HashSet<>();
 
-	MilestoneTracker(Client client, MilestoneStore milestoneStore, Runnable onChanged)
+	/** Clears of each milestone this session, by delve. */
+	private final Map<Integer, Integer> sessionClears = new HashMap<>();
+
+	MilestoneTracker(Client client, MilestoneStore milestoneStore, IntSupplier resetTarget,
+		BooleanSupplier belongsToRun, Runnable onChanged)
 	{
 		this.client = client;
 		this.milestoneStore = milestoneStore;
+		this.resetTarget = resetTarget;
+		this.belongsToRun = belongsToRun;
 		this.onChanged = onChanged;
 	}
 
 	void reset()
 	{
-		milestones.replaceAll(Collections.emptyMap());
+		milestones.replaceAll(null);
 		improvedThisSession.clear();
+		sessionClears.clear();
 	}
 
 	void forgetSession()
 	{
 		improvedThisSession.clear();
+		sessionClears.clear();
 	}
 
 	/** Reads the logged in character's table; while logged out the last one stays on show. */
@@ -53,31 +76,86 @@ class MilestoneTracker
 			return;
 		}
 
-		Map<Integer, MilestoneTable.Row> loaded = milestoneStore.load();
-		milestones.replaceAll(loaded);
+		milestones.replaceAll(milestoneStore.load());
+		// Another character's session: its resets are not this one's.
 		improvedThisSession.clear();
+		sessionClears.clear();
 		seedFromDeepestLevel();
 		onChanged.run();
 	}
 
 	void recordClear(int level, DelveRun run)
 	{
-		if (!MilestoneTable.isMilestone(level))
+		if (!MilestoneTable.isMilestone(level) || !belongsToRun.getAsBoolean())
 		{
 			return;
 		}
 
 		Duration elapsed = run.pbElapsed();
 		int ticks = elapsed == null ? 0 : DoomFormat.toTicks(elapsed);
+		// A joined run's time is an upper bound: fair as a best it failed to beat, not as a run.
+		boolean whole = !run.isPartial();
 
-		if (milestones.record(level, ticks))
+		if (milestones.record(level, ticks, whole))
 		{
 			improvedThisSession.add(level);
 			log.debug("Delve {} personal best is now {} ticks", level, ticks);
 		}
 
+		if (whole && ticks > 0 && level == resetTarget.getAsInt())
+		{
+			milestones.recordRecent(level, ticks);
+		}
+
+		sessionClears.merge(level, 1, Integer::sum);
 		milestoneStore.save(milestones);
 		onChanged.run();
+	}
+
+	/**
+	 * Counts a run towards the resets card's reach rate - only one watched from delve 1. A joined
+	 * run is often a trip already counted, picked up again after a session reset or the plugin
+	 * being turned off before its first clear, and its clears stay out of the rate to match.
+	 */
+	void runStarted(boolean partial)
+	{
+		if (partial || !belongsToRun.getAsBoolean())
+		{
+			return;
+		}
+
+		milestones.runStarted();
+		milestoneStore.save(milestones);
+	}
+
+	/**
+	 * Counts how a run ended towards the resets card.
+	 *
+	 * @param diedOn the delve died on, or 0 for a run that ended any other way
+	 * @param uniques how many uniques it claimed
+	 */
+	void runEnded(int diedOn, int uniques)
+	{
+		if (!belongsToRun.getAsBoolean())
+		{
+			return;
+		}
+
+		if (diedOn > 0)
+		{
+			milestones.died(diedOn);
+		}
+
+		milestones.claimed(uniques);
+		milestoneStore.save(milestones);
+		onChanged.run();
+	}
+
+	/** The resets card's figures, for runs aimed at the current target. */
+	ResetSummary summary()
+	{
+		int target = resetTarget.getAsInt();
+		return milestones.summary(target, sessionClears.getOrDefault(target, 0));
 	}
 
 	/** Pre-fills the reached milestone rows from the game's deepest delve, once per character. */
@@ -110,8 +188,9 @@ class MilestoneTracker
 	List<MilestoneTablePanel.Row> rows()
 	{
 		List<MilestoneTablePanel.Row> rows = new ArrayList<>();
+		int target = resetTarget.getAsInt();
 		milestones.getRows().forEach((delve, row) -> rows.add(new MilestoneTablePanel.Row(
-			delve, row.kc, row.pbTicks, improvedThisSession.contains(delve))));
+			delve, row.kc, row.pbTicks, improvedThisSession.contains(delve), delve == target)));
 		return rows;
 	}
 }

@@ -34,6 +34,18 @@ interface Icons
 		{
 			return null;
 		}
+
+		@Override
+		public BufferedImage sprite(int spriteId)
+		{
+			return null;
+		}
+
+		@Override
+		public BufferedImage smallSprite(int spriteId)
+		{
+			return null;
+		}
 	};
 
 	/** What a counter counts, pictured at the size the game draws it - see {@link IconArt}. */
@@ -47,4 +59,22 @@ interface Icons
 
 	/** The same, shrunk to stand in for the item's name. */
 	BufferedImage smallItem(int itemId);
+
+	/** An interface sprite as the game draws it - a skill icon, the boss's icon. */
+	BufferedImage sprite(int spriteId);
+
+	/** The same, shrunk to a line of text high. */
+	BufferedImage smallSprite(int spriteId);
+
+	/** The skill icon a unit is pictured by, a line of text high - see {@link IconArt#spriteFor}. */
+	default BufferedImage smallUnit(CombatMetric.Unit unit)
+	{
+		return smallSprite(IconArt.spriteFor(unit));
+	}
+
+	/** The boss's own icon, which stands for the plugin wherever the game's pictures are used. */
+	default BufferedImage boss()
+	{
+		return sprite(IconArt.BOSS);
+	}
 }
