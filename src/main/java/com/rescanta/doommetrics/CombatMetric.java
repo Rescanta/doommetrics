@@ -97,6 +97,13 @@ enum CombatMetric implements CombatSeries
 			return series;
 		}
 
+		/** The unit's skill icon: a sum has no one weapon, but it has one unit. */
+		@Override
+		public BufferedImage icon(Icons icons)
+		{
+			return icons.smallUnit(unit);
+		}
+
 		/** Every counter under this heading, the catch-alls included. */
 		@Override
 		public long amount(CombatTotals totals)

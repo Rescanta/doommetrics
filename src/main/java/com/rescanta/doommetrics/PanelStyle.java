@@ -3,8 +3,13 @@ package com.rescanta.doommetrics;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
@@ -16,6 +21,8 @@ import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
 import net.runelite.client.ui.FontManager;
+import net.runelite.client.ui.components.materialtabs.MaterialTab;
+import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
  * The shared look of the side panel and the detail window: rounded cards on the panel, each led by
@@ -51,6 +58,9 @@ final class PanelStyle
 	/** Between one card and the next. */
 	static final int SECTION_GAP = 2 * GRID;
 
+	/** Between two rows of the same card. */
+	static final int ROW_GAP = 3;
+
 	/** Corner diameter of a card; tiles and pills take half of it. */
 	static final int ARC = 10;
 
@@ -60,6 +70,12 @@ final class PanelStyle
 
 	/** How tall a slim meter under a row is. */
 	static final int METER_HEIGHT = 3;
+
+	/** Short of the whole, so the largest figure reads as a bar rather than a recoloured row. */
+	static final double METER_WIDTH = 0.94;
+
+	/** How strongly a meter behind a row is tinted, low enough to read the figure over it. */
+	private static final int METER_ALPHA = 52;
 
 	/** Between a picture and the name beside it. */
 	private static final int ICON_TEXT_GAP = 4;
@@ -135,10 +151,16 @@ final class PanelStyle
 	 */
 	static JPanel section(String title, Component control, Component content)
 	{
+		return section(title(title), control, content);
+	}
+
+	/** The same, with a title the caller keeps so it can retext it. */
+	static JPanel section(JLabel title, Component control, Component content)
+	{
 		JPanel header = new JPanel(new BorderLayout(2 * GRID, 0));
 		header.setOpaque(false);
 		header.setBorder(new EmptyBorder(0, 0, 2 * GRID, 0));
-		header.add(title(title), BorderLayout.WEST);
+		header.add(title, BorderLayout.WEST);
 
 		if (control != null)
 		{
@@ -151,6 +173,118 @@ final class PanelStyle
 		card.add(header, BorderLayout.NORTH);
 		card.add(content, BorderLayout.CENTER);
 		return card;
+	}
+
+	static JPanel flatSection(String title, Component content)
+	{
+		return flatSection(title, null, content);
+	}
+
+	/**
+	 * A named block without a card round it: the name, a hairline rule across, and the content
+	 * under them. The detail window's look, where the chart wants the room a card would take.
+	 */
+	static JPanel flatSection(String title, Component control, Component content)
+	{
+		JPanel header = new JPanel(new BorderLayout(6, 0));
+		header.setBackground(BACKGROUND);
+		header.setBorder(new EmptyBorder(0, 0, 4, 0));
+		header.add(title(title), BorderLayout.WEST);
+		header.add(rule(), BorderLayout.CENTER);
+
+		if (control != null)
+		{
+			header.add(control, BorderLayout.EAST);
+		}
+
+		JPanel wrapper = new JPanel(new BorderLayout());
+		wrapper.setBackground(BACKGROUND);
+		wrapper.add(header, BorderLayout.NORTH);
+		wrapper.add(content, BorderLayout.CENTER);
+		return wrapper;
+	}
+
+	/** Content on the card colour with room around it, so a block reads as one thing. */
+	static JPanel card(JComponent content)
+	{
+		JPanel panel = new JPanel(new BorderLayout());
+		panel.setBackground(CARD);
+		panel.setBorder(new EmptyBorder(6, 8, 7, 8));
+		panel.add(content, BorderLayout.CENTER);
+		return panel;
+	}
+
+	/** A one pixel line down the middle of whatever width it is given. */
+	static JComponent rule()
+	{
+		return new JComponent()
+		{
+			@Override
+			public Dimension getPreferredSize()
+			{
+				return new Dimension(0, 1);
+			}
+
+			@Override
+			protected void paintComponent(Graphics g)
+			{
+				g.setColor(RULE);
+				g.fillRect(0, getHeight() / 2, getWidth(), 1);
+			}
+		};
+	}
+
+	/**
+	 * One option of a two-way switch on a section's title line: small capitals, the one in use
+	 * white over an orange underline.
+	 */
+	static MaterialTab toggle(MaterialTabGroup group, String name, String tooltip,
+		Runnable onSelect)
+	{
+		MaterialTab tab = new MaterialTab(name.toUpperCase(), group, null);
+		tab.setFont(FontManager.getRunescapeSmallFont());
+		tab.setToolTipText(tooltip);
+		tab.setOnSelectEvent(() ->
+		{
+			onSelect.run();
+			return true;
+		});
+
+		group.addTab(tab);
+		return tab;
+	}
+
+	/**
+	 * A line of orange words that does something when clicked, lighting to yellow under the
+	 * pointer as the game's own buttons do.
+	 */
+	static JLabel link(Runnable onClick)
+	{
+		JLabel link = label("", SwingConstants.CENTER, FontManager.getRunescapeSmallFont(),
+			DoomColors.ORANGE);
+		link.setBorder(CELL_PADDING);
+		link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		link.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mousePressed(MouseEvent event)
+			{
+				onClick.run();
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent event)
+			{
+				link.setForeground(DoomColors.YELLOW);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent event)
+			{
+				link.setForeground(DoomColors.ORANGE);
+			}
+		});
+		return link;
 	}
 
 	/** A card's title: the section's name, quiet beside the figures it heads. */
@@ -190,6 +324,12 @@ final class PanelStyle
 	{
 		String whole = DoomFormat.count(amount);
 		return whole.length() <= 6 ? whole : DoomFormat.compact(amount);
+	}
+
+	/** A unit's colour as a meter fill: the same hue, thin enough to read a figure over. */
+	static Color meterFill(Color color)
+	{
+		return alpha(color, METER_ALPHA);
 	}
 
 	/** A colour at a lower opacity. */

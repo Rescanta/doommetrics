@@ -36,6 +36,10 @@ final class PreviewIcons implements Icons
 		ITEMS.put(ItemID.CRYSTAL_HALBERD, "crystal_halberd");
 
 		SPRITES.put(SpriteID.Magicon2.BLOOD_BARRAGE, "blood_barrage");
+		SPRITES.put(SpriteID.Staticons.HITPOINTS, "hitpoints");
+		SPRITES.put(SpriteID.Staticons.PRAYER, "prayer");
+		SPRITES.put(SpriteID.Staticons.STRENGTH, "strength");
+		SPRITES.put(IconArt.BOSS, "doom_boss");
 	}
 
 	/** Built after the tables above, which it loads from. */
@@ -87,6 +91,18 @@ final class PreviewIcons implements Icons
 	public BufferedImage smallItem(int itemId)
 	{
 		return small.get(ITEMS.get(itemId));
+	}
+
+	@Override
+	public BufferedImage sprite(int spriteId)
+	{
+		return full.get(SPRITES.get(spriteId));
+	}
+
+	@Override
+	public BufferedImage smallSprite(int spriteId)
+	{
+		return small.get(SPRITES.get(spriteId));
 	}
 
 	/** The file a counter's picture is kept in, or null for a counter the harness has none for. */

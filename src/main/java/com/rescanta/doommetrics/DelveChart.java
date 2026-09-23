@@ -30,7 +30,7 @@ import net.runelite.client.ui.FontManager;
  */
 class DelveChart extends JPanel
 {
-	private static final Color GRID_COLOR = new Color(58, 58, 55);
+	private static final Color GRID_COLOR = new Color(44, 44, 42);
 	private static final Color AXIS_COLOR = new Color(56, 56, 53);
 	private static final Color LABEL_COLOR = ColorScheme.LIGHT_GRAY_COLOR;
 
@@ -42,7 +42,10 @@ class DelveChart extends JPanel
 
 	private static final Color CROSSHAIR_COLOR = new Color(0xFF, 0xFF, 0xFF, 90);
 
-	private static final Color READOUT_VALUE_COLOR = ColorScheme.TEXT_COLOR;
+	/** The hover readout names its figures in the game's orange, so they stand off the values. */
+	private static final Color READOUT_LABEL_COLOR = DoomColors.ORANGE;
+
+	private static final Color READOUT_VALUE_COLOR = DoomColors.PLAIN;
 
 	private static final int READOUT_GAP = 12;
 
@@ -59,13 +62,6 @@ class DelveChart extends JPanel
 		new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
 	private static final BasicStroke HAIRLINE = new BasicStroke(1f);
-
-	/** Gridlines dashed, so they read as a scale behind the lines rather than more lines. */
-	private static final BasicStroke GRID_STROKE = new BasicStroke(1f, BasicStroke.CAP_BUTT,
-		BasicStroke.JOIN_MITER, 10f, new float[]{3f, 3f}, 0f);
-
-	/** The dots on each line at the hovered delve. */
-	private static final int HOVER_DOT = 7;
 
 	private static final int DIMMED_ALPHA = 55;
 
@@ -367,7 +363,7 @@ class DelveChart extends JPanel
 	private void drawCountGrid(Graphics2D g2)
 	{
 		FontMetrics metrics = g2.getFontMetrics();
-		g2.setStroke(GRID_STROKE);
+		g2.setStroke(HAIRLINE);
 
 		for (int value = 0; value <= countMax; value += countStep)
 		{
@@ -381,6 +377,9 @@ class DelveChart extends JPanel
 			g2.drawString(text, left() - 6 - metrics.stringWidth(text),
 				y + metrics.getAscent() / 2);
 		}
+
+		g2.setColor(AXIS_COLOR);
+		g2.drawLine(left(), countTop(), left(), countBottom());
 	}
 
 	/**
@@ -417,7 +416,7 @@ class DelveChart extends JPanel
 
 		for (String[] part : readout)
 		{
-			g2.setColor(LABEL_COLOR);
+			g2.setColor(READOUT_LABEL_COLOR);
 			g2.drawString(part[0], x, baseline);
 			x += metrics.stringWidth(part[0]);
 
@@ -454,7 +453,7 @@ class DelveChart extends JPanel
 	private void drawTimeGrid(Graphics2D g2)
 	{
 		FontMetrics metrics = g2.getFontMetrics();
-		g2.setStroke(GRID_STROKE);
+		g2.setStroke(HAIRLINE);
 
 		for (int value = 0; value <= timeMax; value += timeStep)
 		{
@@ -468,6 +467,9 @@ class DelveChart extends JPanel
 			g2.drawString(text, left() - 6 - metrics.stringWidth(text),
 				y + metrics.getAscent() / 2);
 		}
+
+		g2.setColor(AXIS_COLOR);
+		g2.drawLine(left(), stripTop(), left(), stripBottom());
 	}
 
 	private void drawDelveAxis(Graphics2D g2)
@@ -728,43 +730,6 @@ class DelveChart extends JPanel
 		g2.setColor(CROSSHAIR_COLOR);
 		g2.drawLine(x, countTop(), x, countBottom());
 		g2.drawLine(x, stripTop(), x, stripBottom());
-
-		RunDetail.Delve at = detail.at(hovered);
-
-		// A dot where each line crosses, only while lines are drawn raw: over an average the
-		// delve's own figure would sit off the bold line.
-		if (at == null || window > 0)
-		{
-			return;
-		}
-
-		if (at.watched)
-		{
-			for (CombatSeries line : series)
-			{
-				if (!hidden.contains(line))
-				{
-					dot(g2, x, yForCount(line.amount(at.combat)), line.seriesColor());
-				}
-			}
-		}
-
-		dot(g2, x, yForTime(at.fullTime.getSeconds()), FULL_TIME_COLOR);
-
-		if (at.fight != null)
-		{
-			dot(g2, x, yForTime(Math.min(at.fight.getSeconds(), at.fullTime.getSeconds())),
-				FIGHT_COLOR);
-		}
-	}
-
-	/** A hover dot, ringed in the card colour so it stands off the line under it. */
-	private void dot(Graphics2D g2, int x, int y, Color color)
-	{
-		g2.setColor(getBackground());
-		g2.fillOval(x - HOVER_DOT / 2 - 2, y - HOVER_DOT / 2 - 2, HOVER_DOT + 4, HOVER_DOT + 4);
-		g2.setColor(color);
-		g2.fillOval(x - HOVER_DOT / 2, y - HOVER_DOT / 2, HOVER_DOT, HOVER_DOT);
 	}
 
 	@Override

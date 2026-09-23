@@ -59,29 +59,29 @@ what the game posts in chat, and what the run detail's time strip draws as the k
 
 ## Overlay
 
-While a run is going, the delve is the one large figure, with the clock beside it and the rest
-in lines underneath:
+While a run is going:
 
 ```
 Doom Metrics
-Delve           Time
-14             21:40
+Delve             14
+Time           21:40
 Deep pace    40.0/hr
 ```
 
+It is drawn as one of the game's own panels: an orange title with the boss's icon over an ember
+line, names in the game's orange, figures in white, the delve in yellow so it stands out by colour
+rather than size. A faint rule separates the run's lines from the counters under them.
+
 Once it ends the panel stays up for 30 minutes rather than vanishing, so the numbers are still
-there when you get back from your gravestone. A death puts the delve you died on in red where the
-delve was:
+there when you get back from your gravestone. A death is written in red:
 
 ```
 Doom Metrics
-Died on         Time
-7              11:17
+Died on      Delve 7
 Cleared            6
+Time           11:17
 Deep pace          -
 ```
-
-With the delve number switched off, the clock takes the large place instead.
 
 The time shown for a finished run is the time through the last delve you cleared, so it always
 matches the pace beside it. Right click the overlay and pick **Clear** to dismiss it early, or set
@@ -132,16 +132,16 @@ longer this run has to go; `Both` shows the two.
 
 ```
 Doom Metrics
-Delve           Time
-14             21:40
-[=====---------------]
+Delve             14
+Time           21:40
 Deep pace    40.0/hr
 Target            50
 Total        1:15:40
+[=====---------------]
 ```
 
-The bar under the large figures fills as delves are cleared towards the target, and turns green
-once it is reached.
+A thin bar under the target's lines fills as delves are cleared towards it, and turns green once it
+is reached. The side panel and the run detail window draw the same bar.
 
 The prediction is what your delve 9+ average says the delves between here and there will take, so
 it reads `-` until this run has cleared a delve 9. The delve in progress is charged against it as it
@@ -239,7 +239,8 @@ crossbow, the scythe and so on, as the game draws them. An icon is a line of tex
 switching to it moves no rows. `Icon grid` fits two of those to a line, which halves the lines a
 heading drawn counter by counter takes; a figure past 9,999 is shortened to fit its half, as the
 infobox shortens it (`25k`, `+1.2k`). A total line keeps its name and a line of its own in either
-icon style, since it sums several sources and no one icon stands for them.
+icon style, since it sums several sources and no one weapon stands for them; its unit's skill icon
+goes before the name instead.
 
 ```
 Healing        1,520
@@ -310,13 +311,17 @@ Behind the chevron icon, a stack of cards, top to bottom:
 - **Combat** - what your gear gave back. Three tiles lead it with each heading's total -
   everything counted under it, including the sources with no row - so the card answers how much
   sustain there was before it says which source found it. Under them is a row per source, beneath
-  the heading it belongs to, with a slim bar under each figure filled against the largest figure
-  counted in the same unit. The **Session** and **Lifetime** switch on the card's title puts the
+  the heading it belongs to - each heading led by its skill icon, hitpoints, prayer or strength -
+  with a bar behind each row filled against the largest figure counted in the same unit. The
+  **Session** and **Lifetime** tabs on the card's title put the
   same figures on this sitting's tally and on the character's; the bars refill against whichever is
   on show, so each says which source is carrying it on its own terms. Lifetime is worth reading
   between runs - it is the one figure here that does not go quiet when a sitting ends. Click a
   heading to fold its rows away; its total stays in the tile, and the fold is remembered across
-  restarts.
+  restarts. With **Hide counters at 0** on, as it is by default, a counter that has counted nothing
+  is left out here as it is on the overlay, and comes up the moment it counts; **Show all** under
+  the rows puts every one back.
+- **Resets** - how the runs aimed at your target delve are going, below.
 - **Milestones** - the lifetime table, below.
 - **Open run detail** - this run, delve by delve, in a window of its own.
 - **Reset session** - starts the session over and drops the run in progress, after asking, letting
@@ -355,6 +360,10 @@ multiple of six.
 
 A personal best beaten since the client started is shown in green.
 
+A deep table is kept short: every ten delves down to 50, then every 50 (100, 150, 200 ...), with
+your target delve's row - in orange - and your deepest row always on show. **Show all** under the
+table opens the rest, and **Show fewer** closes it again.
+
 ### Delves you reached before installing
 
 The game remembers your deepest delve ever, so the first time a character logs in the rows up to
@@ -373,31 +382,69 @@ If you logged in at the cave and switched the plugin on mid-trip the bound is ti
 genuine best still stands; if the client had been logged in for hours it is loose, and that run
 quietly fails to set one.
 
+## Resets
+
+For a player who resets at a set depth, a character's deep delve count is not much to watch go
+up. The Resets card follows the runs aimed at your **Target delve**, rounded down to a milestone
+row, so a target of 105 is followed as 100. It follows the setting whether or not the target is
+shown on the overlay.
+
+```
+Delve 100 resets
+Reached  62%            Average time  1:52:10
+184 / 297 runs          best 1:41:30
+Died short                       41
+This session             6 (2.1/hr)
+Last 10           1:49:05 (-3:05)
+Uniques           3 (1 per 99 runs)
+```
+
+- **Reached** - runs that cleared the target, out of every run started.
+- **Average time** - from the start of a run to clearing the target, the same span as a
+  milestone's PB, which is shown under it.
+
+Only runs the plugin watched from delve 1 count towards these two. A run it joined part way
+through - after a session reset, or the plugin being turned on mid-trip - may be a trip it has
+already counted, and its time is only an upper bound; it still adds to the milestone KC, and can
+still set a PB.
+- **Died short** - deaths before clearing the target, the target delve itself included.
+- **This session** - targets cleared this sitting, and how many that is an hour once the sitting
+  is ten minutes old.
+- **Last 10** - the latest ten runs' average time to the target, in green when it is quicker than
+  your average and red when it is slower. Changing the target starts this list over.
+- **Uniques** - uniques claimed, and how many runs there have been for each.
+
+Everything on the card is a running count kept in the milestone table, not a list of runs, so it
+takes the same room after ten runs as after ten thousand and is synced with the rest of your
+settings. It counts from the version that added it: the KC and PB you already had are kept, but
+nothing before that can be counted towards reach, deaths or averages.
+
 ## Run detail
 
 **Open run detail** puts one run in a window of its own - the one you are on, or the last one you
 finished - broken down delve by delve. A side panel has no room for a chart; this does.
 
 ```
-[Delve] [Time ] [Deep pace] [Target ] [Total] [Healing] [Prayer] [Damage]
-[ 24  ] [21:02] [ 58.1/hr ] [23 / 50] [48:36] [ 1,035 ] [  210 ] [ 2,925]
-
-Per delve                                      Counters  Sources | Grouped
-Counted per delve                                                This run
-140 |            ZCB /\   /\                    | Healing           1,035
-    |  __       /  \_/  \                      o Blood barrage       806
- 70 | /  \_ Barrage      \                     o Ancient godsword     58
-    |/     \__/--\__/--\__\                    o Blowpipe             47
-  0 |__Eldritch__________                     ...
-    |
-2:00| Full time                                Drops
-    | Kill time                                    Delve 7
-0:00  1     5    10    15                          Delve 10
-                 Delve
+This run       Live   Per delve
+Delve      Time       Counted per delve
+  24      21:02       140 |            ZCB /\   /\
+Deep pace  58.1/hr        |  __       /  \_/  \
+Target       23 / 50   70 | /  \_ Barrage      \
+Counters                  |/     \__/‾‾\__/‾‾\__\
+  Sources | Grouped     0 |__Eldritch__________
+             This run     |
+Healing         1,035     | 2:00
+ ■ Blood barrage  806     | ▁▂▃▃▄▄▅▅▆▆▇▇  Full time
+ ■ Ancient godsword 58    | ▁▁▂▂▃▃▄▄▅▅▆▆  Kill time
+ ■ Blowpipe        47   0:00
+ ...                      1     5    10    15
+                                  Delve
 ```
 
-The run's figures run across the top as tiles, the three counter headings' totals for the run
-among them, with the chart as the main card under them and its legend and the drops beside it.
+The run's figures head the sidebar, with the same Live, Ended or Died word as the side panel and
+the bar towards the target, then the drops and the legend; the chart takes the rest of the window.
+Hovering a delve writes its number and its full and kill times on the chart's top edge, named in
+orange.
 
 The upper plot is the counters, a line each, over the delves the run has completed. They share one
 scale because none of them clears a few hundred on a single delve, so a barrage heal and a Zaryte
@@ -533,7 +580,7 @@ rather than the whole file.
 | Prayer | Off | The eldritch staff spec: off, one total line, or a line each |
 | Damage | Off | The zaryte crossbow spec and your scythe and halberds punishing: off, one total line, or a line each |
 | Counter style | Names | Lead each counter's line with its name, its icon, or its icon two to a line; the infobox takes the icon too |
-| Hide counters at 0 | on | Leave a counter off the overlay until it has counted something, and start it switched off on the run detail chart |
+| Hide counters at 0 | on | Leave a counter off the overlay and the side panel until it has counted something, and start it switched off on the run detail chart |
 
 ### Chat
 

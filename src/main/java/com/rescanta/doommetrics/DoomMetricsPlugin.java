@@ -194,7 +194,9 @@ public class DoomMetricsPlugin extends Plugin
 			() -> endRun(EndReason.FINISHED, -1));
 		combat = new CombatWatcher(client, clientThread, config, items, () -> run, this::recordCombat);
 		totals = new Totals(totalsStore, runHistoryStore, () -> runProfile);
-		milestones = new MilestoneTracker(client, milestoneStore, () -> feed.refreshTable());
+		milestones = new MilestoneTracker(client, milestoneStore, this::resetTarget,
+			totals::lifetimeBelongsToRun,
+			() -> feed.refreshTable());
 		feed = new PanelFeed(this, config, totals, milestones);
 
 		overlayManager.add(overlay);
@@ -285,6 +287,7 @@ public class DoomMetricsPlugin extends Plugin
 		// Died a moment ago: the run is over, not unfinished.
 		if (deathLevel >= 0)
 		{
+			milestones.runEnded(deathLevel, unfinished.loot().getClaimed().size());
 			return runHistoryStore.append(
 				recordOf(unfinished, Instant.now(), EndReason.DIED, deathLevel, false),
 				profileOf(runProfile));
@@ -302,15 +305,20 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		DelveRun unfinished = run;
 
-		if (unfinished == null || unfinished.lastLevel() == 0)
+		if (unfinished == null)
 		{
 			return;
 		}
 
-		// The player respawns outside, so there is nothing to carry on.
+		// The player respawns outside, so there is nothing to carry on - a death on delve 1 too.
 		if (deathLevel >= 0)
 		{
 			endRun(EndReason.DIED, deathLevel);
+			return;
+		}
+
+		if (unfinished.lastLevel() == 0)
+		{
 			return;
 		}
 
@@ -484,6 +492,15 @@ public class DoomMetricsPlugin extends Plugin
 		return config.showTargetDelve() ? config.targetDelve() : 0;
 	}
 
+	/**
+	 * The milestone the resets card follows: the target delve rounded down to a row, whether or not
+	 * the target is shown.
+	 */
+	int resetTarget()
+	{
+		return Math.max(MilestoneTable.INTERVAL, MilestoneTable.milestoneAtOrBelow(config.targetDelve()));
+	}
+
 	private void updateDiagnostics()
 	{
 		boolean wanted = config.debugLogging();
@@ -520,6 +537,12 @@ public class DoomMetricsPlugin extends Plugin
 		else if ("hideEmptyCounters".equals(event.getKey()))
 		{
 			feed.hideEmptyChanged();
+		}
+		else if ("targetDelve".equals(event.getKey()))
+		{
+			// The milestone table marks the target's row and the resets card follows it. Config
+			// changes arrive on the thread that made them; the table is the client thread's.
+			clientThread.invoke(feed::refreshTable);
 		}
 	}
 
@@ -984,6 +1007,7 @@ public class DoomMetricsPlugin extends Plugin
 		settleSuspended();
 		watch(new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null),
 			runHistoryStore.currentProfile(), startedAt, partial);
+		milestones.runStarted(partial);
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
 	}
 
@@ -1038,6 +1062,9 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			return;
 		}
+
+		milestones.runEnded(reason == EndReason.DIED ? diedOnLevel : 0,
+			ended.loot().getClaimed().size());
 
 		lastRun = ended;
 		lastRunCleared = false;

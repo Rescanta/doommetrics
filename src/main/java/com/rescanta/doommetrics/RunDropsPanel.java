@@ -37,8 +37,8 @@ class RunDropsPanel extends JPanel
 
 	RunDropsPanel()
 	{
-		super(new DynamicGridLayout(0, 1, 0, 0));
-		setBackground(PanelStyle.CARD);
+		super(new DynamicGridLayout(0, 1, 0, 1));
+		setBackground(PanelStyle.BACKGROUND);
 	}
 
 	void setIcons(Icons icons)
@@ -95,7 +95,7 @@ class RunDropsPanel extends JPanel
 			return HOVERED;
 		}
 
-		return index % 2 == 0 ? PanelStyle.STRIPE : PanelStyle.CARD;
+		return index % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE;
 	}
 
 	private JPanel row(RunDetail.Drop drop, int index)

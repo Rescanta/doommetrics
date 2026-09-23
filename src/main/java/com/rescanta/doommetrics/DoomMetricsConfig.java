@@ -279,9 +279,10 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "hideEmptyCounters",
 		name = "Hide counters at 0",
-		description = "Leave a counter off the overlay until it has counted something,"
-			+ "<br>so Each only draws the gear you are actually using."
+		description = "Leave a counter off the overlay and the side panel until it has counted"
+			+ "<br>something, so Each only draws the gear you are actually using."
 			+ "<br>A line appears when its counter first counts."
+			+ "<br>The side panel has a Show all link under its counters to see the rest."
 			+ "<br>The run detail window starts those counters switched off,"
 			+ "<br>so their flat lines are not on the chart. Click one there to put it back."
 			+ "<br>Untick to draw every counter from the start, greyed at 0.",

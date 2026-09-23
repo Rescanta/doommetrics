@@ -2,7 +2,6 @@ package com.rescanta.doommetrics;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
-import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
@@ -18,12 +17,6 @@ class MilestoneStore
 {
 	private static final String KEY_ROWS = "milestones";
 	private static final String KEY_SEEDED = "milestonesSeeded";
-
-	/** Carries the map's generic type for Gson. */
-	private static final class Stored
-	{
-		Map<Integer, MilestoneTable.Row> rows;
-	}
 
 	private final ConfigManager configManager;
 	private final Gson gson;
@@ -42,7 +35,7 @@ class MilestoneStore
 	}
 
 	/** The stored table for the current character, or null if there is nothing to read. */
-	Map<Integer, MilestoneTable.Row> load()
+	MilestoneTable.Saved load()
 	{
 		return decode(configManager.getRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_ROWS));
 	}
@@ -69,12 +62,10 @@ class MilestoneStore
 
 	String encode(MilestoneTable table)
 	{
-		Stored stored = new Stored();
-		stored.rows = table.getRows();
-		return gson.toJson(stored);
+		return gson.toJson(table.save());
 	}
 
-	Map<Integer, MilestoneTable.Row> decode(String json)
+	MilestoneTable.Saved decode(String json)
 	{
 		if (json == null || json.isEmpty())
 		{
@@ -83,8 +74,7 @@ class MilestoneStore
 
 		try
 		{
-			Stored stored = gson.fromJson(json, Stored.class);
-			return stored == null ? null : stored.rows;
+			return gson.fromJson(json, MilestoneTable.Saved.class);
 		}
 		catch (JsonSyntaxException e)
 		{
