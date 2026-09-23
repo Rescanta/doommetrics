@@ -1,5 +1,6 @@
 package com.rescanta.doommetrics;
 
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -9,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.inject.Inject;
 import net.runelite.api.MenuAction;
+import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayMenuEntry;
 import net.runelite.client.ui.overlay.OverlayPanel;
@@ -37,6 +39,14 @@ class DoomMetricsOverlay extends OverlayPanel
 
 	/** The most characters a figure keeps whole in a grid column - see {@link #figure}. */
 	private static final int NARROW_FIGURE = 5;
+
+	/** The plugin's name, in the accent the side panel's card titles use. */
+	private static final Color TITLE_COLOR = ColorScheme.BRAND_ORANGE;
+
+	private static final Color DIED_COLOR = ColorScheme.PROGRESS_ERROR_COLOR;
+
+	/** The target meter once the target is behind the run. */
+	private static final Color REACHED_COLOR = ColorScheme.PROGRESS_COMPLETE_COLOR;
 
 	private final DoomMetricsPlugin plugin;
 	private final DoomMetricsConfig config;
@@ -75,34 +85,12 @@ class DoomMetricsOverlay extends OverlayPanel
 		{
 			panelComponent.getChildren().add(TitleComponent.builder()
 				.text("Doom Metrics")
+				.color(TITLE_COLOR)
 				.build());
 		}
 
-		if (run.isFinished())
-		{
-			if (run.getEndReason() == EndReason.DIED)
-			{
-				addLine("Died on", "Delve " + run.getDiedOnLevel());
-			}
-
-			if (config.showDelveNumber())
-			{
-				addLine("Cleared", Integer.toString(run.lastLevel()));
-			}
-		}
-		else if (config.showDelveNumber())
-		{
-			addLine("Delve", Integer.toString(run.currentLevel()));
-		}
-
 		Instant now = Instant.now();
-
-		if (config.showRunTimer())
-		{
-			// The asterisk marks a run we joined part way through, whose start time is a guess.
-			addLine(run.isPartial() ? "Time*" : "Time",
-				DoomFormat.duration(run.displayElapsed(now)));
-		}
+		addHero(run, now);
 
 		if (config.showPace())
 		{
@@ -134,6 +122,65 @@ class DoomMetricsOverlay extends OverlayPanel
 		addCombatLines(run, now);
 
 		return super.render(graphics);
+	}
+
+	/**
+	 * The head of the overlay: the delve large with the clock beside it, or the clock large when
+	 * the delve is switched off, and the target's meter under them. A death is always shown.
+	 */
+	private void addHero(DelveRun run, Instant now)
+	{
+		boolean died = run.isFinished() && run.getEndReason() == EndReason.DIED;
+		// The asterisk marks a run we joined part way through, whose start time is a guess.
+		String timeLabel = run.isPartial() ? "Time*" : "Time";
+		String time = DoomFormat.duration(run.displayElapsed(now));
+		Color timeColor = run.isFinished() ? DoomColors.DIMMED : DoomColors.PLAIN;
+		OverlayHero hero;
+
+		if (died)
+		{
+			hero = new OverlayHero("Died on", Integer.toString(run.getDiedOnLevel()), DIED_COLOR);
+		}
+		else if (config.showDelveNumber())
+		{
+			hero = run.isFinished()
+				? new OverlayHero("Cleared", Integer.toString(run.lastLevel()), DoomColors.PLAIN)
+				: new OverlayHero("Delve", Integer.toString(run.currentLevel()), DoomColors.PLAIN);
+		}
+		else if (config.showRunTimer())
+		{
+			hero = new OverlayHero(timeLabel, time, timeColor);
+		}
+		else
+		{
+			hero = null;
+		}
+
+		boolean timeInHero = hero != null && (died || config.showDelveNumber());
+
+		if (timeInHero && config.showRunTimer())
+		{
+			hero.side(timeLabel, time, timeColor);
+		}
+
+		if (hero != null && config.showTargetDelve())
+		{
+			int target = config.targetDelve();
+			boolean reached = run.hasReached(target);
+			hero.meter(target > 0 ? (double) run.lastLevel() / target : 0,
+				reached ? REACHED_COLOR : PanelStyle.ACCENT);
+		}
+
+		if (hero != null)
+		{
+			panelComponent.getChildren().add(hero);
+		}
+
+		// A death leaves the delve it died on large, and what was cleared on a line of its own.
+		if (died && config.showDelveNumber())
+		{
+			addLine("Cleared", Integer.toString(run.lastLevel()));
+		}
 	}
 
 	/**
@@ -276,6 +323,7 @@ class DoomMetricsOverlay extends OverlayPanel
 	{
 		panelComponent.getChildren().add(LineComponent.builder()
 			.left(left)
+			.leftColor(OverlayHero.CAPTION_COLOR)
 			.right(right)
 			.build());
 	}
