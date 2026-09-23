@@ -46,23 +46,28 @@ class GroupHeading extends JPanel
 		super(new BorderLayout());
 		this.group = group;
 
-		JPanel tab = new JPanel();
-		tab.setBackground(group.unit().color());
+		RoundedPanel tab = new RoundedPanel(group.unit().color(), STRIPE);
 		tab.setPreferredSize(new Dimension(STRIPE, 0));
 
 		JLabel text = PanelStyle.label(group.heading(), SwingConstants.LEFT,
 			FontManager.getRunescapeSmallFont(), ColorScheme.LIGHT_GRAY_COLOR);
-		text.setBorder(new EmptyBorder(2, 5, 2, 5));
-		value.setBorder(new EmptyBorder(2, 5, 2, 5));
+		text.setBorder(new EmptyBorder(1, 5, 1, 5));
+		value.setBorder(new EmptyBorder(1, 5, 1, 5));
 
 		lead.setOpaque(false);
 		lead.add(tab, BorderLayout.WEST);
 
-		setBackground(PanelStyle.BACKGROUND);
-		setBorder(new EmptyBorder(4, 0, 1, 0));
+		setBackground(PanelStyle.CARD);
+		setBorder(new EmptyBorder(PanelStyle.GRID + 2, 0, 2, 0));
 		add(lead, BorderLayout.WEST);
 		add(text, BorderLayout.CENTER);
 		add(value, BorderLayout.EAST);
+	}
+
+	/** Leaves the total off, for a card whose tiles already carry it. */
+	void hideTotal()
+	{
+		remove(value);
 	}
 
 	/**

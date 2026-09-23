@@ -1,8 +1,6 @@
 package com.rescanta.doommetrics;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.util.EnumSet;
 import java.util.List;
@@ -16,8 +14,8 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
 
 /**
- * A {@link CombatTotals} as a table: headings with their group totals, and a row per counter with a
- * meter scaled per unit. Rows are built once and never reflow. Swing thread only.
+ * A {@link CombatTotals} as a table: headings, and a row per counter with a slim meter scaled per
+ * unit. Rows are built once and never reflow. Swing thread only.
  */
 class CombatTablePanel extends JPanel
 {
@@ -26,9 +24,6 @@ class CombatTablePanel extends JPanel
 
 	/** The headings, by group, so each can be handed its total the same way. */
 	private final GroupHeading[] headings = new GroupHeading[CombatMetric.Group.values().length];
-
-	/** The pictures drawn beside the rows' names, or none while they are still on their way. */
-	private Icons icons = Icons.NONE;
 
 	/** The headings whose rows are folded away. */
 	private final Set<CombatMetric.Group> folded = EnumSet.noneOf(CombatMetric.Group.class);
@@ -39,8 +34,8 @@ class CombatTablePanel extends JPanel
 
 	CombatTablePanel()
 	{
-		super(new DynamicGridLayout(0, 1, 0, 1));
-		setBackground(PanelStyle.BACKGROUND);
+		super(new DynamicGridLayout(0, 1, 0, 0));
+		setBackground(PanelStyle.CARD);
 		build();
 		layOut();
 		setTotals(null);
@@ -49,7 +44,6 @@ class CombatTablePanel extends JPanel
 	private void build()
 	{
 		CombatMetric.Group heading = null;
-		int striped = 0;
 
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
@@ -58,16 +52,13 @@ class CombatTablePanel extends JPanel
 				CombatMetric.Group group = metric.group();
 				GroupHeading row = new GroupHeading(group);
 				row.foldable(() -> toggle(group));
+				// The card's tiles carry the totals, so the heading is a name and a fold.
+				row.hideTotal();
 				headings[group.ordinal()] = row;
 				heading = group;
-
-				// Restarted under each heading so the stripes read as a block per group rather
-				// than as one run of alternating rows the headings happen to interrupt.
-				striped = 0;
 			}
 
-			rows[metric.ordinal()] = new MeterRow(metric,
-				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE);
+			rows[metric.ordinal()] = new MeterRow(metric);
 		}
 	}
 
@@ -137,8 +128,6 @@ class CombatTablePanel extends JPanel
 
 	void setIcons(Icons icons)
 	{
-		this.icons = icons;
-
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			rows[metric.ordinal()].showName(icons);
@@ -170,34 +159,39 @@ class CombatTablePanel extends JPanel
 		}
 	}
 
-	/** One metric: name, figure, and a painted meter behind both. */
+	/** One metric: name and figure, with a slim meter under them. */
 	private static final class MeterRow extends JPanel
 	{
 		private final CombatMetric metric;
-		private final Color stripe;
 		private final JLabel value = PanelStyle.body("0", SwingConstants.RIGHT);
 		private final JLabel label;
-
-		/** How much of the row the meter fills, from nothing to {@link PanelStyle#METER_WIDTH}. */
-		private double fill;
+		private final Meter meter;
 
 		/** The icon the name was last drawn with, so only rows still waiting redraw. */
 		private BufferedImage shownIcon;
 
-		private MeterRow(CombatMetric metric, Color stripe)
+		private MeterRow(CombatMetric metric)
 		{
 			super(new BorderLayout());
 			this.metric = metric;
-			this.stripe = stripe;
 
 			label = PanelStyle.body(metric.label(), SwingConstants.LEFT);
-			label.setBorder(PanelStyle.CELL_PADDING);
-			value.setBorder(PanelStyle.CELL_PADDING);
+			label.setBorder(new EmptyBorder(2, 0, 2, 4));
+			value.setBorder(new EmptyBorder(2, 4, 2, 0));
+			meter = new Meter(metric.unit().color(), PanelStyle.METER_HEIGHT);
 
-			setBackground(stripe);
+			JPanel bar = new JPanel(new BorderLayout());
+			bar.setOpaque(false);
+			bar.setBorder(new EmptyBorder(0, 0, 3, 0));
+			bar.add(meter, BorderLayout.CENTER);
+
+			setBackground(PanelStyle.CARD);
+			// Indented past the heading's stripe, so the rows hang under their heading.
+			setBorder(new EmptyBorder(1, 8, 0, 0));
 			// A narrow row squeezes the name rather than clipping the figure.
 			add(label, BorderLayout.CENTER);
 			add(value, BorderLayout.EAST);
+			add(bar, BorderLayout.SOUTH);
 
 			// On the row rather than the label, so the gap beside a short name answers too. The
 			// figure keeps its own tooltip, which Swing shows in preference while over it.
@@ -236,23 +230,7 @@ class CombatTablePanel extends JPanel
 				? DoomFormat.count(amount) + " " + metric.unit().description()
 				: "Nothing counted yet");
 
-			fill = amount > 0 && largest > 0 ? (double) amount / largest : 0;
-			repaint();
-		}
-
-		@Override
-		protected void paintComponent(Graphics g)
-		{
-			g.setColor(stripe);
-			g.fillRect(0, 0, getWidth(), getHeight());
-
-			if (fill <= 0)
-			{
-				return;
-			}
-
-			g.setColor(PanelStyle.meterFill(metric.unit().color()));
-			g.fillRect(0, 0, (int) (getWidth() * PanelStyle.METER_WIDTH * fill), getHeight());
+			meter.setFill(amount > 0 && largest > 0 ? (double) amount / largest : 0);
 		}
 	}
 }

@@ -11,6 +11,7 @@ import java.awt.image.BufferedImage;
 import java.util.Set;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -20,12 +21,11 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.components.materialtabs.MaterialTab;
-import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
- * One run, delve by delve: the chart, its legend and the drops. Shows the live run or the last one,
- * ignoring the overlay's linger and Clear. Swing thread only; the plugin owns the one instance.
+ * One run, delve by delve, as a dashboard: a strip of tiles for the run's figures, the chart as the
+ * main card, and its legend and the drops beside it. Shows the live run or the last one, ignoring
+ * the overlay's linger and Clear. Swing thread only; the plugin owns the one instance.
  */
 class RunDetailWindow extends JFrame
 {
@@ -35,35 +35,33 @@ class RunDetailWindow extends JFrame
 	/** How far a notch of the wheel scrolls the sidebar. */
 	private static final int SCROLL_UNIT = 16;
 
+	/** Between the window's cards. */
+	private static final int GAP = PanelStyle.GRID * 3;
+
 	private final DelveChart chart = new DelveChart();
 	private final RunLegendPanel legend = new RunLegendPanel();
 	private final RunDropsPanel drops = new RunDropsPanel();
 
-	/** Which way the counters are read, one tab each - see {@link #groupingTabs()}. */
-	private final MaterialTabGroup grouping = new MaterialTabGroup();
+	/** Which way the counters are read, one segment each - see {@link #groupingControl()}. */
+	private final SegmentedControl grouping = groupingControl();
 
-	private MaterialTab separateTab;
-	private MaterialTab groupedTab;
-
-	/** The drops, under their heading - only on show for a run that has any. */
+	/** The drops, on a card of their own - only on show for a run that has any. */
 	private final JPanel dropsSection = PanelStyle.section("Drops", drops);
-	private final JPanel summary = PanelStyle.column(3);
 
-	/** The two figures at the head of the sidebar - see {@link DoomMetricsPanel.Live}. */
-	private final JLabel[] heroCaptions = new JLabel[DoomMetricsPanel.Live.HERO_ROWS];
-	private final JLabel[] heroValues = new JLabel[DoomMetricsPanel.Live.HERO_ROWS];
+	/** The tiles across the top, rebuilt only when which of them are up changes. */
+	private final JPanel strip = new JPanel(new GridLayout(1, 0, PanelStyle.GRID * 2, 0));
 
-	private final JPanel summaryRows = PanelStyle.column(PanelStyle.ROW_GAP);
-	private final JLabel idle = PanelStyle.caption("No run yet", SwingConstants.LEFT);
-
-	/** The rows under the two figures, built once and retexted - see {@link #setLive}. */
+	/** The live rows, a tile each - see {@link DoomMetricsPanel.Live}. */
 	private final JLabel[] rowCaptions = new JLabel[DoomMetricsPanel.Live.ROWS];
-	private final JLabel[] rowValues = new JLabel[DoomMetricsPanel.Live.ROWS];
-	private final JPanel[] rows = new JPanel[DoomMetricsPanel.Live.ROWS];
+	private final JComponent[] rowValues = new JComponent[DoomMetricsPanel.Live.ROWS];
+	private final JPanel[] rowTiles = new JPanel[DoomMetricsPanel.Live.ROWS];
+	private final Meter targetMeter = new Meter(PanelStyle.ACCENT, PanelStyle.METER_HEIGHT);
 
-	/**
-	 * Which of {@link #rows} are up, a bit per index, or -1 for the idle line. Starts as neither.
-	 */
+	/** Each heading's total for the run, after the run's own figures. */
+	private final JLabel[] unitTotals = new JLabel[CombatMetric.Group.values().length];
+	private final JPanel[] unitTiles = new JPanel[CombatMetric.Group.values().length];
+
+	/** Which of {@link #rowTiles} are up, a bit per index. Starts as none of the possible sets. */
 	private int shownRows = Integer.MIN_VALUE;
 
 	/**
@@ -99,14 +97,19 @@ class RunDetailWindow extends JFrame
 		legend.setToggleListener(chart::setHidden);
 		legend.setEmphasisListener(chart::setEmphasis);
 
-		buildSummary();
+		buildStrip();
 		dropsSection.setVisible(false);
 
-		JPanel content = new JPanel(new BorderLayout(10, 0));
+		JPanel main = new JPanel(new BorderLayout(GAP, 0));
+		main.setOpaque(false);
+		main.add(PanelStyle.section("Per delve", chart), BorderLayout.CENTER);
+		main.add(sidebar(), BorderLayout.EAST);
+
+		JPanel content = new JPanel(new BorderLayout(0, GAP));
 		content.setBackground(PanelStyle.BACKGROUND);
-		content.setBorder(new EmptyBorder(10, 10, 10, 10));
-		content.add(sidebar(), BorderLayout.WEST);
-		content.add(PanelStyle.section("Per delve", chart), BorderLayout.CENTER);
+		content.setBorder(new EmptyBorder(GAP, GAP, GAP, GAP));
+		content.add(strip, BorderLayout.NORTH);
+		content.add(main, BorderLayout.CENTER);
 
 		setContentPane(content);
 		setMinimumSize(new Dimension(760, 460));
@@ -135,6 +138,17 @@ class RunDetailWindow extends JFrame
 		legend.setDetail(detail);
 		drops.setDetail(detail);
 		dropsSection.setVisible(!detail.drops().isEmpty());
+
+		CombatTotals totals = detail.totals();
+
+		for (CombatMetric.Group group : CombatMetric.Group.values())
+		{
+			long amount = group.amount(totals);
+			JLabel total = unitTotals[group.ordinal()];
+			total.setText(PanelStyle.tileFigure(amount));
+			total.setForeground(amount > 0 ? group.unit().color() : ColorScheme.LIGHT_GRAY_COLOR);
+			unitTiles[group.ordinal()].setToolTipText(group.tooltip(totals));
+		}
 	}
 
 	/**
@@ -163,35 +177,23 @@ class RunDetailWindow extends JFrame
 	/** @param live the side panel's live rows, or null when there is no run */
 	void setLive(DoomMetricsPanel.Live live)
 	{
-		int shown = -1;
+		// The two heroes are always up, so the strip holds its shape between runs.
+		int shown = (1 << DoomMetricsPanel.Live.HERO_ROWS) - 1;
 
 		if (live == null)
 		{
 			for (int i = 0; i < DoomMetricsPanel.Live.HERO_ROWS; i++)
 			{
-				heroValues[i].setText("-");
-				heroValues[i].setForeground(DoomColors.DIMMED);
+				setValue(i, "-");
+				rowValues[i].setForeground(DoomColors.DIMMED);
 			}
 
-			heroCaptions[0].setText("Delve");
-			heroCaptions[1].setText("Time");
+			rowCaptions[0].setText("Delve");
+			rowCaptions[1].setText("Time");
 		}
 		else
 		{
-			for (int i = 0; i < DoomMetricsPanel.Live.HERO_ROWS; i++)
-			{
-				heroCaptions[i].setText(live.labels[i]);
-				heroValues[i].setText(live.values[i]);
-			}
-
-			heroValues[0].setForeground(live.died
-				? ColorScheme.PROGRESS_ERROR_COLOR
-				: DoomColors.PLAIN);
-			heroValues[1].setForeground(live.finished ? DoomColors.DIMMED : DoomColors.PLAIN);
-
-			shown = 0;
-
-			for (int i = DoomMetricsPanel.Live.HERO_ROWS; i < DoomMetricsPanel.Live.ROWS; i++)
+			for (int i = 0; i < DoomMetricsPanel.Live.ROWS; i++)
 			{
 				if (live.labels[i] == null)
 				{
@@ -199,19 +201,48 @@ class RunDetailWindow extends JFrame
 				}
 
 				rowCaptions[i].setText(live.labels[i]);
-				rowValues[i].setText(live.values[i]);
+				setValue(i, i == DoomMetricsPanel.Live.TARGET_ROW && live.progress() < 1
+					? live.cleared + " / " + live.values[i]
+					: live.values[i]);
+				rowValues[i].setForeground("-".equals(live.values[i])
+					? DoomColors.DIMMED
+					: DoomColors.PLAIN);
 				shown |= 1 << i;
 			}
+
+			rowValues[0].setForeground(live.died
+				? ColorScheme.PROGRESS_ERROR_COLOR
+				: DoomColors.PLAIN);
+			rowValues[1].setForeground(live.finished ? DoomColors.DIMMED : DoomColors.PLAIN);
+
+			targetMeter.setFill(live.progress());
+			targetMeter.setColor(live.progress() >= 1
+				? ColorScheme.PROGRESS_COMPLETE_COLOR
+				: PanelStyle.ACCENT);
 		}
 
-		showRows(shown);
+		showTiles(shown);
+	}
+
+	private void setValue(int row, String text)
+	{
+		JComponent value = rowValues[row];
+
+		if (value instanceof PanelStyle.Figure)
+		{
+			((PanelStyle.Figure) value).setText(text);
+		}
+		else
+		{
+			((JLabel) value).setText(text);
+		}
 	}
 
 	/**
-	 * Puts up the rows a snapshot has; a no-op when they're already up, since the clock ticks every
-	 * second.
+	 * Puts up the tiles a snapshot has; a no-op when they're already up, since the clock ticks
+	 * every second.
 	 */
-	private void showRows(int shown)
+	private void showTiles(int shown)
 	{
 		if (shown == shownRows)
 		{
@@ -219,116 +250,116 @@ class RunDetailWindow extends JFrame
 		}
 
 		shownRows = shown;
-		summaryRows.removeAll();
+		strip.removeAll();
 
-		if (shown < 0)
+		for (int i = 0; i < DoomMetricsPanel.Live.ROWS; i++)
 		{
-			summaryRows.add(idle);
-		}
-		else
-		{
-			for (int i = DoomMetricsPanel.Live.HERO_ROWS; i < DoomMetricsPanel.Live.ROWS; i++)
+			if ((shown & (1 << i)) != 0)
 			{
-				if ((shown & (1 << i)) != 0)
-				{
-					summaryRows.add(rows[i]);
-				}
+				strip.add(rowTiles[i]);
 			}
 		}
 
-		summaryRows.revalidate();
-		summaryRows.repaint();
+		for (JPanel tile : unitTiles)
+		{
+			strip.add(tile);
+		}
+
+		strip.revalidate();
+		strip.repaint();
 	}
 
-	/** The same head the side panel gives the run. */
-	private void buildSummary()
+	/** A tile per live row and per heading; the delve and the clock drawn as heroes. */
+	private void buildStrip()
 	{
-		JPanel hero = new JPanel(new GridLayout(1, 2, 6, 0));
-		hero.setBackground(PanelStyle.CARD);
+		strip.setOpaque(false);
 
-		for (int i = 0; i < DoomMetricsPanel.Live.HERO_ROWS; i++)
-		{
-			heroCaptions[i] = PanelStyle.caption("", SwingConstants.LEFT);
-			heroValues[i] = PanelStyle.hero("-", SwingConstants.LEFT);
-
-			JPanel tile = new JPanel(new BorderLayout());
-			tile.setBackground(PanelStyle.CARD);
-			tile.add(heroCaptions[i], BorderLayout.NORTH);
-			tile.add(heroValues[i], BorderLayout.CENTER);
-			hero.add(tile);
-		}
-
-		for (int i = DoomMetricsPanel.Live.HERO_ROWS; i < DoomMetricsPanel.Live.ROWS; i++)
+		for (int i = 0; i < DoomMetricsPanel.Live.ROWS; i++)
 		{
 			rowCaptions[i] = PanelStyle.caption("", SwingConstants.LEFT);
-			rowValues[i] = PanelStyle.body("", SwingConstants.RIGHT);
-			rows[i] = pair(rowCaptions[i], rowValues[i]);
+
+			if (i < DoomMetricsPanel.Live.HERO_ROWS)
+			{
+				rowValues[i] = PanelStyle.hero("-", SwingConstants.LEFT);
+			}
+			else
+			{
+				rowValues[i] = i == DoomMetricsPanel.Live.TARGET_ROW
+					? PanelStyle.hero("", SwingConstants.LEFT)
+					: PanelStyle.heroFigure(SwingConstants.LEFT);
+			}
+
+			JComponent value = rowValues[i];
+
+			if (i == DoomMetricsPanel.Live.TARGET_ROW)
+			{
+				JPanel withMeter = new JPanel(new BorderLayout(0, PanelStyle.GRID));
+				withMeter.setOpaque(false);
+				withMeter.add(value, BorderLayout.CENTER);
+				withMeter.add(targetMeter, BorderLayout.SOUTH);
+				value = withMeter;
+			}
+
+			rowTiles[i] = heroTile(rowCaptions[i], value);
 		}
 
-		summary.add(hero);
-		summary.add(PanelStyle.rule());
-		summary.add(summaryRows);
+		for (CombatMetric.Group group : CombatMetric.Group.values())
+		{
+			JLabel value = PanelStyle.hero("0", SwingConstants.LEFT);
+			unitTotals[group.ordinal()] = value;
+			unitTiles[group.ordinal()] = heroTile(
+				PanelStyle.caption(group.overlayHeading(), SwingConstants.LEFT), value);
+		}
+
 		setLive(null);
 	}
 
-	private static JPanel pair(JLabel label, JLabel value)
+	/** A strip tile: a card-coloured cell with more room than the side panel's. */
+	private static JPanel heroTile(JLabel caption, JComponent value)
 	{
-		JPanel panel = new JPanel(new BorderLayout());
-		panel.setBackground(PanelStyle.CARD);
-		panel.add(label, BorderLayout.WEST);
-		panel.add(value, BorderLayout.EAST);
-		return panel;
+		RoundedPanel tile = new RoundedPanel(PanelStyle.CARD, PanelStyle.ARC);
+		tile.setLayout(new BorderLayout(0, 2));
+		tile.setBorder(new EmptyBorder(PanelStyle.GRID * 2, PanelStyle.GRID * 3,
+			PanelStyle.GRID * 2, PanelStyle.GRID * 3));
+		tile.add(caption, BorderLayout.NORTH);
+		tile.add(value, BorderLayout.SOUTH);
+		return tile;
 	}
 
-	/** Separate / Grouped tabs on the Counters heading. */
-	private MaterialTabGroup groupingTabs()
+	/** Separate / Grouped segments on the Counters card. */
+	private SegmentedControl groupingControl()
 	{
-		separateTab = groupingTab("Sources", false,
-			"A line for each counter, named by what it counts");
-		groupedTab = groupingTab("Grouped", true,
-			"<html>A line for each heading, summing the counters under it."
-				+ "<br>Counts the sources with no line of their own too - a punish thrown"
-				+ "<br>with a weapon this plugin does not name is in the figure here.</html>");
-		grouping.select(separateTab);
-		return grouping;
-	}
-
-	private MaterialTab groupingTab(String name, boolean grouped, String tooltip)
-	{
-		MaterialTab tab = new MaterialTab(name, grouping, null);
-		tab.setToolTipText(tooltip);
-		tab.setOnSelectEvent(() ->
-		{
-			// The chart first: the legend answers by handing over the lines that are off, and
-			// which lines those are depends on which of them the chart is drawing.
-			chart.setGrouped(grouped);
-			legend.setGrouped(grouped);
-			return true;
-		});
-
-		grouping.addTab(tab);
-		return tab;
+		return new SegmentedControl(new String[]{"Sources", "Grouped"},
+			new String[]{
+				"A line for each counter, named by what it counts",
+				"<html>A line for each heading, summing the counters under it."
+					+ "<br>Counts the sources with no line of their own too - a punish thrown"
+					+ "<br>with a weapon this plugin does not name is in the figure here.</html>",
+			},
+			index ->
+			{
+				boolean grouped = index == 1;
+				// The chart first: the legend answers by handing over the lines that are off, and
+				// which lines those are depends on which of them the chart is drawing.
+				chart.setGrouped(grouped);
+				legend.setGrouped(grouped);
+			});
 	}
 
 	/** For the preview harness. Idempotent. */
 	void showGrouped(boolean grouped)
 	{
-		grouping.select(grouped ? groupedTab : separateTab);
+		grouping.select(grouped ? 1 : 0);
 	}
 
-	/** The run's figures, drops and legend, scrolled together. */
+	/** The legend and the drops, scrolled together. */
 	private JScrollPane sidebar()
 	{
-		// A hidden section takes its gap with it, so a run without drops lays out as it always did.
-		JPanel lower = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
-		lower.setBackground(PanelStyle.BACKGROUND);
-		lower.add(dropsSection, BorderLayout.NORTH);
-		lower.add(PanelStyle.section("Counters", groupingTabs(), legend), BorderLayout.CENTER);
-
-		JPanel stack = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
+		// A hidden card takes its gap with it, so a run without drops lays out as it always did.
+		JPanel stack = new JPanel(new BorderLayout(0, GAP));
 		stack.setBackground(PanelStyle.BACKGROUND);
-		stack.add(PanelStyle.section("This run", PanelStyle.card(summary)), BorderLayout.NORTH);
-		stack.add(lower, BorderLayout.CENTER);
+		stack.add(PanelStyle.section("Counters", grouping, legend), BorderLayout.NORTH);
+		stack.add(dropsSection, BorderLayout.CENTER);
 
 		// Wrapped so rows aren't stretched to the viewport height, and held to the sidebar width so
 		// a wide row squeezes its name rather than having its digits clipped.

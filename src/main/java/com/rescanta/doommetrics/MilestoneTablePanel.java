@@ -11,6 +11,7 @@ import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.border.Border;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.FontManager;
 
 /** The lifetime milestone table - delve, kill count, personal best. Swing thread only. */
 class MilestoneTablePanel extends JPanel
@@ -47,7 +48,7 @@ class MilestoneTablePanel extends JPanel
 	{
 		super(new GridBagLayout());
 		this.emptyText = emptyText;
-		setBackground(PanelStyle.BACKGROUND);
+		setBackground(PanelStyle.CARD);
 	}
 
 	/** Rebuilds the table. Called only when a row actually changed. */
@@ -58,7 +59,6 @@ class MilestoneTablePanel extends JPanel
 		if (rows.isEmpty())
 		{
 			JLabel empty = PanelStyle.caption(emptyText, SwingConstants.LEFT);
-			empty.setBorder(PanelStyle.CELL_PADDING);
 
 			GridBagConstraints constraints = new GridBagConstraints();
 			constraints.fill = GridBagConstraints.HORIZONTAL;
@@ -84,15 +84,17 @@ class MilestoneTablePanel extends JPanel
 
 	private void addHeaderRow()
 	{
-		addRow(0, PanelStyle.BACKGROUND, HEADER_PADDING,
-			PanelStyle.caption("Delve", SwingConstants.RIGHT),
+		addRow(0, PanelStyle.CARD, HEADER_PADDING,
+			PanelStyle.caption("Delve", SwingConstants.LEFT),
 			PanelStyle.caption("KC", SwingConstants.RIGHT),
 			PanelStyle.caption("PB", SwingConstants.RIGHT));
 	}
 
 	private void addDataRow(Row data, int index)
 	{
-		JLabel delve = PanelStyle.body(Integer.toString(data.delve), SwingConstants.RIGHT);
+		// The delve in bold: it is what the row is looked up by.
+		JLabel delve = PanelStyle.label(Integer.toString(data.delve), SwingConstants.LEFT,
+			FontManager.getRunescapeBoldFont(), ColorScheme.TEXT_COLOR);
 		JLabel kc = PanelStyle.body(Integer.toString(data.kc), SwingConstants.RIGHT);
 		JLabel pb = PanelStyle.body(DoomFormat.ticks(data.pbTicks), SwingConstants.RIGHT);
 
@@ -102,7 +104,12 @@ class MilestoneTablePanel extends JPanel
 			? ColorScheme.PROGRESS_COMPLETE_COLOR
 			: data.pbTicks > 0 ? ColorScheme.TEXT_COLOR : ColorScheme.LIGHT_GRAY_COLOR);
 
-		addRow(index + 1, index % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE,
+		if (data.improved)
+		{
+			pb.setToolTipText("Beaten since the client started");
+		}
+
+		addRow(index + 1, index % 2 == 0 ? PanelStyle.STRIPE : PanelStyle.CARD,
 			PanelStyle.CELL_PADDING, delve, kc, pb);
 	}
 
@@ -112,9 +119,7 @@ class MilestoneTablePanel extends JPanel
 		GridBagConstraints constraints = new GridBagConstraints();
 		constraints.fill = GridBagConstraints.BOTH;
 		constraints.gridy = gridy;
-
-		// The gap the stripes used to be separated by, now that they tile the row themselves.
-		constraints.insets = new Insets(gridy == 0 ? 0 : 1, 0, 0, 0);
+		constraints.insets = new Insets(gridy == 1 ? 2 : 0, 0, 0, 0);
 
 		for (int i = 0; i < cells.length; i++)
 		{

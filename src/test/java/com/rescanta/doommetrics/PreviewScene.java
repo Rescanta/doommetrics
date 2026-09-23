@@ -289,7 +289,7 @@ final class PreviewScene
 			new PreviewConfig(), run(1, now, NOTHING), new CombatTotals(), new CombatTotals(),
 			new DoomMetricsPanel.Stats(DoomFormat.duration(Duration.ofMinutes(2)),
 				DoomFormat.pace(null), "No delves completed yet", "0",
-				DoomFormat.pace(null), "No delves completed yet", null),
+				DoomFormat.pace(null), "No delves completed yet", null, null, null),
 			Collections.emptyList());
 	}
 
@@ -588,7 +588,9 @@ final class PreviewScene
 			DoomFormat.count(session.deep),
 			DoomFormat.pace(lifetime.kph()),
 			tooltip(lifetime),
-			DoomFormat.count(lifetime.deep));
+			DoomFormat.count(lifetime.deep),
+			session.kph(),
+			lifetime.kph());
 	}
 
 	/** Mirrors the tooltip the plugin hangs off a rate, so a hover in the preview reads as one. */
