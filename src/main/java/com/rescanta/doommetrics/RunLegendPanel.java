@@ -1,10 +1,11 @@
 package com.rescanta.doommetrics;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
@@ -87,8 +88,8 @@ class RunLegendPanel extends JPanel
 
 	RunLegendPanel()
 	{
-		super(new DynamicGridLayout(0, 1, 0, 1));
-		setBackground(PanelStyle.BACKGROUND);
+		super(new DynamicGridLayout(0, 1, 0, 0));
+		setBackground(PanelStyle.CARD);
 		build();
 		layOut();
 		setDetail(RunDetail.empty());
@@ -110,12 +111,11 @@ class RunLegendPanel extends JPanel
 	/** Builds every row and heading, both ways of reading the run, once. */
 	private void build()
 	{
-		top.setBackground(PanelStyle.BACKGROUND);
-		top.setBorder(new EmptyBorder(0, 5, 3, 5));
+		top.setBackground(PanelStyle.CARD);
+		top.setBorder(new EmptyBorder(0, 0, 0, 0));
 		top.add(heading, BorderLayout.EAST);
 
 		CombatMetric.Group group = null;
-		int striped = 0;
 
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
@@ -126,20 +126,15 @@ class RunLegendPanel extends JPanel
 				heading.foldable(() -> toggleFold(each));
 				headings.put(each, heading);
 				group = each;
-				striped = 0;
 			}
 
-			rows.put(metric, new Row(metric,
-				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE, false));
+			rows.put(metric, new Row(metric, false));
 		}
-
-		striped = 0;
 
 		for (CombatMetric.Group each : CombatMetric.Group.values())
 		{
 			// Grouped, a heading's row keeps the unit stripe.
-			rows.put(each, new Row(each,
-				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE, true));
+			rows.put(each, new Row(each, true));
 		}
 	}
 
@@ -363,16 +358,16 @@ class RunLegendPanel extends JPanel
 		onEmphasis.accept(hidden.contains(line) ? null : line);
 	}
 
-	/** One counter: swatch, name, figure in text ink, and a meter behind them. */
+	/** One counter: swatch, name, figure in text ink, and a slim meter under them. */
 	private final class Row extends JPanel
 	{
 		/** How wide the unit's stripe down a grouped row is - the width a heading gave it. */
 		private static final int UNIT_STRIPE = 3;
 
 		private final CombatSeries series;
-		private final Color stripe;
 		private final JLabel name;
 		private final JLabel value = PanelStyle.body("0", SwingConstants.RIGHT);
+		private final Meter meter;
 
 		/** Whether the unit's colour is drawn down the side, as a heading draws it. */
 		private final boolean unitStripe;
@@ -380,34 +375,43 @@ class RunLegendPanel extends JPanel
 		/** Which specs feed a catch-all, as tooltip lines, or empty for a row its name explains. */
 		private final String sources;
 
-		private double fill;
 		private boolean off;
+
+		/** Whether the pointer is over the row, which lifts it as the line comes forward. */
+		private boolean pointed;
 
 		/** What the name was last drawn as, so a hover that changes neither redraws nothing. */
 		private BufferedImage shownIcon;
 		private boolean shownOff;
 
-		private Row(CombatSeries series, Color stripe, boolean unitStripe)
+		private Row(CombatSeries series, boolean unitStripe)
 		{
 			super(new BorderLayout(4, 0));
 			this.series = series;
-			this.stripe = stripe;
 			this.unitStripe = unitStripe;
 			this.name = PanelStyle.body(series.label(), SwingConstants.LEFT);
+			this.meter = new Meter(series.seriesColor(), PanelStyle.METER_HEIGHT - 1);
 
 			List<String> from = series.sources();
 			this.sources = from.isEmpty() ? "" : "<br><br>Counted from:<br>" + String.join("<br>", from);
 
-			name.setBorder(new EmptyBorder(3, 3, 3, 0));
-			value.setBorder(PanelStyle.CELL_PADDING);
+			name.setBorder(new EmptyBorder(3, 2, 2, 0));
+			value.setBorder(new EmptyBorder(3, 4, 2, 5));
+			meter.setTrack(null);
 
-			setBackground(stripe);
-			setBorder(new EmptyBorder(0, 5, 0, 0));
+			JPanel bar = new JPanel(new BorderLayout());
+			bar.setOpaque(false);
+			bar.setBorder(new EmptyBorder(0, SWATCH + 4, 3, 5));
+			bar.add(meter, BorderLayout.CENTER);
+
+			setOpaque(false);
+			setBorder(new EmptyBorder(0, unitStripe ? 9 : 5, 0, 0));
 			setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			setToolTipText("Click to take this line off the chart");
 			add(swatch(), BorderLayout.WEST);
 			add(name, BorderLayout.CENTER);
 			add(value, BorderLayout.EAST);
+			add(bar, BorderLayout.SOUTH);
 
 			addMouseListener(new MouseAdapter()
 			{
@@ -420,18 +424,22 @@ class RunLegendPanel extends JPanel
 				@Override
 				public void mouseEntered(MouseEvent event)
 				{
+					pointed = true;
+					repaint();
 					onEmphasis.accept(off ? null : Row.this.series);
 				}
 
 				@Override
 				public void mouseExited(MouseEvent event)
 				{
+					pointed = false;
+					repaint();
 					onEmphasis.accept(null);
 				}
 			});
 		}
 
-		/** The line's colour, drawn as the segment of line it stands for. */
+		/** The line's colour, drawn as a dot. */
 		private Swatch swatch()
 		{
 			return new Swatch();
@@ -455,7 +463,7 @@ class RunLegendPanel extends JPanel
 
 			setToolTipText("<html>" + series.label() + "<br>" + tooltip + sources + "</html>");
 
-			fill = off || amount <= 0 || largest <= 0 ? 0 : (double) amount / largest;
+			meter.setFill(off || amount <= 0 || largest <= 0 ? 0 : (double) amount / largest);
 			showName();
 			repaint();
 		}
@@ -482,23 +490,19 @@ class RunLegendPanel extends JPanel
 		@Override
 		protected void paintComponent(Graphics g)
 		{
-			g.setColor(stripe);
-			g.fillRect(0, 0, getWidth(), getHeight());
-
-			if (fill > 0)
-			{
-				Color color = series.seriesColor();
-				g.setColor(PanelStyle.meterFill(color));
-				g.fillRect(0, 0, (int) (getWidth() * PanelStyle.METER_WIDTH * fill), getHeight());
-			}
+			Graphics2D graphics = (Graphics2D) g.create();
+			graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+				RenderingHints.VALUE_ANTIALIAS_ON);
+			graphics.setColor(pointed ? PanelStyle.TILE : PanelStyle.CARD);
+			graphics.fillRoundRect(0, 0, getWidth(), getHeight(), PanelStyle.ARC, PanelStyle.ARC);
 
 			if (unitStripe)
 			{
-				// Over the meter rather than under it: the meter runs the width of the row, and a
-				// stripe the fill washes over says nothing.
-				g.setColor(series.unit().color());
-				g.fillRect(0, 0, UNIT_STRIPE, getHeight());
+				graphics.setColor(series.unit().color());
+				graphics.fillRoundRect(0, 2, UNIT_STRIPE, getHeight() - 4, UNIT_STRIPE, UNIT_STRIPE);
 			}
+
+			graphics.dispose();
 		}
 
 		/** Filled while the line is on the chart, hollow once it is off. */
@@ -513,16 +517,22 @@ class RunLegendPanel extends JPanel
 			@Override
 			protected void paintComponent(Graphics g)
 			{
+				Graphics2D graphics = (Graphics2D) g.create();
+				graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+					RenderingHints.VALUE_ANTIALIAS_ON);
 				int y = (getHeight() - SWATCH) / 2;
-				g.setColor(series.seriesColor());
+				graphics.setColor(series.seriesColor());
 
 				if (off)
 				{
-					g.drawRect(0, y, SWATCH - 1, SWATCH - 1);
-					return;
+					graphics.drawOval(0, y, SWATCH - 1, SWATCH - 1);
+				}
+				else
+				{
+					graphics.fillOval(0, y, SWATCH, SWATCH);
 				}
 
-				g.fillRect(0, y, SWATCH, SWATCH);
+				graphics.dispose();
 			}
 		}
 	}

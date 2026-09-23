@@ -254,7 +254,9 @@ class Totals
 			live == null ? null : DoomFormat.count(live.deep),
 			DoomFormat.pace(lifetime.kph()),
 			tooltip(lifetime),
-			lifetime.isEmpty() ? null : DoomFormat.count(lifetime.deep));
+			lifetime.isEmpty() ? null : DoomFormat.count(lifetime.deep),
+			live == null ? null : live.kph(),
+			lifetime.kph());
 	}
 
 	private String sessionLength(Instant now)
