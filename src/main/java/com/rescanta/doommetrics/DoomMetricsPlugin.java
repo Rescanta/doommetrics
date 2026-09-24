@@ -65,7 +65,11 @@ public class DoomMetricsPlugin extends Plugin
 	private static final int DOM_VARP_FIRST = VarPlayerID.DOM_LAST_DELVE_LEVEL;
 	private static final int DOM_VARP_LAST = VarPlayerID.DOM_CURRENT_LEVEL_TEMP;
 
-	/** Ticks without the boss before a run with no clears is given up on. */
+	/**
+	 * Ticks without the boss before a run with no clears is given up on, counted from a scene load:
+	 * leaving the cave loads one, while delve 1's jump prompt holds the boss back for as long as it
+	 * is left open.
+	 */
 	private static final int ABANDON_TICKS = 100;
 
 	/** Ticks a run is held open after a death, for the clear of a boss that died with the player. */
@@ -164,6 +168,9 @@ public class DoomMetricsPlugin extends Plugin
 
 	private int bossCount;
 	private int ticksWithoutBoss;
+
+	/** Whether the scene has loaded since the run started - see {@link #ABANDON_TICKS}. */
+	private boolean sceneLoadedInRun;
 
 	/** The delve the player died on while {@link #run} is held open after it, or -1. */
 	private int deathLevel = -1;
@@ -863,7 +870,7 @@ public class DoomMetricsPlugin extends Plugin
 
 	private void trackAbandonedRun()
 	{
-		if (bossCount > 0)
+		if (bossCount > 0 || !sceneLoadedInRun)
 		{
 			ticksWithoutBoss = 0;
 			return;
@@ -931,6 +938,7 @@ public class DoomMetricsPlugin extends Plugin
 		{
 			bossCount = 0;
 			ticksWithoutBoss = 0;
+			sceneLoadedInRun = true;
 			combat.sceneCleared();
 		}
 
@@ -985,6 +993,7 @@ public class DoomMetricsPlugin extends Plugin
 		runProfile = profile;
 		pickUpPending = false;
 		ticksWithoutBoss = 0;
+		sceneLoadedInRun = false;
 		deathLevel = -1;
 		combat.runStarted();
 		claims.reset();
