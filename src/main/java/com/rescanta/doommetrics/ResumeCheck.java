@@ -18,7 +18,7 @@ final class ResumeCheck
 		/** The player is back in the delve. The run carries on. */
 		INSIDE,
 
-		/** The player came back outside the cave. The run ended where we last saw it. */
+		/** The player came back outside the cave, the pile lost. The run died where we last saw it. */
 		OUTSIDE
 	}
 
