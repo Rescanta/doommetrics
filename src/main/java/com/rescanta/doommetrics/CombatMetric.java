@@ -385,6 +385,12 @@ enum CombatMetric implements CombatSeries
 			named.add("Any other spec");
 		}
 
+		// Credited straight from the hitsplat - see CombatWatcher.
+		if (this == OTHER_SPEC_DAMAGE)
+		{
+			named.add("Burns (scorching bow, burning claws)");
+		}
+
 		return named;
 	}
 
