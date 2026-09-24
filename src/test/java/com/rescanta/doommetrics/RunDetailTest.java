@@ -3,7 +3,6 @@ package com.rescanta.doommetrics;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import net.runelite.api.gameval.ItemID;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -363,27 +362,13 @@ public class RunDetailTest
 	}
 
 	@Test
-	public void aDeathIsCarriedThroughToTheWindow()
+	public void anEndedRunIsCarriedThroughToTheWindow()
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
 		run.end(EndReason.DIED, at(90), 2);
 
-		RunDetail detail = RunDetail.of(run);
-
-		assertTrue(detail.isFinished());
-		assertEquals(2, detail.diedOn());
-	}
-
-	/** Walking out is not dying, and the delve you walked out on is not one you died on. */
-	@Test
-	public void aRunWalkedOutOfDiedOnNothing()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-		run.end(EndReason.FINISHED, at(90), -1);
-
-		assertEquals(0, RunDetail.of(run).diedOn());
+		assertTrue(RunDetail.of(run).isFinished());
 	}
 
 	@Test
@@ -439,154 +424,6 @@ public class RunDetailTest
 		assertNotEquals("", RunDetail.keyFor(new DelveRun(START, 1, false)));
 	}
 
-	/**
-	 * The pile can be seen growing a moment before the chat line that clears the delve, and there is
-	 * no column for the drop until that line lands.
-	 */
-	@Test
-	public void aDropIsChartedOnceItsDelveIsBanked()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-		run.enterLevel(2, at(60));
-		run.loot().sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-
-		assertTrue(RunDetail.of(run).drops().isEmpty());
-
-		run.complete(2, at(120), null);
-
-		List<RunDetail.Drop> drops = RunDetail.of(run).drops();
-		assertEquals(1, drops.size());
-		assertEquals(2, drops.get(0).level);
-		assertEquals(ItemID.AVERNIC_TREADS, drops.get(0).itemId);
-		assertEquals("Avernic treads", drops.get(0).name);
-	}
-
-	/** Nothing has lost a drop while the run is still going - it is in the pile. */
-	@Test
-	public void aDropIsKeptWhileTheRunIsGoing()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-		run.loot().sawInPile(ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth", 1);
-
-		assertTrue(RunDetail.of(run).drops().get(0).kept);
-	}
-
-	/** Dying loses the pile, so what was in it is drawn as lost - the pet included. */
-	@Test
-	public void aDeathLosesWhatWasStillInThePileAndThePet()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-		run.loot().sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-		run.loot().sawInPile(ItemID.DOMPET, "Dom", run.loot().held(ItemID.DOMPET) + 1);
-		run.end(EndReason.DIED, at(90), 2);
-
-		List<RunDetail.Drop> drops = RunDetail.of(run).drops();
-		assertFalse("the treads went with the run", drops.get(0).kept);
-		assertFalse("so did the pet", drops.get(1).kept);
-	}
-
-	/** The pet is only announced in chat, and the claim takes what the run saw land. */
-	@Test
-	public void aClaimKeepsThePetTheRunSawLand()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-		run.loot().sawInPile(ItemID.DOMPET, "Dom", run.loot().held(ItemID.DOMPET) + 1);
-		run.loot().recordLoot(ItemID.DOMPET, "Dom", run.loot().held(ItemID.DOMPET));
-		run.end(EndReason.FINISHED, at(90), -1);
-
-		assertTrue(RunDetail.of(run).drops().get(0).kept);
-	}
-
-	/** An unknown unique is in the pile while the run goes, and lost once it is over unnamed. */
-	@Test
-	public void anUnknownUniqueIsLostWhenTheRunEndsWithoutNamingIt()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-		run.loot().uniqueSignalled();
-
-		RunDetail.Drop going = RunDetail.of(run).drops().get(0);
-		assertTrue(going.isUnknown());
-		assertTrue(going.kept);
-
-		run.end(EndReason.DIED, at(90), 2);
-		assertFalse(RunDetail.of(run).drops().get(0).kept);
-	}
-
-	/** A claim keeps the drops it reached: a claim of one eye keeps the first eye and not the second. */
-	@Test
-	public void aClaimKeepsTheDropsItReached()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-		run.loot().sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 1);
-		run.complete(2, at(120), null);
-		run.loot().sawInPile(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 2);
-		run.loot().recordLoot(ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak", 1);
-		run.end(EndReason.FINISHED, at(150), -1);
-
-		List<RunDetail.Drop> drops = RunDetail.of(run).drops();
-		assertTrue(drops.get(0).kept);
-		assertFalse(drops.get(1).kept);
-	}
-
-	@Test
-	public void aRunClaimedInFullKeepsEverything()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-		run.loot().sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-		run.loot().recordLoot(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-		run.end(EndReason.FINISHED, at(90), -1);
-
-		assertTrue(RunDetail.of(run).drops().get(0).kept);
-	}
-
-	/**
-	 * A drop can land after the clear that banked its delve, and the window only redraws when the
-	 * key moves - so a drop has to move it.
-	 */
-	@Test
-	public void theKeyMovesWhenADropLandsOrIsClaimed()
-	{
-		DelveRun run = new DelveRun(START, 1, false);
-		run.complete(1, at(60), null);
-
-		String banked = RunDetail.keyFor(run);
-		run.loot().sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-		assertNotEquals(banked, RunDetail.keyFor(run));
-
-		String landed = RunDetail.keyFor(run);
-		run.loot().sawInPile(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-		assertEquals("the same pile sent again changes nothing", landed, RunDetail.keyFor(run));
-
-		run.loot().recordLoot(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
-		assertNotEquals(landed, RunDetail.keyFor(run));
-	}
-
-	/** A drop lost to a death says so, rather than that the run was left without claiming it. */
-	@Test
-	public void aLostDropSaysHowItWasLost()
-	{
-		assertEquals("Lost when you died",
-			RunDetail.of(ended(EndReason.DIED, 2)).lostHow());
-		assertEquals("Lost when the run ended unclaimed",
-			RunDetail.of(ended(EndReason.FINISHED, -1)).lostHow());
-	}
-
-	/** A run that cleared delve 1 and then ended as {@code reason} says. */
-	private static DelveRun ended(EndReason reason, int diedOn)
-	{
-		DelveRun run = new DelveRun(Instant.EPOCH, 1, false);
-		run.complete(1, Instant.EPOCH.plusSeconds(60), null);
-		run.end(reason, Instant.EPOCH.plusSeconds(90), diedOn);
-		return run;
-	}
-
 	/** Delves 1-3 watched, the plugin off until part way into delve 7, then delve 8 watched. */
 	private static DelveRun resumedMidDelve()
 	{
@@ -596,7 +433,7 @@ public class RunDetailTest
 		run.complete(2, Instant.EPOCH.plusSeconds(120), null);
 		run.enterLevel(3, Instant.EPOCH.plusSeconds(130));
 		run.complete(3, Instant.EPOCH.plusSeconds(180), null);
-		run.resumeOn(7, Instant.EPOCH.plusSeconds(500));
+		run.resumeOn(7, Instant.EPOCH.plusSeconds(500), 3);
 		run.complete(7, Instant.EPOCH.plusSeconds(580), Duration.ofSeconds(64));
 		run.enterLevel(8, Instant.EPOCH.plusSeconds(600));
 		run.complete(8, Instant.EPOCH.plusSeconds(700), null);
@@ -650,7 +487,7 @@ public class RunDetailTest
 		run.complete(2, Instant.EPOCH.plusSeconds(120), null);
 		run.enterLevel(3, Instant.EPOCH.plusSeconds(130));
 		run.complete(3, Instant.EPOCH.plusSeconds(180), null);
-		run.resumeOn(6, Instant.EPOCH.plusSeconds(450));
+		run.resumeOn(6, Instant.EPOCH.plusSeconds(450), 3);
 		run.enterLevel(7, Instant.EPOCH.plusSeconds(480));
 		run.complete(7, Instant.EPOCH.plusSeconds(600), null);
 

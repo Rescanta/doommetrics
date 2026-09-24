@@ -9,9 +9,11 @@ import java.awt.Polygon;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.StringJoiner;
+import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -20,21 +22,27 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
 /**
- * A heading over its counters with their group total, catch-alls included. Its unit colour is a
- * side stripe, not the words. Shared by the side panel and the detail legend. Swing thread only.
+ * A heading over its counters with their group total, catch-alls included, led by the skill icon
+ * of its unit. Shared by the side panel and the detail legend. Swing thread only.
  */
 class GroupHeading extends JPanel
 {
-	/** How wide the unit's stripe down the side is. */
-	private static final int STRIPE = 3;
+	/** The room the unit's icon takes, held while it loads so nothing moves when it arrives. */
+	private static final int ICON_SLOT = IconArt.SMALL + 4;
 
 	private final CombatMetric.Group group;
 
 	private final JLabel value = PanelStyle.label("0", SwingConstants.RIGHT,
 		FontManager.getRunescapeSmallFont(), ColorScheme.LIGHT_GRAY_COLOR);
 
-	/** Where the fold arrow goes, beside the stripe, once the heading is made foldable. */
+	/** The unit's skill icon. */
+	private final JLabel icon = new JLabel();
+
+	/** Where the fold arrow goes, before the icon, once the heading is made foldable. */
 	private final JPanel lead = new JPanel(new BorderLayout());
+
+	/** The icon last shown, so a heading still waiting is the only one redrawn. */
+	private BufferedImage shownIcon;
 
 	/** Whether a click folds the rows under this heading away - see {@link #foldable}. */
 	private boolean foldable;
@@ -46,23 +54,42 @@ class GroupHeading extends JPanel
 		super(new BorderLayout());
 		this.group = group;
 
-		JPanel tab = new JPanel();
-		tab.setBackground(group.unit().color());
-		tab.setPreferredSize(new Dimension(STRIPE, 0));
+		icon.setPreferredSize(new Dimension(ICON_SLOT, IconArt.SMALL));
+		icon.setHorizontalAlignment(SwingConstants.CENTER);
 
 		JLabel text = PanelStyle.label(group.heading(), SwingConstants.LEFT,
 			FontManager.getRunescapeSmallFont(), ColorScheme.LIGHT_GRAY_COLOR);
-		text.setBorder(new EmptyBorder(2, 5, 2, 5));
-		value.setBorder(new EmptyBorder(2, 5, 2, 5));
+		text.setBorder(new EmptyBorder(1, 1, 1, 5));
+		value.setBorder(new EmptyBorder(1, 5, 1, 5));
 
 		lead.setOpaque(false);
-		lead.add(tab, BorderLayout.WEST);
+		lead.add(icon, BorderLayout.CENTER);
 
-		setBackground(PanelStyle.BACKGROUND);
-		setBorder(new EmptyBorder(4, 0, 1, 0));
+		setBackground(PanelStyle.CARD);
+		setBorder(new EmptyBorder(PanelStyle.GRID + 2, 0, 2, 0));
 		add(lead, BorderLayout.WEST);
 		add(text, BorderLayout.CENTER);
 		add(value, BorderLayout.EAST);
+	}
+
+	/** @param icons where the unit's skill icon comes from; a no-op until it has arrived */
+	void setIcons(Icons icons)
+	{
+		BufferedImage picture = icons.smallUnit(group.unit());
+
+		if (picture == shownIcon)
+		{
+			return;
+		}
+
+		shownIcon = picture;
+		icon.setIcon(picture == null ? null : new ImageIcon(picture));
+	}
+
+	/** Leaves the total off, for a card whose tiles already carry it. */
+	void hideTotal()
+	{
+		remove(value);
 	}
 
 	/**
@@ -73,7 +100,7 @@ class GroupHeading extends JPanel
 	void foldable(Runnable onToggle)
 	{
 		foldable = true;
-		lead.add(new Arrow(), BorderLayout.EAST);
+		lead.add(new Arrow(), BorderLayout.WEST);
 		setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
 		addMouseListener(new MouseAdapter()
@@ -157,7 +184,7 @@ class GroupHeading extends JPanel
 		private Arrow()
 		{
 			setOpaque(false);
-			setPreferredSize(new Dimension(SIZE * 2 + 5, 0));
+			setPreferredSize(new Dimension(SIZE * 2 + 3, 0));
 		}
 
 		@Override
@@ -168,7 +195,7 @@ class GroupHeading extends JPanel
 				RenderingHints.VALUE_ANTIALIAS_ON);
 			graphics.setColor(ColorScheme.LIGHT_GRAY_COLOR);
 
-			int x = 5;
+			int x = 1;
 			int y = getHeight() / 2;
 			Polygon arrow = new Polygon();
 

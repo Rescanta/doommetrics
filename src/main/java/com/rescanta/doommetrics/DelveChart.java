@@ -12,21 +12,18 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.geom.Path2D;
-import java.awt.image.BufferedImage;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.IntConsumer;
-import java.util.function.IntFunction;
 import javax.swing.JPanel;
-import javax.swing.ToolTipManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
 /**
  * One run, delve by delve: the counters on an upper plot, the delve times on a strip under it,
- * sharing the delve axis, with the run's drops in a lane above. Swing thread only.
+ * sharing the delve axis. Swing thread only.
  */
 class DelveChart extends JPanel
 {
@@ -42,7 +39,10 @@ class DelveChart extends JPanel
 
 	private static final Color CROSSHAIR_COLOR = new Color(0xFF, 0xFF, 0xFF, 90);
 
-	private static final Color READOUT_VALUE_COLOR = ColorScheme.TEXT_COLOR;
+	/** The hover readout names its figures in the game's orange, so they stand off the values. */
+	private static final Color READOUT_LABEL_COLOR = DoomColors.ORANGE;
+
+	private static final Color READOUT_VALUE_COLOR = DoomColors.PLAIN;
 
 	private static final int READOUT_GAP = 12;
 
@@ -54,6 +54,14 @@ class DelveChart extends JPanel
 
 	private static final BasicStroke EMPHASIS_STROKE =
 		new BasicStroke(2.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+
+	private static final float[] DASH = {6f, 5f};
+
+	private static final BasicStroke DASHED_STROKE =
+		new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, DASH, 0f);
+
+	private static final BasicStroke DASHED_EMPHASIS_STROKE =
+		new BasicStroke(2.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, DASH, 0f);
 
 	private static final BasicStroke TIME_STROKE =
 		new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
@@ -114,8 +122,6 @@ class DelveChart extends JPanel
 	/** The delve at the left edge: the first delve seen for a joined run. */
 	private int shallowest = 1;
 
-	private final DropLane lane = new DropLane();
-
 	/** Delves averaged over, or 0 for none. */
 	private int window;
 
@@ -134,8 +140,7 @@ class DelveChart extends JPanel
 			@Override
 			public void mouseMoved(MouseEvent event)
 			{
-				RunDetail.Drop drop = lane.at(event.getX(), event.getY());
-				hover(drop != null ? drop.level : nearestDelve(event.getX(), event.getY()));
+				hover(nearestDelve(event.getX(), event.getY()));
 			}
 		});
 
@@ -147,16 +152,6 @@ class DelveChart extends JPanel
 				hover(0);
 			}
 		});
-
-		// For the drop icons' names.
-		ToolTipManager.sharedInstance().registerComponent(this);
-	}
-
-	/** Item icons, or null while there is none. Called on every paint. */
-	void setItemIcons(IntFunction<BufferedImage> itemIcons)
-	{
-		lane.setItemIcons(itemIcons);
-		repaint();
 	}
 
 	void setHoverListener(IntConsumer onHover)
@@ -254,13 +249,9 @@ class DelveChart extends JPanel
 
 			if (detail.isEmpty() || getWidth() < PAD_LEFT + PAD_RIGHT + 40)
 			{
-				lane.clear();
 				drawEmpty(g2);
 				return;
 			}
-
-			// First: the lane's height decides where the counters begin.
-			lane.layout(detail.drops(), this::xFor, getWidth(), PAD_TOP);
 
 			drawCountGrid(g2);
 			drawTimeGrid(g2);
@@ -268,7 +259,6 @@ class DelveChart extends JPanel
 			drawTimes(g2);
 			drawCounters(g2);
 			drawTimeLegend(g2);
-			lane.draw(g2, this::xFor, countTop());
 			drawCrosshair(g2);
 			drawHeader(g2);
 		}
@@ -314,7 +304,7 @@ class DelveChart extends JPanel
 
 	private int countTop()
 	{
-		return PAD_TOP + lane.height();
+		return PAD_TOP;
 	}
 
 	private int countBottom()
@@ -413,7 +403,7 @@ class DelveChart extends JPanel
 
 		for (String[] part : readout)
 		{
-			g2.setColor(LABEL_COLOR);
+			g2.setColor(READOUT_LABEL_COLOR);
 			g2.drawString(part[0], x, baseline);
 			x += metrics.stringWidth(part[0]);
 
@@ -607,7 +597,9 @@ class DelveChart extends JPanel
 
 		boolean front = emphasis == null || emphasis == line;
 		Color color = front ? line.seriesColor() : dim(line.seriesColor());
-		Stroke stroke = emphasis == line ? EMPHASIS_STROKE : SERIES_STROKE;
+		Stroke stroke = line.dashed()
+			? (emphasis == line ? DASHED_EMPHASIS_STROKE : DASHED_STROKE)
+			: (emphasis == line ? EMPHASIS_STROKE : SERIES_STROKE);
 
 		if (window > 0)
 		{
@@ -727,13 +719,6 @@ class DelveChart extends JPanel
 		g2.setColor(CROSSHAIR_COLOR);
 		g2.drawLine(x, countTop(), x, countBottom());
 		g2.drawLine(x, stripTop(), x, stripBottom());
-	}
-
-	@Override
-	public String getToolTipText(MouseEvent event)
-	{
-		RunDetail.Drop drop = lane.at(event.getX(), event.getY());
-		return drop == null ? null : DropLane.tooltip(drop, detail);
 	}
 
 	/** The delve nearest the pointer, or 0 outside both plots. */

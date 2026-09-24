@@ -34,6 +34,9 @@ class RunLegendPanel extends JPanel
 	 */
 	private static final int SWATCH = 9;
 
+	/** The gap splitting a dashed line's swatch in two. */
+	private static final int DASH_GAP = 3;
+
 	/** How much of a switched-off counter's icon is drawn, as its name is drawn in grey. */
 	private static final float OFF_ALPHA = 0.35f;
 
@@ -130,16 +133,16 @@ class RunLegendPanel extends JPanel
 			}
 
 			rows.put(metric, new Row(metric,
-				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE, false));
+				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE));
 		}
 
 		striped = 0;
 
 		for (CombatMetric.Group each : CombatMetric.Group.values())
 		{
-			// Grouped, a heading's row keeps the unit stripe.
+			// Grouped, a heading's row is led by its unit's skill icon, as the heading is.
 			rows.put(each, new Row(each,
-				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE, true));
+				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE));
 		}
 	}
 
@@ -190,6 +193,11 @@ class RunLegendPanel extends JPanel
 		for (Row row : rows.values())
 		{
 			row.showName();
+		}
+
+		for (GroupHeading heading : headings.values())
+		{
+			heading.setIcons(icons);
 		}
 	}
 
@@ -366,16 +374,10 @@ class RunLegendPanel extends JPanel
 	/** One counter: swatch, name, figure in text ink, and a meter behind them. */
 	private final class Row extends JPanel
 	{
-		/** How wide the unit's stripe down a grouped row is - the width a heading gave it. */
-		private static final int UNIT_STRIPE = 3;
-
 		private final CombatSeries series;
 		private final Color stripe;
 		private final JLabel name;
 		private final JLabel value = PanelStyle.body("0", SwingConstants.RIGHT);
-
-		/** Whether the unit's colour is drawn down the side, as a heading draws it. */
-		private final boolean unitStripe;
 
 		/** Which specs feed a catch-all, as tooltip lines, or empty for a row its name explains. */
 		private final String sources;
@@ -387,12 +389,11 @@ class RunLegendPanel extends JPanel
 		private BufferedImage shownIcon;
 		private boolean shownOff;
 
-		private Row(CombatSeries series, Color stripe, boolean unitStripe)
+		private Row(CombatSeries series, Color stripe)
 		{
 			super(new BorderLayout(4, 0));
 			this.series = series;
 			this.stripe = stripe;
-			this.unitStripe = unitStripe;
 			this.name = PanelStyle.body(series.label(), SwingConstants.LEFT);
 
 			List<String> from = series.sources();
@@ -491,17 +492,9 @@ class RunLegendPanel extends JPanel
 				g.setColor(PanelStyle.meterFill(color));
 				g.fillRect(0, 0, (int) (getWidth() * PanelStyle.METER_WIDTH * fill), getHeight());
 			}
-
-			if (unitStripe)
-			{
-				// Over the meter rather than under it: the meter runs the width of the row, and a
-				// stripe the fill washes over says nothing.
-				g.setColor(series.unit().color());
-				g.fillRect(0, 0, UNIT_STRIPE, getHeight());
-			}
 		}
 
-		/** Filled while the line is on the chart, hollow once it is off. */
+		/** Filled while the line is on the chart, hollow once it is off; split for a dashed line. */
 		private final class Swatch extends JPanel
 		{
 			private Swatch()
@@ -519,6 +512,14 @@ class RunLegendPanel extends JPanel
 				if (off)
 				{
 					g.drawRect(0, y, SWATCH - 1, SWATCH - 1);
+					return;
+				}
+
+				if (series.dashed())
+				{
+					int half = (SWATCH - DASH_GAP) / 2;
+					g.fillRect(0, y, half, SWATCH);
+					g.fillRect(SWATCH - half, y, half, SWATCH);
 					return;
 				}
 

@@ -16,8 +16,10 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DynamicGridLayout;
 
 /**
- * A {@link CombatTotals} as a table: headings with their group totals, and a row per counter with a
- * meter scaled per unit. Rows are built once and never reflow. Swing thread only.
+ * A {@link CombatTotals} as a table: headings led by their skill icon, and a row per counter with a
+ * meter behind it scaled per unit. Rows are built once; with counters at 0 hidden, the table is
+ * laid out again only when a counter crosses from 0, and a link under it shows every row. Swing
+ * thread only.
  */
 class CombatTablePanel extends JPanel
 {
@@ -37,10 +39,21 @@ class CombatTablePanel extends JPanel
 	{
 	};
 
+	/** Whether counters still at 0 are left out - the overlay's Hide counters at 0. */
+	private boolean hideEmpty;
+
+	/** Whether the reader has asked for every row despite {@link #hideEmpty}. */
+	private boolean showingAll;
+
+	/** The counters at 0 in the tally on show, which are the rows {@link #hideEmpty} leaves out. */
+	private final Set<CombatMetric> empty = EnumSet.noneOf(CombatMetric.class);
+
+	private final JLabel showAll = PanelStyle.link(() -> setShowingAll(!showingAll));
+
 	CombatTablePanel()
 	{
 		super(new DynamicGridLayout(0, 1, 0, 1));
-		setBackground(PanelStyle.BACKGROUND);
+		setBackground(PanelStyle.CARD);
 		build();
 		layOut();
 		setTotals(null);
@@ -49,7 +62,6 @@ class CombatTablePanel extends JPanel
 	private void build()
 	{
 		CombatMetric.Group heading = null;
-		int striped = 0;
 
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
@@ -58,16 +70,13 @@ class CombatTablePanel extends JPanel
 				CombatMetric.Group group = metric.group();
 				GroupHeading row = new GroupHeading(group);
 				row.foldable(() -> toggle(group));
+				// The card's tiles carry the totals, so the heading is a name and a fold.
+				row.hideTotal();
 				headings[group.ordinal()] = row;
 				heading = group;
-
-				// Restarted under each heading so the stripes read as a block per group rather
-				// than as one run of alternating rows the headings happen to interrupt.
-				striped = 0;
 			}
 
-			rows[metric.ordinal()] = new MeterRow(metric,
-				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE);
+			rows[metric.ordinal()] = new MeterRow(metric);
 		}
 	}
 
@@ -78,6 +87,7 @@ class CombatTablePanel extends JPanel
 	private void layOut()
 	{
 		removeAll();
+		int hidden = 0;
 
 		for (CombatMetric.Group group : CombatMetric.Group.values())
 		{
@@ -90,17 +100,63 @@ class CombatTablePanel extends JPanel
 				continue;
 			}
 
+			// Restarted under each heading so the stripes read as a block per group rather than
+			// as one run of alternating rows the headings happen to interrupt.
+			int striped = 0;
+
 			for (CombatMetric metric : group.metrics())
 			{
-				if (metric.displayed())
+				if (!metric.displayed())
 				{
-					add(rows[metric.ordinal()]);
+					continue;
 				}
+
+				if (hideEmpty && empty.contains(metric))
+				{
+					hidden++;
+
+					if (!showingAll)
+					{
+						continue;
+					}
+				}
+
+				MeterRow row = rows[metric.ordinal()];
+				row.setStripe(striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE);
+				add(row);
 			}
+		}
+
+		if (hidden > 0)
+		{
+			showAll.setText(showingAll
+				? "Hide counters at 0"
+				: "Show all (" + hidden + " at 0)");
+			add(showAll);
 		}
 
 		revalidate();
 		repaint();
+	}
+
+	/**
+	 * @param hideEmpty whether counters still at 0 are left out, as the overlay leaves them; the
+	 *                  link under the table brings them back
+	 */
+	void setHideEmpty(boolean hideEmpty)
+	{
+		if (this.hideEmpty != hideEmpty)
+		{
+			this.hideEmpty = hideEmpty;
+			layOut();
+		}
+	}
+
+	/** Every row despite {@link #hideEmpty}, or back to leaving the ones at 0 out. */
+	void setShowingAll(boolean showingAll)
+	{
+		this.showingAll = showingAll;
+		layOut();
 	}
 
 	/** The headings to fold, as last left. Tells no listener. */
@@ -143,6 +199,11 @@ class CombatTablePanel extends JPanel
 		{
 			rows[metric.ordinal()].showName(icons);
 		}
+
+		for (GroupHeading heading : headings)
+		{
+			heading.setIcons(icons);
+		}
 	}
 
 	/** Repaints every figure; a null tally reads as zeroes. Meters are scaled per unit. */
@@ -159,9 +220,29 @@ class CombatTablePanel extends JPanel
 			largest[metric.unit().ordinal()] = Math.max(largest[metric.unit().ordinal()], amount);
 		}
 
+		Set<CombatMetric> nowEmpty = EnumSet.noneOf(CombatMetric.class);
+
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
-			rows[metric.ordinal()].set(counted.get(metric), largest[metric.unit().ordinal()]);
+			long amount = counted.get(metric);
+			rows[metric.ordinal()].set(amount, largest[metric.unit().ordinal()]);
+
+			if (amount <= 0)
+			{
+				nowEmpty.add(metric);
+			}
+		}
+
+		// Only a counter crossing from 0 - or the tab switching tallies - changes which rows are up.
+		if (!nowEmpty.equals(empty))
+		{
+			empty.clear();
+			empty.addAll(nowEmpty);
+
+			if (hideEmpty)
+			{
+				layOut();
+			}
 		}
 
 		for (CombatMetric.Group group : CombatMetric.Group.values())
@@ -174,7 +255,7 @@ class CombatTablePanel extends JPanel
 	private static final class MeterRow extends JPanel
 	{
 		private final CombatMetric metric;
-		private final Color stripe;
+		private Color stripe = PanelStyle.CARD;
 		private final JLabel value = PanelStyle.body("0", SwingConstants.RIGHT);
 		private final JLabel label;
 
@@ -184,17 +265,15 @@ class CombatTablePanel extends JPanel
 		/** The icon the name was last drawn with, so only rows still waiting redraw. */
 		private BufferedImage shownIcon;
 
-		private MeterRow(CombatMetric metric, Color stripe)
+		private MeterRow(CombatMetric metric)
 		{
 			super(new BorderLayout());
 			this.metric = metric;
-			this.stripe = stripe;
 
 			label = PanelStyle.body(metric.label(), SwingConstants.LEFT);
 			label.setBorder(PanelStyle.CELL_PADDING);
 			value.setBorder(PanelStyle.CELL_PADDING);
 
-			setBackground(stripe);
 			// A narrow row squeezes the name rather than clipping the figure.
 			add(label, BorderLayout.CENTER);
 			add(value, BorderLayout.EAST);
@@ -207,6 +286,13 @@ class CombatTablePanel extends JPanel
 				? metric.label()
 				: "<html>" + metric.label() + "<br><br>Counted from:<br>"
 					+ String.join("<br>", sources) + "</html>");
+		}
+
+		/** Its place in the alternation, which moves as the rows around it are hidden. */
+		private void setStripe(Color stripe)
+		{
+			this.stripe = stripe;
+			setBackground(stripe);
 		}
 
 		private void showName(Icons icons)

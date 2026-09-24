@@ -28,26 +28,42 @@ enum SpecWeapon
 	/** Toxic blowpipe. One dart, healing half of what it hits for, both landing together. */
 	BLOWPIPE("Toxic blowpipe",
 		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		heal(CombatMetric.BLOWPIPE_HEAL, 1)),
+		projectileHeal(CombatMetric.BLOWPIPE_HEAL, 1)),
 
 	/** Ancient godsword: the swing, then Blood Sacrifice's damage and heal eight ticks later. */
 	ANCIENT_GODSWORD("Ancient godsword",
-		damage(CombatMetric.OTHER_SPEC_DAMAGE, 1),
+		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
 		sacrificeDamage(),
 		sacrificeHeal()),
 
-	/** Eldritch nightmare staff. Restores prayer rather than hitpoints. */
+	/**
+	 * Saradomin godsword. Healing Blade heals half of what the swing hits for and restores a
+	 * quarter as prayer, as it lands.
+	 */
+	SARADOMIN_GODSWORD("Saradomin godsword",
+		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
+		swingHeal(CombatMetric.SGS_HEAL),
+		swingPrayer(CombatMetric.SGS_PRAYER)),
+
+	/** Eldritch nightmare staff. Restores prayer rather than hitpoints, both when the spell lands. */
 	ELDRITCH_STAFF("Eldritch staff",
-		damage(CombatMetric.OTHER_SPEC_DAMAGE, 1),
+		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
 		prayer(CombatMetric.ELDRITCH_PRAYER, 2)),
 
-	/** Everything else. Four hits covers dragon claws. */
-	OTHER(null,
-		damage(CombatMetric.OTHER_SPEC_DAMAGE, 4),
-		heal(CombatMetric.OTHER_SPEC_HEAL, 4));
+	/** Every other melee spec. Four hits covers dragon claws. None of them heals. */
+	OTHER(null, swing(CombatMetric.OTHER_SPEC_DAMAGE, 4)),
+
+	/** Every other ranged or magic spec, whose hits have to fly - see {@link #FLIGHT}. */
+	OTHER_FIRED(null, projectile(CombatMetric.OTHER_SPEC_DAMAGE, 4));
 
 	/** How long a spec's own hit may take to arrive, in ticks. */
 	private static final int PROMPT = 3;
+
+	/**
+	 * The earliest a melee spec lands: a tick after the energy moves. A hit on the spec's own tick
+	 * is the attack before it.
+	 */
+	private static final int SWING = 1;
 
 	/** The earliest a thrown or fired spec can land; keeps out the auto-attack thrown before it. */
 	private static final int FLIGHT = 2;
@@ -71,9 +87,9 @@ enum SpecWeapon
 		this.effects = Collections.unmodifiableList(Arrays.asList(effects));
 	}
 
-	private static SpecEffect damage(CombatMetric metric, int budget)
+	private static SpecEffect swing(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, 0, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, SWING, PROMPT, budget);
 	}
 
 	/** A spec's hit that has to fly to its target - see {@link #FLIGHT}. */
@@ -82,14 +98,27 @@ enum SpecWeapon
 		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, PROMPT, budget);
 	}
 
-	private static SpecEffect heal(CombatMetric metric, int budget)
+	/** A heal that lands with a melee spec's hit. */
+	private static SpecEffect swingHeal(CombatMetric metric)
 	{
-		return new SpecEffect(SpecEffect.Kind.HEAL, metric, 0, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.HEAL, metric, SWING, PROMPT, 1);
+	}
+
+	/** A prayer restore that lands with a melee spec's hit. */
+	private static SpecEffect swingPrayer(CombatMetric metric)
+	{
+		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, SWING, PROMPT, 1);
+	}
+
+	/** A heal that lands with a projectile's hit. */
+	private static SpecEffect projectileHeal(CombatMetric metric, int budget)
+	{
+		return new SpecEffect(SpecEffect.Kind.HEAL, metric, FLIGHT, PROMPT, budget);
 	}
 
 	private static SpecEffect prayer(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, 0, RESTORE, budget);
+		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, FLIGHT, RESTORE, budget);
 	}
 
 	/**
@@ -114,11 +143,17 @@ enum SpecWeapon
 	}
 
 	/**
-	 * The weapon's name as the panel lists it, or null for {@link #OTHER}, which is no one weapon.
+	 * The weapon's name as the panel lists it, or null for the catch-alls, which are no one weapon.
 	 */
 	String label()
 	{
 		return label;
+	}
+
+	/** {@link #OTHER_FIRED} for an unnamed weapon that isn't melee; any other weapon unchanged. */
+	SpecWeapon fired(boolean melee)
+	{
+		return this == OTHER && !melee ? OTHER_FIRED : this;
 	}
 
 	/** Whether anything this weapon's spec produces is credited to {@code metric}. */
@@ -135,7 +170,10 @@ enum SpecWeapon
 		return false;
 	}
 
-	/** The weapon held, or null if the slot is empty. */
+	/**
+	 * The weapon held, or null if the slot is empty. Unnamed weapons are {@link #OTHER}; the caller
+	 * tells a fired one apart with {@link #fired}.
+	 */
 	static SpecWeapon forItem(int itemId)
 	{
 		switch (itemId)
@@ -163,6 +201,10 @@ enum SpecWeapon
 			case ItemID.ANCIENT_GODSWORD:
 			case ItemID.BR_ANCIENT_GODSWORD:
 				return ANCIENT_GODSWORD;
+
+			case ItemID.SGS:
+			case ItemID.SGSG:
+				return SARADOMIN_GODSWORD;
 
 			// Loaded and empty forms, and their ornaments: the last shot swaps to empty.
 			case ItemID.TOXIC_BLOWPIPE:
@@ -219,6 +261,11 @@ enum SpecWeapon
 		if (lower.contains("ancient godsword"))
 		{
 			return ANCIENT_GODSWORD;
+		}
+
+		if (lower.contains("saradomin godsword"))
+		{
+			return SARADOMIN_GODSWORD;
 		}
 
 		if (lower.contains("zaryte crossbow"))

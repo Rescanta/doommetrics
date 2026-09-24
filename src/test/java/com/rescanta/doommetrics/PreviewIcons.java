@@ -21,14 +21,9 @@ final class PreviewIcons implements Icons
 
 	static
 	{
-		ITEMS.put(ItemID.EYE_OF_AYAK, "eye_of_ayak");
-		ITEMS.put(ItemID.EYE_OF_AYAK_UNCHARGED, "eye_of_ayak_uncharged");
-		ITEMS.put(ItemID.AVERNIC_TREADS, "avernic_treads");
-		ITEMS.put(ItemID.MOKHAIOTL_CLOTH, "mokhaiotl_cloth");
-		ITEMS.put(ItemID.DOMPET, "dom");
-
 		ITEMS.put(ItemID.ANCIENT_GODSWORD, "ancient_godsword");
 		ITEMS.put(ItemID.TOXIC_BLOWPIPE, "toxic_blowpipe");
+		ITEMS.put(ItemID.SGS, "saradomin_godsword");
 		ITEMS.put(ItemID.NIGHTMARE_STAFF_ELDRITCH, "eldritch_nightmare_staff");
 		ITEMS.put(ItemID.ZARYTE_XBOW, "zaryte_crossbow");
 		ITEMS.put(ItemID.SCYTHE_OF_VITUR, "scythe_of_vitur");
@@ -36,6 +31,10 @@ final class PreviewIcons implements Icons
 		ITEMS.put(ItemID.CRYSTAL_HALBERD, "crystal_halberd");
 
 		SPRITES.put(SpriteID.Magicon2.BLOOD_BARRAGE, "blood_barrage");
+		SPRITES.put(SpriteID.Staticons.HITPOINTS, "hitpoints");
+		SPRITES.put(SpriteID.Staticons.PRAYER, "prayer");
+		SPRITES.put(SpriteID.Staticons.STRENGTH, "strength");
+		SPRITES.put(IconArt.BOSS, "doom_boss");
 	}
 
 	/** Built after the tables above, which it loads from. */
@@ -78,15 +77,15 @@ final class PreviewIcons implements Icons
 	}
 
 	@Override
-	public BufferedImage item(int itemId)
+	public BufferedImage sprite(int spriteId)
 	{
-		return full.get(ITEMS.get(itemId));
+		return full.get(SPRITES.get(spriteId));
 	}
 
 	@Override
-	public BufferedImage smallItem(int itemId)
+	public BufferedImage smallSprite(int spriteId)
 	{
-		return small.get(ITEMS.get(itemId));
+		return small.get(SPRITES.get(spriteId));
 	}
 
 	/** The file a counter's picture is kept in, or null for a counter the harness has none for. */

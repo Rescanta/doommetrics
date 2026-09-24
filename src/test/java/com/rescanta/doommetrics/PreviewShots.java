@@ -244,6 +244,8 @@ public class PreviewShots
 		panel.setStats(scene.stats);
 		panel.setCombat(scene.panelCombat(), scene.lifetime);
 		panel.setRows(scene.rows);
+		panel.setHideEmpty(scene.config.hideEmptyCounters);
+		panel.setResets(scene.resets(), PreviewScene.RESETS_PER_HOUR);
 
 		return PreviewRender.scale(PreviewRender.component(panel), ZOOM);
 	}

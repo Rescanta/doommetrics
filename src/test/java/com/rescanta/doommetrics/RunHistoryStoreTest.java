@@ -1,8 +1,6 @@
 package com.rescanta.doommetrics;
 
 import com.google.gson.Gson;
-import java.util.Arrays;
-import java.util.Collections;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -26,7 +24,6 @@ public class RunHistoryStoreTest
 		record.delve = delve;
 		record.ticks = 4210;
 		record.end = end;
-		record.loot = Collections.emptyList();
 		return record;
 	}
 
@@ -36,7 +33,6 @@ public class RunHistoryStoreTest
 		RunRecord original = record(83, EndReason.DIED);
 		original.diedOn = 84;
 		original.partial = true;
-		original.loot = Arrays.asList("Eye of ayak", "Mokhaiotl cloth");
 
 		RunRecord restored = store.decode(store.encode(original));
 
@@ -48,7 +44,17 @@ public class RunHistoryStoreTest
 		assertEquals(EndReason.DIED, restored.end);
 		assertEquals(84, restored.diedOn);
 		assertTrue(restored.partial);
-		assertEquals(Arrays.asList("Eye of ayak", "Mokhaiotl cloth"), restored.loot);
+	}
+
+	/** Lines written while claimed uniques were recorded still read. */
+	@Test
+	public void aRecordWithTheRetiredLootFieldStillReads()
+	{
+		RunRecord restored = store.decode(
+			"{\"v\":1,\"at\":1756339200,\"delve\":30,\"loot\":[\"Eye of ayak\"]}");
+
+		assertNotNull(restored);
+		assertEquals(30, restored.delve);
 	}
 
 	@Test
@@ -140,7 +146,7 @@ public class RunHistoryStoreTest
 		assertNotNull(restored);
 		assertEquals(30, restored.delve);
 		assertNull(restored.end);
-		assertNull(restored.loot);
+		assertNull(restored.combat);
 	}
 
 	@Test

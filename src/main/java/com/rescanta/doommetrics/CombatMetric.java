@@ -16,8 +16,9 @@ import java.util.stream.Collectors;
  */
 enum CombatMetric implements CombatSeries
 {
-	// Each counter drawn has a palette slot to itself - see seriesColor. The catch-alls are drawn
-	// nowhere, and their colours are only there because every constant needs one.
+	// Each counter drawn has a palette slot to itself - see seriesColor - except the two SGS ones,
+	// which share one each and are dashed. The catch-alls are drawn nowhere, and their colours are only there
+	// because every constant needs one.
 	BLOOD_BARRAGE_HEAL(Group.HEALING, "bloodBarrage", "Blood barrage", "Barrage", Unit.HITPOINTS,
 		new Color(0x3987E5)),
 	OTHER_SPELL_HEAL(Group.HEALING, "otherSpell", "Other spells", "Other spells", Unit.HITPOINTS,
@@ -27,11 +28,15 @@ enum CombatMetric implements CombatSeries
 		new Color(0xD95926)),
 	BLOWPIPE_HEAL(Group.HEALING, "bpHeal", "Blowpipe", "BP", Unit.HITPOINTS,
 		new Color(0x199E70)),
+	SGS_HEAL(Group.HEALING, "sgsHeal", "Saradomin godsword", "SGS", Unit.HITPOINTS,
+		new Color(0x9085E9)),
 	OTHER_SPEC_HEAL(Group.HEALING, "otherSpecHeal", "Other specs", "Other specs", Unit.HITPOINTS,
 		new Color(0xD55181)),
 
 	ELDRITCH_PRAYER(Group.PRAYER, "eldritchPrayer", "Eldritch staff", "Eldritch", Unit.PRAYER,
 		new Color(0xC98500)),
+	SGS_PRAYER(Group.PRAYER, "sgsPrayer", "Saradomin godsword", "SGS prayer", Unit.PRAYER,
+		new Color(0x008300)),
 
 	ZCB_DAMAGE(Group.DAMAGE, "zcbDamage", "Zaryte crossbow", "ZCB", Unit.DAMAGE,
 		new Color(0xD55181)),
@@ -95,6 +100,13 @@ enum CombatMetric implements CombatSeries
 		public Color seriesColor()
 		{
 			return series;
+		}
+
+		/** The unit's skill icon: a sum has no one weapon, but it has one unit. */
+		@Override
+		public BufferedImage icon(Icons icons)
+		{
+			return icons.smallUnit(unit);
 		}
 
 		/** Every counter under this heading, the catch-alls included. */
@@ -373,6 +385,12 @@ enum CombatMetric implements CombatSeries
 			named.add("Any other spec");
 		}
 
+		// Credited straight from the hitsplat - see CombatWatcher.
+		if (this == OTHER_SPEC_DAMAGE)
+		{
+			named.add("Burns (scorching bow, burning claws)");
+		}
+
 		return named;
 	}
 
@@ -384,5 +402,12 @@ enum CombatMetric implements CombatSeries
 	public Color seriesColor()
 	{
 		return series;
+	}
+
+	/** The counters past the eighth slot reuse hues checked against their neighbours. */
+	@Override
+	public boolean dashed()
+	{
+		return this == SGS_HEAL || this == SGS_PRAYER;
 	}
 }

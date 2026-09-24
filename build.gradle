@@ -111,7 +111,7 @@ tasks.register('verifyPluginPackaging') {
 	}
 	def strayArtifacts = fileTree(projectDir) {
 		include '**/*.class'
-		exclude 'build/**', '.gradle/**', '.git/**', '.idea/**'
+		exclude 'build/**', '.gradle/**', '.git/**', '.idea/**', '.claude/**'
 	}
 
 	doLast {
