@@ -236,10 +236,10 @@ public class DoomMetricsOverlayTest
 		config.counterStyle = CounterStyle.ICON_GRID;
 		BufferedImage grid = draw(plugin, config);
 
-		assertEquals("nine counters, a line each", none + ruleHeight() + 9 * lineHeight(), icons);
+		assertEquals("ten counters, a line each", none + ruleHeight() + 10 * lineHeight(), icons);
 		assertEquals("the grid keeps the overlay's width", ComponentConstants.STANDARD_WIDTH,
 			grid.getWidth());
-		assertEquals("nine counters, two to a line", none + ruleHeight() + 5 * lineHeight(),
+		assertEquals("ten counters, two to a line", none + ruleHeight() + 5 * lineHeight(),
 			grid.getHeight());
 
 		// Healing's four counters take two lines; prayer's total takes one of its own; the four
@@ -247,10 +247,10 @@ public class DoomMetricsOverlayTest
 		config.mode(CombatMetric.Group.PRAYER, CounterMode.TOTAL);
 		assertEquals(none + ruleHeight() + 5 * lineHeight(), draw(plugin, config).getHeight());
 
-		// Without the damage, the eldritch staff starts a line of its own after healing's two.
+		// Without the damage, the two prayer counters share a line after healing's two.
 		config.mode(CombatMetric.Group.PRAYER, CounterMode.EACH);
 		config.mode(CombatMetric.Group.DAMAGE, CounterMode.OFF);
-		assertEquals("blood barrage, AGS, blowpipe, SGS and eldritch - three lines",
+		assertEquals("blood barrage, AGS, blowpipe, SGS, eldritch and SGS prayer - three lines",
 			none + ruleHeight() + 3 * lineHeight(), draw(plugin, config).getHeight());
 
 		// Healing alone fills its two lines.
