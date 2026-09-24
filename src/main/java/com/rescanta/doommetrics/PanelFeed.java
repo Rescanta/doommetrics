@@ -12,7 +12,7 @@ import javax.swing.SwingUtilities;
  */
 class PanelFeed
 {
-	/** A sitting shorter than this has no resets-per-hour yet: one quick reset is not a rate. */
+	/** A session shorter than this has no resets-per-hour yet: one quick reset is not a rate. */
 	private static final Duration MIN_RATE_SPAN = Duration.ofMinutes(10);
 
 	private final DoomMetricsPlugin plugin;
@@ -133,13 +133,11 @@ class PanelFeed
 				plugin.targetDelve(), config.targetPrediction()));
 
 		Instant now = Instant.now();
-		boolean showSession = totals.sessionShown(plugin.isRunInProgress(), now);
-		DoomMetricsPanel.Stats stats = totals.stats(showSession, now);
+		DoomMetricsPanel.Stats stats = totals.stats(now);
 		ResetSummary resets = milestones.summary();
-		Double resetsPerHour = showSession ? perHour(resets.sessionResets, totals.sessionElapsed(now))
-			: null;
+		Double resetsPerHour = perHour(resets.sessionResets, totals.sessionElapsed(now));
 		String key = (live == null ? "" : live.key())
-			+ "|" + stats.key() + "|" + totals.combatKey(showSession)
+			+ "|" + stats.key() + "|" + totals.combatKey()
 			+ "|" + resets.key() + "|" + DoomFormat.pace(resetsPerHour)
 			+ (detailLive == live ? "" : "|" + (detailLive == null ? "" : detailLive.key()));
 
@@ -150,7 +148,7 @@ class PanelFeed
 
 		lastLiveKey = key;
 
-		CombatTotals combat = showSession ? totals.sessionCombat() : null;
+		CombatTotals combat = totals.sessionCombat();
 		CombatTotals lifetimeShown = totals.lifetimeCombat();
 
 		SwingUtilities.invokeLater(() ->
@@ -169,7 +167,7 @@ class PanelFeed
 		});
 	}
 
-	/** A count over a sitting as an hourly rate, or null while the sitting is too short to say. */
+	/** A count over the session as an hourly rate, or null while the session is too short to say. */
 	private static Double perHour(int count, Duration elapsed)
 	{
 		if (count == 0 || elapsed == null || elapsed.compareTo(MIN_RATE_SPAN) < 0)

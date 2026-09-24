@@ -34,7 +34,6 @@ final class PreviewIcons implements Icons
 		SPRITES.put(SpriteID.Staticons.HITPOINTS, "hitpoints");
 		SPRITES.put(SpriteID.Staticons.PRAYER, "prayer");
 		SPRITES.put(SpriteID.Staticons.STRENGTH, "strength");
-		SPRITES.put(IconArt.BOSS, "doom_boss");
 	}
 
 	/** Built after the tables above, which it loads from. */

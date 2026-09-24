@@ -278,11 +278,11 @@ class DelveChart extends JPanel
 		}
 		else if (detail.isFinished())
 		{
-			text = "This run completed no delves.";
+			text = "This run cleared no delves.";
 		}
 		else
 		{
-			text = "No delve completed yet.";
+			text = "No delves cleared yet.";
 		}
 
 		FontMetrics metrics = g2.getFontMetrics();
@@ -379,7 +379,7 @@ class DelveChart extends JPanel
 		int baseline = PAD_TOP - 8;
 
 		String caption = window > 0
-			? "Counted per delve - bold lines are averaged over " + window + " delves"
+			? "Counted per delve - bold lines are a " + window + "-delve average"
 			: "Counted per delve";
 
 		String[][] readout = readout();
