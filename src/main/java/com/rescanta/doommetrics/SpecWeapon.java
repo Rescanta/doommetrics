@@ -38,12 +38,12 @@ enum SpecWeapon
 
 	/**
 	 * Saradomin godsword. Healing Blade heals half of what the swing hits for and restores a
-	 * quarter as prayer, as it lands.
+	 * quarter as prayer, both on the spec's own tick - a tick ahead of the hitsplat.
 	 */
 	SARADOMIN_GODSWORD("Saradomin godsword",
 		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		swingHeal(CombatMetric.SGS_HEAL),
-		swingPrayer(CombatMetric.SGS_PRAYER)),
+		healingBlade(SpecEffect.Kind.HEAL, CombatMetric.SGS_HEAL),
+		healingBlade(SpecEffect.Kind.PRAYER, CombatMetric.SGS_PRAYER)),
 
 	/** Eldritch nightmare staff. Restores prayer rather than hitpoints, both when the spell lands. */
 	ELDRITCH_STAFF("Eldritch staff",
@@ -56,7 +56,7 @@ enum SpecWeapon
 	/** Every other ranged or magic spec, whose hits have to fly - see {@link #FLIGHT}. */
 	OTHER_FIRED(null, projectile(CombatMetric.OTHER_SPEC_DAMAGE, 4));
 
-	/** How long a spec's own hit may take to arrive, in ticks. */
+	/** How long a melee spec's own hit may take to arrive, in ticks. */
 	private static final int PROMPT = 3;
 
 	/**
@@ -67,6 +67,12 @@ enum SpecWeapon
 
 	/** The earliest a thrown or fired spec can land; keeps out the auto-attack thrown before it. */
 	private static final int FLIGHT = 2;
+
+	/** The latest a thrown or fired spec lands: a bow at range, and the scorching bow's spec. */
+	private static final int LANDED = 4;
+
+	/** The last tick after an SGS spec its heal and prayer may arrive; seen only on the first. */
+	private static final int HEALING_BLADE = 1;
 
 	/** How long after an Eldritch spec its restore may arrive: it lands when the spell does. */
 	private static final int RESTORE = 7;
@@ -95,25 +101,19 @@ enum SpecWeapon
 	/** A spec's hit that has to fly to its target - see {@link #FLIGHT}. */
 	private static SpecEffect projectile(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, LANDED, budget);
 	}
 
-	/** A heal that lands with a melee spec's hit. */
-	private static SpecEffect swingHeal(CombatMetric metric)
+	/** The SGS's heal or prayer restore, from the spec's own tick. */
+	private static SpecEffect healingBlade(SpecEffect.Kind kind, CombatMetric metric)
 	{
-		return new SpecEffect(SpecEffect.Kind.HEAL, metric, SWING, PROMPT, 1);
-	}
-
-	/** A prayer restore that lands with a melee spec's hit. */
-	private static SpecEffect swingPrayer(CombatMetric metric)
-	{
-		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, SWING, PROMPT, 1);
+		return new SpecEffect(kind, metric, 0, HEALING_BLADE, 1);
 	}
 
 	/** A heal that lands with a projectile's hit. */
 	private static SpecEffect projectileHeal(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.HEAL, metric, FLIGHT, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.HEAL, metric, FLIGHT, LANDED, budget);
 	}
 
 	private static SpecEffect prayer(CombatMetric metric, int budget)

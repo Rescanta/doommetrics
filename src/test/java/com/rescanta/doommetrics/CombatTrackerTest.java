@@ -110,6 +110,19 @@ public class CombatTrackerTest
 		assertEquals(SpecWeapon.ANCIENT_GODSWORD, SpecWeapon.ANCIENT_GODSWORD.fired(false));
 	}
 
+	/** A scorching bow spec lands four ticks after the energy drops; the next shot after that. */
+	@Test
+	public void aFiredSpecMayLandFourTicksLater()
+	{
+		tracker.specFired(SpecWeapon.OTHER.fired(false), 5094);
+		tracker.damaged(12, 5098);
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 6000);
+		tracker.damaged(80, 6004);
+		tracker.damaged(30, 6005);
+
+		assertEquals(list("otherSpecDamage=12", "zcbDamage=80"), recorded);
+	}
+
 	/**
 	 * An unnamed spec heals nothing. The one that took a Blood Sacrifice heal in a trip's logs was a
 	 * Scorching bow fired seven ticks after the godsword.
@@ -127,19 +140,21 @@ public class CombatTrackerTest
 		assertEquals(list("agsHeal=10"), recorded);
 	}
 
-	/** Healing Blade heals and restores prayer as the swing lands, a tick after the spec. */
+	/**
+	 * Healing Blade heals and restores prayer on the spec's own tick, read before the energy drop,
+	 * with the hitsplat a tick later.
+	 */
 	@Test
-	public void aSaradominGodswordSpecHealsWithItsHit()
+	public void aSaradominGodswordSpecHealsOnItsOwnTick()
 	{
-		tracker.healed(9, 100);
+		tracker.healed(24, 100);
+		tracker.prayerGained(12, 100);
 		tracker.specFired(SpecWeapon.SARADOMIN_GODSWORD, 100);
 		tracker.damaged(48, 101);
-		tracker.healed(24, 101);
-		tracker.prayerGained(12, 101);
 		tracker.healed(20, 102);
 		tracker.prayerGained(8, 102);
 
-		assertEquals(list("otherSpecDamage=48", "sgsHeal=24", "sgsPrayer=12"), recorded);
+		assertEquals(list("sgsHeal=24", "sgsPrayer=12", "otherSpecDamage=48"), recorded);
 	}
 
 	/** Held only for the tick it arrived on: a brew is not the next tick's barrage. */
