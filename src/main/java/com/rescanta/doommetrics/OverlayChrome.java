@@ -8,15 +8,13 @@ import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.image.BufferedImage;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.components.LayoutableRenderableEntity;
 import net.runelite.client.ui.overlay.components.TextComponent;
 
 /**
  * What makes the overlay read as one of the game's own panels: the stone frame round it, a title
- * with the boss's icon over an ember line, the target's bar, and the rule between the run and its
- * counters.
+ * over an ember line, the target's bar, and the rule between the run and its counters.
  */
 final class OverlayChrome
 {
@@ -71,13 +69,10 @@ final class OverlayChrome
 		private static final Font FONT = FontManager.getRunescapeBoldFont();
 
 		private final String text;
-		private final BufferedImage icon;
 
-		/** @param icon the boss's icon, a line of text high, or null while it is loading */
-		Title(String text, BufferedImage icon)
+		Title(String text)
 		{
 			this.text = text;
-			this.icon = icon;
 		}
 
 		@Override
@@ -87,24 +82,15 @@ final class OverlayChrome
 			graphics.setFont(FONT);
 			FontMetrics metrics = graphics.getFontMetrics();
 
-			int textHeight = metrics.getHeight();
-			int lineHeight = Math.max(textHeight, icon == null ? 0 : icon.getHeight());
-			int width = metrics.stringWidth(text) + (icon == null ? 0 : icon.getWidth() + 4);
-			int x = location.x + Math.max(0, (size.width - width) / 2);
+			int lineHeight = metrics.getHeight();
+			int x = location.x + Math.max(0, (size.width - metrics.stringWidth(text)) / 2);
 			int y = location.y;
-
-			if (icon != null)
-			{
-				graphics.drawImage(icon, x, y + (lineHeight - icon.getHeight()) / 2, null);
-				x += icon.getWidth() + 4;
-			}
 
 			TextComponent words = new TextComponent();
 			words.setText(text);
 			words.setColor(DoomColors.ORANGE);
 			words.setFont(FONT);
-			words.setPosition(new Point(x,
-				y + (lineHeight - textHeight) / 2 + metrics.getAscent()));
+			words.setPosition(new Point(x, y + metrics.getAscent()));
 			words.render(graphics);
 
 			glow(graphics, location.x, y + lineHeight + UNDER - 1, size.width, DoomColors.EMBER);

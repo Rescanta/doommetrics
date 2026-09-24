@@ -55,8 +55,8 @@ import net.runelite.client.util.ImageUtil;
 @Slf4j
 @PluginDescriptor(
 	name = "Doom of Mokhaiotl Metrics",
-	description = "Times each delve, shows your deep delve rate, and keeps a lifetime record of"
-		+ " every run",
+	description = "Delve timer, pace, combat counters and lifetime stats for the Doom of"
+		+ " Mokhaiotl",
 	tags = {"doom", "mokhaiotl", "delve", "timer", "pace", "pvm", "metrics", "history", "stats"}
 )
 public class DoomMetricsPlugin extends Plugin
@@ -468,11 +468,6 @@ public class DoomMetricsPlugin extends Plugin
 	DelveRun getDetailRun()
 	{
 		return run != null ? run : lastRun;
-	}
-
-	boolean isRunInProgress()
-	{
-		return run != null;
 	}
 
 	/** The target delve, or 0 when the target is switched off. */
@@ -1021,7 +1016,7 @@ public class DoomMetricsPlugin extends Plugin
 		log.debug("Doom run ended: {} after {} delves", reason, ended.lastLevel());
 
 		// Delves are already banked; this flushes the combat since the last one, abandoned or not.
-		totals.runEnded(ended.getEndedAt());
+		totals.flushCombat();
 
 		if (reason == EndReason.ABANDONED)
 		{

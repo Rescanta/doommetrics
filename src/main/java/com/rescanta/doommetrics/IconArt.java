@@ -15,9 +15,6 @@ final class IconArt
 	/** A line of text high. */
 	static final int SMALL = 16;
 
-	/** The boss's own icon, from the hiscores and the collection log. */
-	static final int BOSS = SpriteID.IconBoss25x25.DOOM_OF_MOKHAIOTL;
-
 	private IconArt()
 	{
 	}

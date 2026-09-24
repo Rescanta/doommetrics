@@ -120,7 +120,7 @@ class GroupHeading extends JPanel
 		repaint();
 	}
 
-	/** @param totals the sitting, the lifetime, the run or one delve */
+	/** @param totals the session, the lifetime, the run or one delve */
 	void set(CombatTotals totals)
 	{
 		long amount = group.amount(totals);
@@ -131,7 +131,7 @@ class GroupHeading extends JPanel
 		String tooltip = group.tooltip(totals);
 
 		setToolTipText(foldable
-			? tooltip.replace("</html>", "<br><br>Click to show or hide the rows under it</html>")
+			? tooltip.replace("</html>", "<br><br>Click to expand or collapse</html>")
 			: tooltip);
 	}
 

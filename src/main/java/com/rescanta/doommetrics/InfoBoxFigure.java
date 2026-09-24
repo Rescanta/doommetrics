@@ -172,8 +172,8 @@ public enum InfoBoxFigure
 
 				return pace == null
 					? mode + (mode == PaceMode.RUN_THROUGHPUT
-						? "</br>No deep delve completed"
-						: "</br>Nothing deep enough to average yet")
+						? "</br>No deep delve cleared yet"
+						: "</br>No delve 9+ cleared yet")
 					: mode + "</br>" + DoomFormat.pace(pace);
 			}
 
@@ -182,7 +182,7 @@ public enum InfoBoxFigure
 				int target = config.targetDelve();
 				Duration remaining = run.untilTarget(target, now);
 
-				return "Predicted to delve " + target + "</br>" + (remaining != null
+				return "Time left to delve " + target + "</br>" + (remaining != null
 					? DoomFormat.duration(remaining)
 					: nothingToPredict(run));
 			}
@@ -195,14 +195,14 @@ public enum InfoBoxFigure
 				if (run.hasReached(target))
 				{
 					return total == null
-						? "Delve " + target + "</br>Reached before the run was joined"
+						? "Delve " + target + "</br>Reached before tracking started"
 						: partialNote(run, "Delve " + target + " reached in</br>"
 							+ DoomFormat.duration(total));
 				}
 
 				return total == null
-					? "Predicted run to delve " + target + "</br>" + nothingToPredict(run)
-					: partialNote(run, "Predicted run to delve " + target + "</br>"
+					? "Predicted run time to delve " + target + "</br>" + nothingToPredict(run)
+					: partialNote(run, "Predicted run time to delve " + target + "</br>"
 						+ DoomFormat.duration(total));
 			}
 
@@ -225,7 +225,7 @@ public enum InfoBoxFigure
 	private static String partialNote(DelveRun run, String tooltip)
 	{
 		return run.isPartial()
-			? tooltip + "</br>Joined part way through, so the run is at least this long"
+			? tooltip + "</br>Tracking started mid-run, so this is a minimum"
 			: tooltip;
 	}
 
@@ -233,8 +233,8 @@ public enum InfoBoxFigure
 	private static String nothingToPredict(DelveRun run)
 	{
 		return run.isFinished()
-			? "The run is over"
-			: "No delve " + DelveRun.PACE_AVERAGE_FROM_LEVEL + " cleared to predict from";
+			? "The run has ended"
+			: "Clear delve " + DelveRun.PACE_AVERAGE_FROM_LEVEL + " to get a prediction";
 	}
 
 	/** The one source this figure counts, or null for a group or a figure that is not a counter. */

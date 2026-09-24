@@ -48,7 +48,7 @@ final class PreviewScene
 	/** The run the overlay draws, or null for no run in progress and none lingering. */
 	final DelveRun run;
 
-	/** The sitting's tally, without the run in progress - see {@link #panelCombat()}. */
+	/** The session's tally, without the run in progress - see {@link #panelCombat()}. */
 	final CombatTotals session;
 
 	final CombatTotals lifetime;
@@ -88,7 +88,7 @@ final class PreviewScene
 				from.showTargetDelve ? from.targetDelve : 0, from.targetPrediction);
 	}
 
-	/** The sitting's figures with the run in progress counted in, as the panel is handed them. */
+	/** The session's figures with the run in progress counted in, as the panel is handed them. */
 	CombatTotals panelCombat()
 	{
 		if (session == null)
@@ -171,7 +171,7 @@ final class PreviewScene
 	private static PreviewScene idle()
 	{
 		return new PreviewScene("idle", "Between runs: no overlay at all, and a panel with only "
-			+ "the sitting and the lifetime to report",
+			+ "the session and the lifetime to report",
 			new PreviewConfig(), null, session(), lifetime(),
 			stats(Duration.ofMinutes(96), 41, 92, 1387), rows());
 	}
@@ -273,8 +273,8 @@ final class PreviewScene
 			+ "empty chart, and rates with nothing to average",
 			new PreviewConfig(), run(1, now, NOTHING), new CombatTotals(), new CombatTotals(),
 			new DoomMetricsPanel.Stats(DoomFormat.duration(Duration.ofMinutes(2)),
-				DoomFormat.pace(null), "No delves completed yet", "0",
-				DoomFormat.pace(null), "No delves completed yet", null, null, null),
+				DoomFormat.pace(null), "No delves cleared yet", "0",
+				DoomFormat.pace(null), "No delves cleared yet", null, null, null),
 			Collections.emptyList());
 	}
 
@@ -477,7 +477,7 @@ final class PreviewScene
 	/** A run with nothing attributed to it at all. */
 	private static final long[] NOTHING = new long[CombatMetric.values().length];
 
-	/** What the sitting had banked before the run in progress. */
+	/** What the session had banked before the run in progress. */
 	private static CombatTotals session()
 	{
 		CombatTotals totals = new CombatTotals();
@@ -517,7 +517,7 @@ final class PreviewScene
 	}
 
 	/**
-	 * The sitting's and the character's figures, formatted the way the plugin formats them - which
+	 * The session's and the character's figures, formatted the way the plugin formats them - which
 	 * is why they are built through {@link DelveTotals} rather than written out as strings.
 	 */
 	private static DoomMetricsPanel.Stats stats(Duration sessionLength, int sessionDeep,
@@ -545,7 +545,7 @@ final class PreviewScene
 	private static String tooltip(DelveTotals totals)
 	{
 		return totals.isEmpty()
-			? "No delves completed yet"
+			? "No delves cleared yet"
 			: String.format("%d deep %s in %s of run time",
 				totals.deep, totals.deep == 1 ? "delve" : "delves",
 				DoomFormat.tickDuration(totals.ticks));
