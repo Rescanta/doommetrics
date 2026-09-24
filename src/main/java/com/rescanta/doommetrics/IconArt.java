@@ -89,6 +89,9 @@ final class IconArt
 			case BLOWPIPE_HEAL:
 				return ItemID.TOXIC_BLOWPIPE;
 
+			case SGS_HEAL:
+				return ItemID.SGS;
+
 			case ELDRITCH_PRAYER:
 				return ItemID.NIGHTMARE_STAFF_ELDRITCH;
 

@@ -16,8 +16,9 @@ import java.util.stream.Collectors;
  */
 enum CombatMetric implements CombatSeries
 {
-	// Each counter drawn has a palette slot to itself - see seriesColor. The catch-alls are drawn
-	// nowhere, and their colours are only there because every constant needs one.
+	// Each counter drawn has a palette slot to itself - see seriesColor - except SGS_HEAL, which
+	// shares one and is dashed. The catch-alls are drawn nowhere, and their colours are only there
+	// because every constant needs one.
 	BLOOD_BARRAGE_HEAL(Group.HEALING, "bloodBarrage", "Blood barrage", "Barrage", Unit.HITPOINTS,
 		new Color(0x3987E5)),
 	OTHER_SPELL_HEAL(Group.HEALING, "otherSpell", "Other spells", "Other spells", Unit.HITPOINTS,
@@ -27,6 +28,8 @@ enum CombatMetric implements CombatSeries
 		new Color(0xD95926)),
 	BLOWPIPE_HEAL(Group.HEALING, "bpHeal", "Blowpipe", "BP", Unit.HITPOINTS,
 		new Color(0x199E70)),
+	SGS_HEAL(Group.HEALING, "sgsHeal", "Saradomin godsword", "SGS", Unit.HITPOINTS,
+		new Color(0x9085E9)),
 	OTHER_SPEC_HEAL(Group.HEALING, "otherSpecHeal", "Other specs", "Other specs", Unit.HITPOINTS,
 		new Color(0xD55181)),
 
@@ -391,5 +394,12 @@ enum CombatMetric implements CombatSeries
 	public Color seriesColor()
 	{
 		return series;
+	}
+
+	/** The one counter past the eighth slot reuses a hue checked against its neighbours. */
+	@Override
+	public boolean dashed()
+	{
+		return this == SGS_HEAL;
 	}
 }

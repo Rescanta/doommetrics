@@ -58,6 +58,14 @@ class DelveChart extends JPanel
 	private static final BasicStroke EMPHASIS_STROKE =
 		new BasicStroke(2.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
+	private static final float[] DASH = {6f, 5f};
+
+	private static final BasicStroke DASHED_STROKE =
+		new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, DASH, 0f);
+
+	private static final BasicStroke DASHED_EMPHASIS_STROKE =
+		new BasicStroke(2.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, DASH, 0f);
+
 	private static final BasicStroke TIME_STROKE =
 		new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
@@ -610,7 +618,9 @@ class DelveChart extends JPanel
 
 		boolean front = emphasis == null || emphasis == line;
 		Color color = front ? line.seriesColor() : dim(line.seriesColor());
-		Stroke stroke = emphasis == line ? EMPHASIS_STROKE : SERIES_STROKE;
+		Stroke stroke = line.dashed()
+			? (emphasis == line ? DASHED_EMPHASIS_STROKE : DASHED_STROKE)
+			: (emphasis == line ? EMPHASIS_STROKE : SERIES_STROKE);
 
 		if (window > 0)
 		{

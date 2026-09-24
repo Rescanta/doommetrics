@@ -63,17 +63,81 @@ public class CombatTrackerTest
 		assertEquals(list("bloodBarrage=12"), recorded);
 	}
 
-	/** A melee spec hits on the tick it was fired, before the weapon that fired it can be read. */
+	/**
+	 * A melee spec lands a tick after the energy moves, so what lands on the spec's own tick is the
+	 * attack before it - here a bow shot, which would otherwise spend the godsword's one hit.
+	 */
 	@Test
-	public void aHitArrivingAheadOfItsSpecIsStillTheSpecs()
+	public void aHitOnTheSpecsOwnTickIsTheAttackBeforeIt()
 	{
 		tracker.damaged(52, 100);
 		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100);
+		tracker.damaged(46, 101);
 
 		tracker.damaged(25, 108);
 		tracker.healed(25, 108);
 
-		assertEquals(list("otherSpecDamage=52", "otherSpecDamage=25", "agsHeal=25"), recorded);
+		assertEquals(list("otherSpecDamage=46", "otherSpecDamage=25", "agsHeal=25"), recorded);
+	}
+
+	/**
+	 * From a trip's log: a twisted bow arrow landed on the tick of an Eldritch spec and took its one
+	 * hit, so the spell's own hit three ticks later was rejected. The spell has to fly.
+	 */
+	@Test
+	public void anEldritchSpecsHitIsTheSpellNotTheArrowAheadOfIt()
+	{
+		tracker.damaged(72, 1105);
+		tracker.specFired(SpecWeapon.ELDRITCH_STAFF, 1105);
+		tracker.damaged(30, 1106);
+		tracker.damaged(0, 1108);
+		tracker.damaged(41, 1108);
+
+		assertEquals(list("otherSpecDamage=0"), recorded);
+	}
+
+	/** An unnamed bow or staff spec flies like any other: the shot a tick ahead is not the spec. */
+	@Test
+	public void anUnnamedFiredSpecSkipsTheShotAheadOfIt()
+	{
+		tracker.specFired(SpecWeapon.OTHER.fired(false), 100);
+		tracker.damaged(17, 100);
+		tracker.damaged(12, 101);
+		tracker.damaged(58, 103);
+
+		assertEquals(list("otherSpecDamage=58"), recorded);
+		assertEquals(SpecWeapon.OTHER, SpecWeapon.OTHER.fired(true));
+		assertEquals(SpecWeapon.ANCIENT_GODSWORD, SpecWeapon.ANCIENT_GODSWORD.fired(false));
+	}
+
+	/**
+	 * An unnamed spec heals nothing. The one that took a Blood Sacrifice heal in a trip's logs was a
+	 * Scorching bow fired seven ticks after the godsword.
+	 */
+	@Test
+	public void anUnnamedSpecDoesNotTakeTheGodswordsHeal()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 3833);
+		tracker.specFired(SpecWeapon.OTHER.fired(false), 3840);
+		tracker.healed(10, 3841);
+
+		tracker.specFired(SpecWeapon.OTHER, 4000);
+		tracker.healed(20, 4001);
+
+		assertEquals(list("agsHeal=10"), recorded);
+	}
+
+	/** Healing Blade heals as the swing lands, a tick after the spec. */
+	@Test
+	public void aSaradominGodswordSpecHealsWithItsHit()
+	{
+		tracker.healed(9, 100);
+		tracker.specFired(SpecWeapon.SARADOMIN_GODSWORD, 100);
+		tracker.damaged(48, 101);
+		tracker.healed(24, 101);
+		tracker.healed(20, 102);
+
+		assertEquals(list("otherSpecDamage=48", "sgsHeal=24"), recorded);
 	}
 
 	/** Held only for the tick it arrived on: a brew is not the next tick's barrage. */
@@ -270,7 +334,7 @@ public class CombatTrackerTest
 	public void ancientGodswordPaysOutEightTicksAfterTheSwing()
 	{
 		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100);
-		tracker.damaged(52, 100);
+		tracker.damaged(52, 101);
 		tracker.damaged(25, 108);
 		tracker.healed(25, 108);
 
@@ -340,7 +404,7 @@ public class CombatTrackerTest
 	public void aSpecFiredWhileTheGodswordMarkIsUpDoesNotEvictIt()
 	{
 		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100);
-		tracker.damaged(52, 100);
+		tracker.damaged(52, 101);
 
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 103);
 		tracker.damaged(44, 105);
@@ -369,10 +433,10 @@ public class CombatTrackerTest
 	public void eldritchPrayerIsCountedAndOtherSpecsPrayerIsNot()
 	{
 		tracker.specFired(SpecWeapon.ELDRITCH_STAFF, 100);
-		tracker.prayerGained(24, 100);
+		tracker.prayerGained(24, 103);
 
 		tracker.specFired(SpecWeapon.BLOWPIPE, 200);
-		tracker.prayerGained(24, 200);
+		tracker.prayerGained(24, 203);
 
 		assertEquals(list("eldritchPrayer=24"), recorded);
 	}
@@ -409,8 +473,8 @@ public class CombatTrackerTest
 	public void theMoreRecentCauseTakesTheHeal()
 	{
 		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 100);
-		tracker.specFired(SpecWeapon.BLOWPIPE, 101);
-		tracker.healed(15, 101);
+		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
+		tracker.healed(15, 102);
 
 		assertEquals(list("bpHeal=15"), recorded);
 	}
@@ -420,8 +484,8 @@ public class CombatTrackerTest
 	{
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
 		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 100);
-		tracker.healed(15, 100);
-		tracker.healed(12, 100);
+		tracker.healed(15, 102);
+		tracker.healed(12, 102);
 
 		// Both opened on the same tick, so the later-registered barrage takes the first; its budget
 		// of one is then spent and the blowpipe takes the second rather than it being dropped.
@@ -453,6 +517,8 @@ public class CombatTrackerTest
 			SpecWeapon.forItem(999_999, "Dragon thrownaxe"));
 		assertEquals(SpecWeapon.ANCIENT_GODSWORD,
 			SpecWeapon.forItem(999_999, "Ancient godsword"));
+		assertEquals(SpecWeapon.SARADOMIN_GODSWORD,
+			SpecWeapon.forItem(999_999, "Saradomin godsword (or)"));
 		assertEquals(SpecWeapon.ZARYTE_CROSSBOW, SpecWeapon.forItem(999_999, "Zaryte crossbow"));
 		assertEquals(SpecWeapon.ELDRITCH_STAFF,
 			SpecWeapon.forItem(999_999, "Eldritch nightmare staff"));
@@ -517,6 +583,10 @@ public class CombatTrackerTest
 			SpecWeapon.forItem(ItemID.BR_ZARYTE_XBOW));
 		assertEquals(SpecWeapon.ANCIENT_GODSWORD,
 			SpecWeapon.forItem(ItemID.ANCIENT_GODSWORD));
+		assertEquals(SpecWeapon.SARADOMIN_GODSWORD,
+			SpecWeapon.forItem(ItemID.SGS));
+		assertEquals(SpecWeapon.SARADOMIN_GODSWORD,
+			SpecWeapon.forItem(ItemID.SGSG));
 		assertEquals(SpecWeapon.BLOWPIPE,
 			SpecWeapon.forItem(ItemID.TOXIC_BLOWPIPE_LOADED));
 		assertEquals(SpecWeapon.BLOWPIPE,
@@ -541,11 +611,12 @@ public class CombatTrackerTest
 	public void theCatchAllListsTheSpecsItCounts()
 	{
 		assertEquals(list("Dragon knife", "Dragon thrownaxe", "Rosewood blowpipe", "Toxic blowpipe",
-			"Ancient godsword", "Eldritch staff", "Any other spec"),
+			"Ancient godsword", "Saradomin godsword", "Eldritch staff", "Any other spec"),
 			CombatMetric.OTHER_SPEC_DAMAGE.sources());
 
-		// One weapon's figure is named by its own label, as is a catch-all no named weapon feeds.
+		// One weapon's figure is named by its own label, as is a catch-all no weapon feeds any more.
 		assertTrue(CombatMetric.ZCB_DAMAGE.sources().isEmpty());
+		assertTrue(CombatMetric.SGS_HEAL.sources().isEmpty());
 		assertTrue(CombatMetric.OTHER_SPEC_HEAL.sources().isEmpty());
 	}
 

@@ -115,17 +115,17 @@ public class DoomMetricsInfoBoxTest
 		assertEquals("hitpoints, and the colour says so", CombatMetric.Unit.HITPOINTS.color(),
 			box.getTextColor());
 
-		// The spells and the two spec heals, summed under their heading.
+		// The spells and the three spec heals, summed under their heading.
 		config.infoboxFigure = InfoBoxFigure.ALL_HEALING;
 		assertEquals("1.0k", box.getText());
-		assertTrue(box.getTooltip(), box.getTooltip().contains("1,035 hitpoints healed"));
+		assertTrue(box.getTooltip(), box.getTooltip().contains("1,071 hitpoints healed"));
 
 		// A catch-all has no counter of its own to point the square at, and a heading's figure is
 		// what the heading counted, so this is the only place that heal is ever shown.
 		// Counted a while back, so the square is reading the run's total rather than the gain it
 		// shows for five ticks after one lands.
 		plugin.run.recordCombat(CombatMetric.OTHER_SPEC_HEAL, 40, Instant.now().minusSeconds(60));
-		assertTrue(box.getTooltip(), box.getTooltip().contains("1,075 hitpoints healed"));
+		assertTrue(box.getTooltip(), box.getTooltip().contains("1,111 hitpoints healed"));
 
 		plugin.run = new DelveRun(Instant.now().minusSeconds(60), 1, false);
 		config.infoboxFigure = InfoBoxFigure.AGS_HEAL;
