@@ -161,7 +161,7 @@ enum CombatMetric implements CombatSeries
 			{
 				text.append("<br><br>Includes ").append(DoomFormat.count(unnamed))
 					.append(" from ").append(String.join(" and ", unnamedLabels(totals)))
-					.append(",<br>counted but not listed on its own.");
+					.append(",<br>which have no row of their own.");
 			}
 
 			return text.append("</html>").toString();

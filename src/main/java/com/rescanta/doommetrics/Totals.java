@@ -12,9 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class Totals
 {
-	/** Display only: how long without a run before the session rows go blank. */
-	private static final Duration SESSION_IDLE = Duration.ofMinutes(30);
-
 	private final TotalsStore totalsStore;
 	private final RunHistoryStore runHistoryStore;
 
@@ -28,9 +25,6 @@ class Totals
 
 	/** Combat counted since the lifetime figures were last written. */
 	private CombatTotals unbankedCombat = new CombatTotals();
-
-	/** When the session's last run ended; null while one is in progress or before any. */
-	private Instant sessionEndedAt;
 
 	private final SessionClock sessionClock = new SessionClock();
 
@@ -59,7 +53,6 @@ class Totals
 		session = new DelveTotals();
 		sessionCombat = new CombatTotals();
 		unbankedCombat = new CombatTotals();
-		sessionEndedAt = null;
 		sessionClock.reset();
 	}
 
@@ -103,7 +96,6 @@ class Totals
 		sessionProfile = profile;
 		session = new DelveTotals();
 		sessionCombat = new CombatTotals();
-		sessionEndedAt = null;
 		sessionClock.reset();
 	}
 
@@ -111,14 +103,6 @@ class Totals
 	{
 		startSessionForCurrentCharacter();
 		sessionClock.start(startedAt);
-		sessionEndedAt = null;
-	}
-
-	/** Banks what is left of an ended run, and starts the session's idle clock. */
-	void runEnded(Instant endedAt)
-	{
-		flushCombat();
-		sessionEndedAt = endedAt;
 	}
 
 	void loggedOut(Instant at)
@@ -214,21 +198,14 @@ class Totals
 			&& (profile == null || profile.equals(runHistoryStore.currentProfile()));
 	}
 
-	/** Whether the session figures are worth showing: a run is going, or one ended recently. */
-	boolean sessionShown(boolean running, Instant now)
-	{
-		return running || (sessionEndedAt != null
-			&& Duration.between(sessionEndedAt, now).compareTo(SESSION_IDLE) < 0);
-	}
-
 	/** Enough of both combat tallies to tell one repaint from the next. */
-	String combatKey(boolean showSession)
+	String combatKey()
 	{
 		StringBuilder key = new StringBuilder();
 
 		for (CombatMetric metric : CombatMetric.values())
 		{
-			key.append(showSession ? sessionCombat.get(metric) : 0).append(',')
+			key.append(sessionCombat.get(metric)).append(',')
 				.append(lifetimeCombat.get(metric)).append(',');
 		}
 
@@ -245,24 +222,22 @@ class Totals
 		return lifetimeCombat.copy();
 	}
 
-	/** The panel's session and lifetime figures, with the session blank while it isn't shown. */
-	DoomMetricsPanel.Stats stats(boolean showSession, Instant now)
+	/** The panel's session and lifetime figures. */
+	DoomMetricsPanel.Stats stats(Instant now)
 	{
-		DelveTotals live = showSession ? session : null;
-
 		return new DoomMetricsPanel.Stats(
-			live == null ? null : sessionLength(now),
-			live == null ? null : DoomFormat.pace(live.kph()),
-			live == null ? null : tooltip(live),
-			live == null ? null : DoomFormat.count(live.deep),
+			sessionLength(now),
+			DoomFormat.pace(session.kph()),
+			tooltip(session),
+			session.isEmpty() ? null : DoomFormat.count(session.deep),
 			DoomFormat.pace(lifetime.kph()),
 			tooltip(lifetime),
 			lifetime.isEmpty() ? null : DoomFormat.count(lifetime.deep),
-			live == null ? null : live.kph(),
+			session.kph(),
 			lifetime.kph());
 	}
 
-	/** How long this sitting has been going, or null before its first run. */
+	/** How long this session has been going, or null before its first run. */
 	Duration sessionElapsed(Instant now)
 	{
 		return sessionClock.elapsed(now);
@@ -277,7 +252,7 @@ class Totals
 	private static String tooltip(DelveTotals totals)
 	{
 		return totals.isEmpty()
-			? "No delves completed yet"
+			? "No delves cleared yet"
 			: String.format("%d deep %s in %s of run time",
 				totals.deep, totals.deep == 1 ? "delve" : "delves",
 				DoomFormat.tickDuration(totals.ticks));

@@ -165,7 +165,7 @@ public class DoomMetricsInfoBoxTest
 		assertTrue("a target ahead of you reads as a wait: " + further,
 			further.matches("\\d+:\\d\\d"));
 		assertTrue("a target ahead of you is a wait to be read",
-			box.getTooltip().startsWith("Predicted to delve 50"));
+			box.getTooltip().startsWith("Time left to delve 50"));
 
 		config.targetDelve = 40;
 		assertNotEquals("a nearer target is a shorter wait", further, box.getText());
@@ -208,7 +208,7 @@ public class DoomMetricsInfoBoxTest
 		assertTrue(box.render());
 		assertTrue("a target ahead of you reads as a run length: " + box.getText(),
 			box.getText().matches("\\d+h\\d\\d"));
-		assertTrue(box.getTooltip().startsWith("Predicted run to delve 50</br>"));
+		assertTrue(box.getTooltip().startsWith("Predicted run time to delve 50</br>"));
 
 		// Delve 9 was cleared 11:40 in, and stays that however long ago it was.
 		config.targetDelve = 9;
