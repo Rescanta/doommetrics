@@ -530,11 +530,96 @@ public class DelveRunTest
 		run.complete(3, at(180), null);
 
 		// On delve 4 when suspended; six clears later it is on delve 10, or reads 9 between delves.
-		assertTrue(run.continuesAt(10, 6));
-		assertTrue(run.continuesAt(9, 6));
-		assertFalse("a new trip would be on delve 7", run.continuesAt(7, 6));
-		assertFalse(run.continuesAt(11, 6));
-		assertFalse(run.continuesAt(4, -1));
+		assertTrue(run.continuesAt(10, 6, false));
+		assertTrue(run.continuesAt(9, 6, true));
+		assertFalse("a new trip would be on delve 7", run.continuesAt(7, 6, true));
+		assertFalse(run.continuesAt(11, 6, true));
+		assertFalse(run.continuesAt(4, -1, true));
+	}
+
+	/**
+	 * Turned off right after delve 1, and the trip ended with no more clears. A later trip on its
+	 * delve 3 has cleared two, which one short would match - but it is mid-delve, not between.
+	 */
+	@Test
+	public void oneShortOnlyMatchesBetweenDelves()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+
+		assertFalse(run.continuesAt(3, 2, false));
+		assertFalse("a later trip's delve 1", run.continuesAt(1, 0, false));
+		assertTrue("still waiting to go down to delve 2", run.continuesAt(1, 0, true));
+	}
+
+	/**
+	 * Turned off and on again on the same delve: nothing went by unwatched, so the delve's segment
+	 * still runs from the last clear and is banked like any other. From a trip's log, where a
+	 * toggle on delve 2 left it out of the pace with a 0:28 segment for a 0:42 fight.
+	 */
+	@Test
+	public void aRunResumedWithNothingMissedCarriesOnAsItWas()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(45), null);
+		run.enterLevel(2, at(51));
+
+		run.resumeOn(2, at(81), 0);
+		run.watchedFromDelveStart(at(81));
+		run.complete(2, at(96), null);
+
+		assertTrue(run.lastClearTimed());
+		assertEquals(Duration.ofSeconds(51), run.getSplits().get(1).segment);
+	}
+
+	/** Turned off between delves and on again once the next one had started. */
+	@Test
+	public void aRunResumedWithNothingMissedMovesIntoTheDelveUnderWay()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(45), null);
+		assertEquals(1, run.dropLevel());
+
+		run.resumeOn(2, at(60), 0);
+
+		assertFalse(run.isBetweenDelves());
+		assertEquals(2, run.dropLevel());
+	}
+
+	/**
+	 * Carried on in the second between delve 7's chat line and the varp moving, so read as delve 6:
+	 * the varp moving puts it right, without timing a delve whose start it missed.
+	 */
+	@Test
+	public void theDelveVarpMovesARunPickedUpOneShortOnToItsDelve()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		run.complete(2, at(120), null);
+		run.complete(3, at(180), null);
+
+		run.resumeOn(6, at(400), 3);
+		assertTrue(run.caughtUpTo(7));
+		assertEquals(7, run.currentLevel());
+		assertFalse("already there", run.caughtUpTo(7));
+		assertFalse("never backwards", run.caughtUpTo(6));
+
+		run.complete(7, at(480), null);
+		assertFalse(run.lastClearTimed());
+		assertEquals(7, run.lastLevel());
+	}
+
+	/** In the ordinary way the chat line has moved the run on before the varp does. */
+	@Test
+	public void theDelveVarpLeavesARunThatSawItsDelveStartAlone()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, at(60), null);
+		assertFalse("between delves, the varp still reads delve 1", run.caughtUpTo(1));
+
+		run.enterLevel(2, at(66));
+		assertFalse(run.caughtUpTo(2));
+		assertEquals(2, run.currentLevel());
 	}
 
 	/** The clear after the unwatched delves has no measured segment, so pace leaves it out. */
@@ -549,7 +634,7 @@ public class DelveRunTest
 		}
 
 		// Delves 10-14 go by unwatched; picked up again part way into delve 15.
-		run.resumeOn(15, at(1500));
+		run.resumeOn(15, at(1500), 5);
 		run.complete(15, at(1560), null);
 
 		assertFalse(run.lastClearTimed());
@@ -572,7 +657,7 @@ public class DelveRunTest
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(60), null);
 
-		run.resumeOn(5, at(600));
+		run.resumeOn(5, at(600), 3);
 		run.enterLevel(6, at(620));
 		run.complete(6, at(700), null);
 

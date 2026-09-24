@@ -596,7 +596,7 @@ public class RunDetailTest
 		run.complete(2, Instant.EPOCH.plusSeconds(120), null);
 		run.enterLevel(3, Instant.EPOCH.plusSeconds(130));
 		run.complete(3, Instant.EPOCH.plusSeconds(180), null);
-		run.resumeOn(7, Instant.EPOCH.plusSeconds(500));
+		run.resumeOn(7, Instant.EPOCH.plusSeconds(500), 3);
 		run.complete(7, Instant.EPOCH.plusSeconds(580), Duration.ofSeconds(64));
 		run.enterLevel(8, Instant.EPOCH.plusSeconds(600));
 		run.complete(8, Instant.EPOCH.plusSeconds(700), null);
@@ -650,7 +650,7 @@ public class RunDetailTest
 		run.complete(2, Instant.EPOCH.plusSeconds(120), null);
 		run.enterLevel(3, Instant.EPOCH.plusSeconds(130));
 		run.complete(3, Instant.EPOCH.plusSeconds(180), null);
-		run.resumeOn(6, Instant.EPOCH.plusSeconds(450));
+		run.resumeOn(6, Instant.EPOCH.plusSeconds(450), 3);
 		run.enterLevel(7, Instant.EPOCH.plusSeconds(480));
 		run.complete(7, Instant.EPOCH.plusSeconds(600), null);
 

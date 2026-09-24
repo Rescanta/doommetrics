@@ -122,9 +122,17 @@ class DelveRun
 		delveStarts.putIfAbsent(level, at);
 	}
 
-	/** A picked up run saw its delve start, so its next clear is measured. */
+	/**
+	 * A picked up run saw its delve start, so its next clear is measured. One already measuring
+	 * from its last clear keeps that start.
+	 */
 	void watchedFromDelveStart(Instant at)
 	{
+		if (nextClearTimed)
+		{
+			return;
+		}
+
 		if (splits.isEmpty())
 		{
 			startedAt = at;
@@ -137,26 +145,59 @@ class DelveRun
 
 	/**
 	 * Whether the player on {@code level} is still in this run, given the delves cleared since it
-	 * was last watched. Between delves the level reads one short, as the varp does.
+	 * was last watched. Between delves the level reads one short, as the varp does - but only then:
+	 * one short at any other time is a later trip that happens to line up.
+	 *
+	 * @param betweenDelves whether the game shows a clear not yet followed by the next delve
 	 */
-	boolean continuesAt(int level, int clearsSince)
+	boolean continuesAt(int level, int clearsSince, boolean betweenDelves)
 	{
 		int expected = currentLevel + clearsSince;
-		return clearsSince >= 0 && (level == expected || level == expected - 1);
+		return clearsSince >= 0 && (level == expected || (betweenDelves && level == expected - 1));
 	}
 
 	/**
-	 * Carries the run on at {@code level} after delves nobody watched. The next clear's segment
-	 * starts somewhere in them, so it is left out of the rates.
+	 * Carries the run on at {@code level}. After delves nobody watched, the next clear's segment
+	 * starts somewhere in them, so it is left out of the rates; with none missed, the run carries
+	 * on exactly as it was.
 	 */
-	void resumeOn(int level, Instant at)
+	void resumeOn(int level, Instant at, int clearsSince)
 	{
+		if (clearsSince == 0)
+		{
+			// The delve the level reads was started while nobody watched.
+			if (level == currentLevel)
+			{
+				betweenDelves = false;
+			}
+
+			return;
+		}
+
 		currentLevel = level;
 		betweenDelves = false;
 		nextClearTimed = false;
 		segmentStart = at;
 		loot.resumed();
 		delveStarts.putIfAbsent(level, at);
+	}
+
+	/**
+	 * Moves the run onto the delve the game says is under way, when it was picked up while the
+	 * varp still read the delve before and so missed that delve's start. Timing is left alone.
+	 *
+	 * @return true if the run was moved
+	 */
+	boolean caughtUpTo(int level)
+	{
+		if (level < currentLevel || (level == currentLevel && !betweenDelves))
+		{
+			return false;
+		}
+
+		currentLevel = level;
+		betweenDelves = false;
+		return true;
 	}
 
 	/**
