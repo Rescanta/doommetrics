@@ -115,10 +115,13 @@ class PunishTracker
 		cancelledAt = tick;
 	}
 
-	/** Whether a hitsplat on the boss now must be held by {@link #hit}. Spends nothing. */
+	/**
+	 * Whether a hitsplat on the boss now must be held by {@link #hit}. Spends nothing. A melee hit
+	 * lands a tick after its swing, so one on the swing's own tick was fired before it.
+	 */
 	boolean mayBePunish(int tick)
 	{
-		return swungAt != NONE && tick >= swungAt && tick - swungAt <= HIT_WINDOW;
+		return swungAt != NONE && tick > swungAt && tick - swungAt <= HIT_WINDOW;
 	}
 
 	/**

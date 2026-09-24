@@ -78,6 +78,28 @@ public class PunishTrackerTest
 		assertEquals(list("scythePunish=33", "scythePunish=10"), recorded);
 	}
 
+	/**
+	 * From a trip's log: a bow shot fired at 557 was still in the air when the scythe was switched
+	 * to and swung at 559, and landed on the swing's own tick. The scythe's hits came a tick later.
+	 */
+	@Test
+	public void aHitLandingOnTheSwingsOwnTickIsNotThePunishs()
+	{
+		tickEnded(558, true, null);
+
+		tracker.swung(559);
+		mine(49, 559);
+		tickEnded(559, true, PunishWeapon.SCYTHE);
+
+		mine(4, 560);
+		mine(5, 560);
+		mine(2, 560);
+		tickEnded(560, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=4", "scythePunish=5", "scythePunish=2"), recorded);
+		assertFalse("left to the spec tracker, never held", tracker.mayBePunish(559));
+	}
+
 	@Test
 	public void eachWeaponIsCreditedToItsOwnFigure()
 	{
@@ -177,18 +199,16 @@ public class PunishTrackerTest
 
 	/**
 	 * A blowpipe or a spell into the prayer is an animation too, and turns out not to be a swing
-	 * once the weapon is read. What landed with it goes back whole, and nothing after it is held.
+	 * once the weapon is read, so nothing after it is held.
 	 */
 	@Test
 	public void anAnimationWithoutAMeleeWeaponIsNotASwing()
 	{
 		tickEnded(99, true, null);
 		tracker.swung(100);
-		mine(40, 100);
 		tickEnded(100, true, null);
 
 		assertTrue(recorded.isEmpty());
-		assertEquals(list("40@100"), handedBack);
 		assertFalse(tracker.mayBePunish(101));
 	}
 
