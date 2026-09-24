@@ -100,7 +100,7 @@ icon with one figure over it, sat in the infobox bar with everything else you ha
 
 A square holds one number, so **Infobox figure** picks which. It can be the delve you are on, the
 run timer, the pace, the time left to your target delve or the predicted time of the whole run to
-it, any of the eight counters, or any of the three counter headings with everything under it
+it, any of the nine counters, or any of the three counter headings with everything under it
 summed - the sources with no counter of their own included. The
 figures are shortened to fit: `1.2k` for a counter past a thousand, `1h23` for a run past the hour
 and `10h` past ten of them, and `40.1` for a pace. What was dropped to make them fit is in the
@@ -165,7 +165,7 @@ messages are switched off altogether.
 
 The plugin can also count what your gear and spellbook gave back, under three headings - one for
 each thing a figure can be counted in. The side panel's table and the run detail chart always
-carry all eight counters; the overlay draws only what you ask of it under **Counters**, and is off
+carry all nine counters; the overlay draws only what you ask of it under **Counters**, and is off
 for all three headings by default.
 
 | Counter | Heading | Counted in |
@@ -173,6 +173,7 @@ for all three headings by default.
 | Blood barrage | Healing | hitpoints healed |
 | Ancient godsword | Healing | hitpoints healed |
 | Blowpipe | Healing | hitpoints healed |
+| Saradomin godsword | Healing | hitpoints healed |
 | Eldritch staff | Prayer restored | prayer points restored |
 | Zaryte crossbow | Spec & punish damage | damage dealt |
 | Scythe of vitur | Spec & punish damage | damage dealt |
@@ -180,7 +181,7 @@ for all three headings by default.
 | Crystal halberd | Spec & punish damage | damage dealt |
 
 Every counter names one weapon or spell. What falls outside them - other healing spells, other
-specs' heals and damage, and punishes with any other melee weapon - is still tallied and saved with
+specs' damage, and punishes with any other melee weapon - is still tallied and saved with
 the run, and has no line of its own anywhere: there is no counter for "some other melee weapon",
 so a row for it would be a row nobody asked for.
 
@@ -265,7 +266,10 @@ never earned. Every number here is a floor - what could be proven - and never an
 Spec and punish damage are only counted on the boss itself, standing or burrowed. Larvae, volatile earth and
 the boss behind its demonic shield are all worth a spec, but not for the damage, so a spec fired at
 one of them is spent and adds nothing. Nor is the auto-attack either side of a spec: a hit only
-counts if it lands when that weapon's spec could have.
+counts if it lands when that weapon's spec could have - a tick after the spec for a melee weapon,
+two or more for anything that has to fly. Only the specs that heal (the ancient and Saradomin
+godswords, the toxic blowpipe) are credited with a heal; a heal after any other spec is left out,
+since it can only have been food, a brew or another spec's.
 
 ## Chat
 
@@ -399,7 +403,8 @@ Last 10           1:49:05 (-3:05)
 Uniques           3 (1 per 99 runs)
 ```
 
-- **Reached** - runs that cleared the target, out of every run started.
+- **Reached** - runs that cleared the target, out of every run started. Walking into delve 1 and
+  straight back out is not counted as a run.
 - **Average time** - from the start of a run to clearing the target, the same span as a
   milestone's PB, which is shown under it.
 
@@ -412,7 +417,8 @@ still set a PB.
   is ten minutes old.
 - **Last 10** - the latest ten runs' average time to the target, in green when it is quicker than
   your average and red when it is slower. Changing the target starts this list over.
-- **Uniques** - uniques claimed, and how many runs there have been for each.
+- **Uniques** - uniques claimed, and how many runs there have been for each. A pet you already
+  own counts too: the game still announces it and adds it to the collection log.
 
 Everything on the card is a running count kept in the milestone table, not a list of runs, so it
 takes the same room after ten runs as after ten thousand and is synced with the rest of your
@@ -452,14 +458,16 @@ spec are like sizes and can be read against each other. Which unit a line is cou
 legend, under the heading it is listed beneath - hitpoints, prayer points or damage, the same three
 headings the side panel uses.
 
-The chart's colours are eight hues checked as a set for colour blindness, one for each of the eight
-counters, so no two lines share a colour. Grouped, the three headings take the first three of the
+The chart's colours are eight hues checked as a set for colour blindness, one for each of eight
+counters. The ninth, the Saradomin godsword, reuses the noxious halberd's violet - checked against
+the lines listed either side of it - and is drawn dashed, with a split swatch in the legend, so no
+two lines look alike. Grouped, the three headings take the first three of the
 same hues, for the same reason: only neighbouring slots were checked against each other, so a set drawn
 together has to be a run of them from the first.
 
 **Sources** and **Grouped**, on the Counters heading, pick how the run is read. Sources is a line
 per counter; Grouped is a line per heading, the counters under it added up, which is how a run long
-enough to fill the plot stays legible - three lines instead of eight, and each of them the figure
+enough to fill the plot stays legible - three lines instead of nine, and each of them the figure
 you were going to add up anyway. A grouped line counts what no counter names as well, so it is the
 only place on the chart a punish thrown with an unnamed weapon appears. Which lines you have clicked off
 is remembered for each of the two, so switching back finds the chart as you left it. This is a
