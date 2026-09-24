@@ -278,6 +278,9 @@ two or more for anything that has to fly. Only the specs that heal (the ancient 
 godswords, the toxic blowpipe) are credited with a heal; a heal after any other spec is left out,
 since it can only have been food, a brew or another spec's.
 
+Burns from a spec - the scorching bow's or the burning claws' - count as spec damage too, under
+"Other specs", for as long as they tick on the boss.
+
 ## Chat
 
 A message is posted whenever the delve number is a multiple of the configured interval, skipping

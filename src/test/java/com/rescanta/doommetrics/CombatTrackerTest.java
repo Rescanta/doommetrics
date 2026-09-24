@@ -613,7 +613,8 @@ public class CombatTrackerTest
 	public void theCatchAllListsTheSpecsItCounts()
 	{
 		assertEquals(list("Dragon knife", "Dragon thrownaxe", "Rosewood blowpipe", "Toxic blowpipe",
-			"Ancient godsword", "Saradomin godsword", "Eldritch staff", "Any other spec"),
+			"Ancient godsword", "Saradomin godsword", "Eldritch staff", "Any other spec",
+			"Burns (scorching bow, burning claws)"),
 			CombatMetric.OTHER_SPEC_DAMAGE.sources());
 
 		// One weapon's figure is named by its own label, as is a catch-all no weapon feeds any more.

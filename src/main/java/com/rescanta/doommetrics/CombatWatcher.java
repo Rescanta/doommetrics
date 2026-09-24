@@ -67,6 +67,8 @@ class CombatWatcher
 	private final Regeneration prayerRegeneration = new Regeneration();
 	private final Regeneration hitpointsRegeneration = new Regeneration();
 
+	private final CombatTracker.Sink sink;
+
 	/**
 	 * @param sink where an attributed amount is credited
 	 */
@@ -78,6 +80,7 @@ class CombatWatcher
 		this.config = config;
 		this.items = items;
 		this.run = run;
+		this.sink = sink;
 		this.combatTracker = new CombatTracker(sink);
 		this.punishTracker = new PunishTracker(sink, this::handBack);
 	}
@@ -182,6 +185,20 @@ class CombatWatcher
 		if (onBoss)
 		{
 			logBossHitsplat(hitsplat, tick);
+		}
+
+		// Only a spec burns (the scorching bow's, burning claws'), and the fight is solo, so a burn
+		// is our spec's, however long after it.
+		if (hitsplat.getHitsplatType() == HitsplatID.BURN)
+		{
+			if (countsAsDamage(target) && hitsplat.getAmount() > 0)
+			{
+				sink.record(CombatMetric.OTHER_SPEC_DAMAGE, hitsplat.getAmount());
+				log.debug("Burn of {} at tick {} -> {}", hitsplat.getAmount(), tick,
+					CombatMetric.OTHER_SPEC_DAMAGE.key());
+			}
+
+			return;
 		}
 
 		if (onBoss && punishTracker.mayBePunish(tick) && isPunishSplat(hitsplat))
