@@ -8,29 +8,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.ScriptID;
-import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
-import net.runelite.api.gameval.ObjectID;
-import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.Text;
 
 /**
- * Places the run's notable drops on the delves they came off, records what the claim took, and
- * notices the claim and leaving that end a run. Client thread only.
+ * Records the notable drops the claim took, and notices the claim and leaving that end a run. Only
+ * the claim is read: where in the run a drop landed isn't followed. Client thread only.
  */
 @Slf4j
 class LootWatcher
@@ -49,9 +43,6 @@ class LootWatcher
 		"You have a funny feeling like you would have been followed",
 		"You feel something weird sneaking into your backpack"
 	};
-
-	/** One per unique copy, on every descend try. */
-	private static final Pattern LOOT_WARNING = Pattern.compile("^Your loot contains (.+?)! Are you sure");
 
 	private static final String DESCEND_OPTION = "Descend";
 
@@ -76,12 +67,6 @@ class LootWatcher
 	 */
 	private final Set<Integer> stalePiles = new HashSet<>();
 
-	/** Stale piles a joined run started with, whose first sending is taken as what it inherited. */
-	private final Set<Integer> baselinePiles = new HashSet<>();
-
-	/** The glowing hole was seen with no run to mark it on - at plugin start it is replayed first. */
-	private boolean glowWithoutRun;
-
 	LootWatcher(Client client, ClientThread clientThread, GameItems items, Supplier<DelveRun> run,
 		Runnable finishRun)
 	{
@@ -97,51 +82,15 @@ class LootWatcher
 		claimRequested = false;
 	}
 
-	/**
-	 * @param missedDelves whether delves went by unwatched, so the pile may already hold drops
-	 */
-	void runStarted(DelveRun started, boolean missedDelves)
+	void runStarted()
 	{
 		claimRequested = false;
-		baselinePiles.clear();
-		boolean glowed = glowWithoutRun;
-		glowWithoutRun = false;
-
-		if (!missedDelves)
-		{
-			return;
-		}
-
-		// Already in the pile, from delves we did not see.
-		for (int pile : PILES)
-		{
-			if (stalePiles.contains(pile))
-			{
-				baselinePiles.add(pile);
-				continue;
-			}
-
-			notableDrops(client.getItemContainer(pile)).forEach(started.loot()::pileAlreadyHeld);
-		}
-
-		// Picked up between delves, beside a hole that was already glowing.
-		if (glowed && started.loot().uniqueSignalled())
-		{
-			log.debug("Picked up beside the glowing hole: a unique is in the pile");
-		}
 	}
 
 	/** Until they are sent again, the piles the client holds are this run's. */
 	void runEnded()
 	{
 		stalePiles.addAll(PILES);
-		glowWithoutRun = false;
-	}
-
-	/** A new scene: the glowing hole seen before it is gone. */
-	void sceneLoaded()
-	{
-		glowWithoutRun = false;
 	}
 
 	/** A new delve started, so no claim is on its way. */
@@ -173,71 +122,11 @@ class LootWatcher
 			return;
 		}
 
-		int pets = Math.max(1, current.loot().held(ItemID.DOMPET));
-		int delve = current.loot().sawInPile(ItemID.DOMPET, items.name(ItemID.DOMPET), pets);
-		current.loot().recordLoot(ItemID.DOMPET, items.name(ItemID.DOMPET), pets);
-		log.debug("Pet claimed, from delve {}",
-			delve == RunLoot.NOT_RECORDED ? current.dropLevel() : delve);
+		current.loot().recordLoot(ItemID.DOMPET, items.name(ItemID.DOMPET), 1);
+		log.debug("Pet claimed on delve {}", current.currentLevel());
 	}
 
-	/** A "Your loot contains" warning. The dialog's item is read once it has been filled in. */
-	void lootWarning(String message)
-	{
-		if (run.get() == null)
-		{
-			return;
-		}
-
-		Matcher matcher = LOOT_WARNING.matcher(Text.removeTags(message));
-
-		if (!matcher.find())
-		{
-			return;
-		}
-
-		String named = matcher.group(1);
-
-		clientThread.invokeLater(() ->
-		{
-			DelveRun current = run.get();
-
-			if (current == null)
-			{
-				return;
-			}
-
-			Widget shown = client.getWidget(InterfaceID.Objectbox.ITEM);
-			int itemId = shown != null && NOTABLE_DROPS.contains(shown.getItemId())
-				? shown.getItemId()
-				: notableNamed(named);
-
-			if (itemId < 0)
-			{
-				log.debug("Loot warning for \"{}\", which is not a drop we track", named);
-				return;
-			}
-
-			int delve = current.loot().warnedOf(itemId, items.name(itemId));
-			log.debug("Loot warning for item {} while on delve {}, recorded on delve {}",
-				itemId, current.dropLevel(), delve == RunLoot.NOT_RECORDED ? "none" : delve);
-		});
-	}
-
-	/** The notable drop the game calls {@code name}, or -1 for none. */
-	private int notableNamed(String name)
-	{
-		for (int itemId : NOTABLE_DROPS)
-		{
-			if (name.equalsIgnoreCase(items.name(itemId)))
-			{
-				return itemId;
-			}
-		}
-
-		return -1;
-	}
-
-	/** Places drops on delves as the pile grows. Claiming is decided separately. */
+	/** Notes a pile sent this trip; the claimed one filling in is the claim going through. */
 	void itemContainerChanged(ItemContainerChanged event)
 	{
 		int containerId = event.getContainerId();
@@ -248,34 +137,10 @@ class LootWatcher
 		}
 
 		stalePiles.remove(containerId);
-		DelveRun current = run.get();
 
-		if (current == null)
+		if (run.get() == null)
 		{
 			return;
-		}
-
-		Map<Integer, Integer> drops = notableDrops(event.getItemContainer());
-		log.debug("Loot pile {} sent on delve {} (between delves: {}), notable drops {}",
-			containerId, current.currentLevel(), current.dropLevel() != current.currentLevel(), drops);
-
-		if (baselinePiles.remove(containerId))
-		{
-			// The first this run has seen of a pile it could not read at its start.
-			drops.forEach(current.loot()::pileAlreadyHeld);
-		}
-		else
-		{
-			drops.forEach((itemId, quantity) ->
-			{
-				int delve = current.loot().sawInPile(itemId, items.name(itemId), quantity);
-
-				if (delve != RunLoot.NOT_RECORDED)
-				{
-					log.debug("Item {} recorded on delve {}, pile now holds {}", itemId, delve,
-						quantity);
-				}
-			});
 		}
 
 		// The claimed loot filling in after "Claim and leave" is the claim going through.
@@ -288,21 +153,17 @@ class LootWatcher
 
 	void menuOptionClicked(MenuOptionClicked event)
 	{
-		DelveRun current = run.get();
-
-		if (current == null)
+		if (run.get() == null)
 		{
 			return;
 		}
 
 		int widgetId = event.getParam1();
 
-		// A new descend try - but the Descend on a warning dialog continues the same try.
+		// Backed out of the claim and carrying on.
 		if (widgetId == InterfaceID.DomEndLevelUi.BTN_DESCEND
-			|| (DESCEND_OPTION.equals(Text.removeTags(event.getMenuOption()))
-				&& WidgetUtil.componentToInterface(widgetId) != InterfaceID.OBJECTBOX))
+			|| DESCEND_OPTION.equals(Text.removeTags(event.getMenuOption())))
 		{
-			current.loot().descending();
 			claimRequested = false;
 			return;
 		}
@@ -331,34 +192,6 @@ class LootWatcher
 		if (event.getScriptId() == ScriptID.DOM_LOOT_CLAIM && run.get() != null)
 		{
 			clientThread.invokeLater(this::finishClaim);
-		}
-	}
-
-	/** The glowing hole: the pile holds a unique. Scene rebuilds re-send it, which is harmless. */
-	void gameObjectSpawned(GameObjectSpawned event)
-	{
-		DelveRun current = run.get();
-
-		if (event.getGameObject().getId() != ObjectID.DOM_DESCEND_HOLE_UNIQUE)
-		{
-			return;
-		}
-
-		if (current == null)
-		{
-			glowWithoutRun = true;
-			return;
-		}
-
-		if (!current.isBetweenDelves())
-		{
-			return;
-		}
-
-		if (current.loot().uniqueSignalled())
-		{
-			log.debug("Delve {} was left by the glowing hole: a unique is in the pile",
-				current.dropLevel());
 		}
 	}
 

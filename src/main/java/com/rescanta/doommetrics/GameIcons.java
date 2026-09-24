@@ -70,20 +70,6 @@ final class GameIcons implements Icons
 	}
 
 	@Override
-	public BufferedImage item(int itemId)
-	{
-		askItem(itemId);
-		return items.get(itemId);
-	}
-
-	@Override
-	public BufferedImage smallItem(int itemId)
-	{
-		askItem(itemId);
-		return smallItems.get(itemId);
-	}
-
-	@Override
 	public BufferedImage sprite(int spriteId)
 	{
 		askSprite(spriteId);

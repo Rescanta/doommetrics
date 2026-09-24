@@ -578,12 +578,12 @@ public class DelveRunTest
 	{
 		DelveRun run = new DelveRun(START, 1, false);
 		run.complete(1, at(45), null);
-		assertEquals(1, run.dropLevel());
+		assertEquals(1, run.creditLevel());
 
 		run.resumeOn(2, at(60), 0);
 
 		assertFalse(run.isBetweenDelves());
-		assertEquals(2, run.dropLevel());
+		assertEquals(2, run.creditLevel());
 	}
 
 	/**

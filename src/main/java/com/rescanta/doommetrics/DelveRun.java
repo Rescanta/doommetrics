@@ -103,7 +103,7 @@ class DelveRun
 		this.currentLevel = currentLevel;
 		this.partial = partial;
 		this.pbAnchor = pbAnchor;
-		this.loot = new RunLoot(partial, this::dropLevel);
+		this.loot = new RunLoot();
 		this.nextClearTimed = !partial;
 	}
 
@@ -118,7 +118,6 @@ class DelveRun
 
 		currentLevel = level;
 		betweenDelves = false;
-		loot.delveEntered();
 		delveStarts.putIfAbsent(level, at);
 	}
 
@@ -178,7 +177,6 @@ class DelveRun
 		betweenDelves = false;
 		nextClearTimed = false;
 		segmentStart = at;
-		loot.resumed();
 		delveStarts.putIfAbsent(level, at);
 	}
 
@@ -228,7 +226,6 @@ class DelveRun
 		nextClearTimed = true;
 		currentLevel = level + 1;
 		betweenDelves = true;
-		loot.delveCleared();
 		return split;
 	}
 
@@ -251,8 +248,8 @@ class DelveRun
 		return DoomFormat.toTicks(through) - DoomFormat.toTicks(before);
 	}
 
-	/** The delve a drop seen now came off: the one just cleared, or the one still being fought. */
-	int dropLevel()
+	/** The delve something seen now belongs to: the one just cleared, or the one being fought. */
+	int creditLevel()
 	{
 		return betweenDelves ? lastLevel() : currentLevel;
 	}
@@ -282,7 +279,7 @@ class DelveRun
 		}
 
 		combat.add(metric, amount);
-		combatByDelve.computeIfAbsent(dropLevel(), level -> new CombatTotals()).add(metric, amount);
+		combatByDelve.computeIfAbsent(creditLevel(), level -> new CombatTotals()).add(metric, amount);
 		recent.add(metric, amount, at);
 
 		if (betweenDelves)
