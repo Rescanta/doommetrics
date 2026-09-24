@@ -54,6 +54,7 @@ class CombatWatcher
 
 	private final CombatTracker combatTracker;
 	private final PunishTracker punishTracker;
+	private final ThrallTracker thrallTracker = new ThrallTracker();
 
 	/** Held from its spawn; the same NPC across its standing, shielded and burrowed forms. */
 	private NPC boss;
@@ -120,6 +121,7 @@ class CombatWatcher
 	{
 		combatTracker.reset();
 		punishTracker.reset();
+		thrallTracker.reset();
 	}
 
 	/**
@@ -139,6 +141,22 @@ class CombatWatcher
 	void bossSpawned(NPC npc)
 	{
 		boss = npc;
+	}
+
+	/** Thralls are logged so their hits on the boss can be told apart - see {@link #isThrall}. */
+	void npcSpawned(NPC npc)
+	{
+		if (run.get() != null && config.debugLogging() && isThrall(npc))
+		{
+			log.debug("Thrall spawned: {} at tick {}", npc.getId(), client.getTickCount());
+		}
+	}
+
+	/** By id: a thrall's name reads "null" through the client. */
+	private static boolean isThrall(NPC npc)
+	{
+		int id = npc.getId();
+		return id >= NpcID.ARCEUUS_THRALL_GHOST_LESSER && id <= NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER;
 	}
 
 	void npcDespawned(NPC npc)
@@ -209,6 +227,16 @@ class CombatWatcher
 			logBossHitsplat(hitsplat, tick);
 		}
 
+		if (isThrallSplat(hitsplat) && thrallTracker.isThrallHit(hitsplat.getAmount(), tick))
+		{
+			if (config.debugLogging())
+			{
+				log.debug("Thrall hit {} at tick {}, not counted", hitsplat.getAmount(), tick);
+			}
+
+			return;
+		}
+
 		// Only a spec burns (the scorching bow's, burning claws'), and the fight is solo, so a burn
 		// is our spec's, however long after it.
 		if (hitsplat.getHitsplatType() == HitsplatID.BURN)
@@ -244,6 +272,13 @@ class CombatWatcher
 		}
 	}
 
+	/** A thrall's hit or miss is drawn as ours; it never brings a punish bonus splat. */
+	private static boolean isThrallSplat(Hitsplat hitsplat)
+	{
+		int type = hitsplat.getHitsplatType();
+		return hitsplat.isMine() && (type == HitsplatID.DAMAGE_ME || type == HitsplatID.BLOCK_ME);
+	}
+
 	/**
 	 * Punish bonus splats aren't {@code isMine()}; the fight is solo, so others' colours are ours.
 	 */
@@ -260,8 +295,9 @@ class CombatWatcher
 			return;
 		}
 
-		log.debug("Boss hitsplat {} of type {} at tick {}{}", hitsplat.getAmount(),
-			hitsplat.getHitsplatType(), tick,
+		log.debug("Boss hitsplat {} of type {} ({}) at tick {}{}", hitsplat.getAmount(),
+			hitsplat.getHitsplatType(),
+			hitsplat.isMine() ? "mine" : hitsplat.isOthers() ? "others" : "neither", tick,
 			punishTracker.mayBePunish(tick) ? ", held for the punish check" : "");
 	}
 
@@ -335,6 +371,23 @@ class CombatWatcher
 			if (config.debugLogging())
 			{
 				log.debug("Boss animation {} at tick {}", animation, tick);
+			}
+
+			return;
+		}
+
+		if (actor instanceof NPC)
+		{
+			ThrallTracker.Style style = ThrallTracker.attackStyle(((NPC) actor).getId(), animation);
+
+			if (style != null)
+			{
+				thrallTracker.attacked(style, tick);
+
+				if (config.debugLogging())
+				{
+					log.debug("Thrall {} attacked at tick {}", style, tick);
+				}
 			}
 
 			return;

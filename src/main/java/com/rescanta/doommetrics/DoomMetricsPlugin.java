@@ -776,6 +776,8 @@ public class DoomMetricsPlugin extends Plugin
 			ticksWithoutBoss = 0;
 			combat.bossSpawned(event.getNpc());
 		}
+
+		combat.npcSpawned(event.getNpc());
 	}
 
 	@Subscribe
