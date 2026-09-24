@@ -348,7 +348,12 @@ public class DoomMetricsPlugin extends Plugin
 
 		int clearsSince = client.getVarpValue(VarPlayerID.TOTAL_DOM_LEVELS) - suspendedClears;
 
-		if (!suspended.continuesAt(level, clearsSince))
+		// A clear's time is kept from the clear until the next delve's varps move; the trip's
+		// total is zeroed on the way into a new trip.
+		boolean betweenDelves = client.getVarpValue(VarPlayerID.DOM_LAST_LEVEL_DURATION) > 0
+			&& client.getVarpValue(VarPlayerID.DOM_TOTAL_DURATION) > 0;
+
+		if (!suspended.continuesAt(level, clearsSince, betweenDelves))
 		{
 			return false;
 		}
@@ -360,8 +365,8 @@ public class DoomMetricsPlugin extends Plugin
 		runHistoryStore.dropPending();
 
 		Instant now = Instant.now();
-		resumed.resumeOn(level, now);
-		watch(resumed, profile, now, true);
+		resumed.resumeOn(level, now, clearsSince);
+		watch(resumed, profile, now, clearsSince > 0);
 		log.debug("Carried the run on at delve {}, {} delves cleared unwatched", level, clearsSince);
 		return true;
 	}
@@ -748,24 +753,46 @@ public class DoomMetricsPlugin extends Plugin
 			log.debug("Doom varp {} -> {}", varpId, event.getValue());
 		}
 
+		// Held across a lost connection, the login flood sends every Doom varp as 0 and then its
+		// value again; ResumeCheck settles the run instead.
+		boolean flooding = resumeCheck != null;
+
 		// The game's own delve clock start, so our first segment matches its reported time.
-		if (varpId == VarPlayerID.DOM_LEVEL_START_TIME && run != null
+		if (varpId == VarPlayerID.DOM_LEVEL_START_TIME && run != null && !flooding
 			&& run.reanchorStart(Instant.now()))
 		{
 			log.debug("Run start moved onto the delve {} start the game reported", run.currentLevel());
 		}
 
-		// Backstop for an exit that skipped the end level panel. Never fires on delve 1.
-		if (varpId == VarPlayerID.DOM_CURRENT_LEVEL_TEMP && event.getValue() == 0
-			&& run != null && run.lastLevel() > 0)
+		if (varpId == VarPlayerID.DOM_CURRENT_LEVEL_TEMP && run != null && !flooding)
 		{
-			endRun(EndReason.FINISHED, -1);
+			delveVarpChanged(event.getValue());
 		}
 
 		// Arrives in the login varp flood, either side of the profile being ready.
 		if (varpId == VarPlayerID.DOM_DEEPEST_LEVEL)
 		{
 			milestones.seedFromDeepestLevel();
+		}
+	}
+
+	private void delveVarpChanged(int descended)
+	{
+		// Backstop for an exit that skipped the end level panel. Never fires on delve 1.
+		if (descended == 0)
+		{
+			if (run.lastLevel() > 0)
+			{
+				endRun(EndReason.FINISHED, -1);
+			}
+
+			return;
+		}
+
+		// Picked up in the seconds between a delve's chat line and the varp moving.
+		if (run.caughtUpTo(descended + 1))
+		{
+			log.debug("Run moved up to delve {}, whose start it missed", descended + 1);
 		}
 	}
 
