@@ -100,7 +100,7 @@ icon with one figure over it, sat in the infobox bar with everything else you ha
 
 A square holds one number, so **Infobox figure** picks which. It can be the delve you are on, the
 run timer, the pace, the time left to your target delve or the predicted time of the whole run to
-it, any of the nine counters, or any of the three counter headings with everything under it
+it, any of the ten counters, or any of the three counter headings with everything under it
 summed - the sources with no counter of their own included. The
 figures are shortened to fit: `1.2k` for a counter past a thousand, `1h23` for a run past the hour
 and `10h` past ten of them, and `40.1` for a pace. What was dropped to make them fit is in the
@@ -165,7 +165,7 @@ messages are switched off altogether.
 
 The plugin can also count what your gear and spellbook gave back, under three headings - one for
 each thing a figure can be counted in. The side panel's table and the run detail chart always
-carry all nine counters; the overlay draws only what you ask of it under **Counters**, and is off
+carry all ten counters; the overlay draws only what you ask of it under **Counters**, and is off
 for all three headings by default.
 
 | Counter | Heading | Counted in |
@@ -175,6 +175,7 @@ for all three headings by default.
 | Blowpipe | Healing | hitpoints healed |
 | Saradomin godsword | Healing | hitpoints healed |
 | Eldritch staff | Prayer restored | prayer points restored |
+| Saradomin godsword | Prayer restored | prayer points restored |
 | Zaryte crossbow | Spec & punish damage | damage dealt |
 | Scythe of vitur | Spec & punish damage | damage dealt |
 | Noxious halberd | Spec & punish damage | damage dealt |
@@ -459,15 +460,15 @@ legend, under the heading it is listed beneath - hitpoints, prayer points or dam
 headings the side panel uses.
 
 The chart's colours are eight hues checked as a set for colour blindness, one for each of eight
-counters. The ninth, the Saradomin godsword, reuses the noxious halberd's violet - checked against
-the lines listed either side of it - and is drawn dashed, with a split swatch in the legend, so no
-two lines look alike. Grouped, the three headings take the first three of the
+counters. The Saradomin godsword's two, healing and prayer, reuse the noxious halberd's violet and
+the scythe's green - each checked against the lines listed either side of it and against the other
+- and are drawn dashed, with a split swatch in the legend, so no two lines look alike. Grouped, the three headings take the first three of the
 same hues, for the same reason: only neighbouring slots were checked against each other, so a set drawn
 together has to be a run of them from the first.
 
 **Sources** and **Grouped**, on the Counters heading, pick how the run is read. Sources is a line
 per counter; Grouped is a line per heading, the counters under it added up, which is how a run long
-enough to fill the plot stays legible - three lines instead of nine, and each of them the figure
+enough to fill the plot stays legible - three lines instead of ten, and each of them the figure
 you were going to add up anyway. A grouped line counts what no counter names as well, so it is the
 only place on the chart a punish thrown with an unnamed weapon appears. Which lines you have clicked off
 is remembered for each of the two, so switching back finds the chart as you left it. This is a
@@ -585,7 +586,7 @@ rather than the whole file.
 | Setting | Default | Notes |
 |---|---|---|
 | Healing | Off | Blood spells and the ancient godsword and blowpipe specs: off, one total line, or a line each |
-| Prayer | Off | The eldritch staff spec: off, one total line, or a line each |
+| Prayer | Off | The eldritch staff and Saradomin godsword specs: off, one total line, or a line each |
 | Damage | Off | The zaryte crossbow spec and your scythe and halberds punishing: off, one total line, or a line each |
 | Counter style | Names | Lead each counter's line with its name, its icon, or its icon two to a line; the infobox takes the icon too |
 | Hide counters at 0 | on | Leave a counter off the overlay and the side panel until it has counted something, and start it switched off on the run detail chart |

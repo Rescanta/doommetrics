@@ -127,7 +127,7 @@ public class CombatTrackerTest
 		assertEquals(list("agsHeal=10"), recorded);
 	}
 
-	/** Healing Blade heals as the swing lands, a tick after the spec. */
+	/** Healing Blade heals and restores prayer as the swing lands, a tick after the spec. */
 	@Test
 	public void aSaradominGodswordSpecHealsWithItsHit()
 	{
@@ -135,9 +135,11 @@ public class CombatTrackerTest
 		tracker.specFired(SpecWeapon.SARADOMIN_GODSWORD, 100);
 		tracker.damaged(48, 101);
 		tracker.healed(24, 101);
+		tracker.prayerGained(12, 101);
 		tracker.healed(20, 102);
+		tracker.prayerGained(8, 102);
 
-		assertEquals(list("otherSpecDamage=48", "sgsHeal=24"), recorded);
+		assertEquals(list("otherSpecDamage=48", "sgsHeal=24", "sgsPrayer=12"), recorded);
 	}
 
 	/** Held only for the tick it arrived on: a brew is not the next tick's barrage. */

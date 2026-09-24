@@ -36,10 +36,14 @@ enum SpecWeapon
 		sacrificeDamage(),
 		sacrificeHeal()),
 
-	/** Saradomin godsword. Healing Blade heals half of what the swing hits for, as it lands. */
+	/**
+	 * Saradomin godsword. Healing Blade heals half of what the swing hits for and restores a
+	 * quarter as prayer, as it lands.
+	 */
 	SARADOMIN_GODSWORD("Saradomin godsword",
 		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		swingHeal(CombatMetric.SGS_HEAL)),
+		swingHeal(CombatMetric.SGS_HEAL),
+		swingPrayer(CombatMetric.SGS_PRAYER)),
 
 	/** Eldritch nightmare staff. Restores prayer rather than hitpoints, both when the spell lands. */
 	ELDRITCH_STAFF("Eldritch staff",
@@ -98,6 +102,12 @@ enum SpecWeapon
 	private static SpecEffect swingHeal(CombatMetric metric)
 	{
 		return new SpecEffect(SpecEffect.Kind.HEAL, metric, SWING, PROMPT, 1);
+	}
+
+	/** A prayer restore that lands with a melee spec's hit. */
+	private static SpecEffect swingPrayer(CombatMetric metric)
+	{
+		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, SWING, PROMPT, 1);
 	}
 
 	/** A heal that lands with a projectile's hit. */

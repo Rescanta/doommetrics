@@ -25,6 +25,7 @@ public enum InfoBoxFigure
 	BLOWPIPE_HEAL("Blowpipe heal", CombatMetric.BLOWPIPE_HEAL),
 	SGS_HEAL("SGS heal", CombatMetric.SGS_HEAL),
 	ELDRITCH_PRAYER("Eldritch prayer", CombatMetric.ELDRITCH_PRAYER),
+	SGS_PRAYER("SGS prayer", CombatMetric.SGS_PRAYER),
 	ZCB_DAMAGE("ZCB damage", CombatMetric.ZCB_DAMAGE),
 	SCYTHE_PUNISH("Scythe punish", CombatMetric.SCYTHE_PUNISH),
 	NOXIOUS_HALBERD_PUNISH("Noxious halberd punish", CombatMetric.NOXIOUS_HALBERD_PUNISH),
