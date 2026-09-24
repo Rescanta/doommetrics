@@ -996,6 +996,7 @@ public class DoomMetricsPlugin extends Plugin
 			bossCount = 0;
 			ticksWithoutBoss = 0;
 			combat.sceneCleared();
+			loot.sceneLoaded();
 		}
 
 		// A clean hop or logout has already ended the run via the varp; what reaches here is a
@@ -1081,6 +1082,7 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		ended.end(reason, Instant.now(), diedOnLevel);
+		loot.runEnded();
 		log.debug("Doom run ended: {} after {} delves", reason, ended.lastLevel());
 
 		// Delves are already banked; this flushes the combat since the last one, abandoned or not.
