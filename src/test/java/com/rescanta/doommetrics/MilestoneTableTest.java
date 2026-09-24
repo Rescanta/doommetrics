@@ -115,30 +115,6 @@ public class MilestoneTableTest
 	}
 
 	@Test
-	public void aDeathCountsTowardsTheMilestoneBeingFoughtFor()
-	{
-		assertEquals(10, MilestoneTable.milestoneTowards(1));
-		assertEquals(10, MilestoneTable.milestoneTowards(10));
-		assertEquals(100, MilestoneTable.milestoneTowards(91));
-		assertEquals(100, MilestoneTable.milestoneTowards(100));
-		assertEquals(110, MilestoneTable.milestoneTowards(101));
-	}
-
-	/** Dying on the target itself is short of it; dying past it is not. */
-	@Test
-	public void diedShortCountsEveryDeathUpToAndOnTheTarget()
-	{
-		MilestoneTable table = new MilestoneTable();
-		table.died(3);
-		table.died(57);
-		table.died(100);
-		table.died(101);
-
-		assertEquals(3, table.summary(100, 0).diedShort);
-		assertEquals(1, table.summary(10, 0).diedShort);
-	}
-
-	@Test
 	public void theReachRateIsClearsCountedOverRunsStarted()
 	{
 		MilestoneTable table = new MilestoneTable();

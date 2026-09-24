@@ -15,9 +15,6 @@ final class ResetSummary
 	/** Of those, how many cleared the target. */
 	final int reached;
 
-	/** Deaths on the way to the target or on it. */
-	final int diedShort;
-
 	/** Ticks to the target on an average run and on the best one, or 0 for none yet. */
 	final int averageTicks;
 	final int bestTicks;
@@ -29,22 +26,17 @@ final class ResetSummary
 	/** Targets cleared since the client started. */
 	final int sessionResets;
 
-	/** Uniques claimed. */
-	final int uniques;
-
-	ResetSummary(int target, int runs, int reached, int diedShort, int averageTicks, int bestTicks,
-		int recentCount, int recentTicks, int sessionResets, int uniques)
+	ResetSummary(int target, int runs, int reached, int averageTicks, int bestTicks,
+		int recentCount, int recentTicks, int sessionResets)
 	{
 		this.target = target;
 		this.runs = runs;
 		this.reached = reached;
-		this.diedShort = diedShort;
 		this.averageTicks = averageTicks;
 		this.bestTicks = bestTicks;
 		this.recentCount = recentCount;
 		this.recentTicks = recentTicks;
 		this.sessionResets = sessionResets;
-		this.uniques = uniques;
 	}
 
 	/** The share of runs that reached the target, from 0 to 1, or -1 before any run is counted. */
@@ -56,7 +48,7 @@ final class ResetSummary
 	/** Enough to tell one repaint from the next. */
 	String key()
 	{
-		return target + "|" + runs + "|" + reached + "|" + diedShort + "|" + averageTicks + "|"
-			+ bestTicks + "|" + recentCount + "|" + recentTicks + "|" + sessionResets + "|" + uniques;
+		return target + "|" + runs + "|" + reached + "|" + averageTicks + "|" + bestTicks + "|"
+			+ recentCount + "|" + recentTicks + "|" + sessionResets;
 	}
 }

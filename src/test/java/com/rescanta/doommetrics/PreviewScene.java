@@ -7,7 +7,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import net.runelite.api.gameval.ItemID;
 
 /**
  * One state of the interface, built out of invented numbers rather than out of a game.
@@ -245,9 +244,7 @@ final class PreviewScene
 
 	private static PreviewScene lingering(Instant now)
 	{
-		// Claimed on the way out, with the treads in it.
 		DelveRun run = run(27, now, counters(2));
-		run.loot().recordLoot(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
 		run.end(EndReason.FINISHED, now, 0);
 
 		return new PreviewScene("lingering", "A run walked out of, still up for the linger "
@@ -570,10 +567,10 @@ final class PreviewScene
 	{
 		if (rows.isEmpty())
 		{
-			return new ResetSummary(RESET_TARGET, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+			return new ResetSummary(RESET_TARGET, 0, 0, 0, 0, 0, 0, 0);
 		}
 
-		return new ResetSummary(RESET_TARGET, 297, 184, 41, 12_900, 11_600, 10, 12_450, 6, 3);
+		return new ResetSummary(RESET_TARGET, 297, 184, 12_900, 11_600, 10, 12_450, 6);
 	}
 
 	/** Resets an hour for the card's session line. */

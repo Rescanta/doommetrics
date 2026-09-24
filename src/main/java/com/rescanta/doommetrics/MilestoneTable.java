@@ -52,23 +52,15 @@ class MilestoneTable
 		/** Runs since the reset counters began, joined ones included. */
 		int runs;
 
-		/** Uniques claimed since the reset counters began. */
-		int uniques;
-
-		/** Deaths by the milestone being fought towards: a death on 95 or 100 is under 100. */
-		Map<Integer, Integer> deaths;
-
 		/** Which milestone {@link #recent} is for, and its latest exact times, oldest first. */
 		int recentTarget;
 		List<Integer> recent;
 	}
 
 	private final NavigableMap<Integer, Row> rows = new TreeMap<>();
-	private final NavigableMap<Integer, Integer> deaths = new TreeMap<>();
 	private final List<Integer> recent = new ArrayList<>();
 	private int recentTarget;
 	private int runs;
-	private int uniques;
 
 	static boolean isMilestone(int delve)
 	{
@@ -79,12 +71,6 @@ class MilestoneTable
 	static int milestoneAtOrBelow(int delve)
 	{
 		return delve < INTERVAL ? 0 : delve - (delve % INTERVAL);
-	}
-
-	/** The milestone a delve counts towards: 91 to 100 all lead to 100. */
-	static int milestoneTowards(int delve)
-	{
-		return Math.max(1, (delve + INTERVAL - 1) / INTERVAL) * INTERVAL;
 	}
 
 	/** Banks a clear with an exact time. */
@@ -134,17 +120,6 @@ class MilestoneTable
 		runs = Math.max(0, runs - 1);
 	}
 
-	/** @param delve the delve the character died on */
-	void died(int delve)
-	{
-		deaths.merge(milestoneTowards(delve), 1, Integer::sum);
-	}
-
-	void claimed(int count)
-	{
-		uniques += Math.max(0, count);
-	}
-
 	/**
 	 * Keeps an exact time to the milestone being reset at. Changing that milestone starts the list
 	 * over, since times to different depths cannot be averaged together.
@@ -190,11 +165,9 @@ class MilestoneTable
 	void replaceAll(Saved loaded)
 	{
 		rows.clear();
-		deaths.clear();
 		recent.clear();
 		recentTarget = 0;
 		runs = 0;
-		uniques = 0;
 
 		if (loaded == null)
 		{
@@ -208,17 +181,6 @@ class MilestoneTable
 				if (delve != null && row != null && delve > 0)
 				{
 					rows.put(delve, row);
-				}
-			});
-		}
-
-		if (loaded.deaths != null)
-		{
-			loaded.deaths.forEach((delve, count) ->
-			{
-				if (delve != null && count != null && delve > 0 && count > 0)
-				{
-					deaths.put(delve, count);
 				}
 			});
 		}
@@ -242,7 +204,6 @@ class MilestoneTable
 		}
 
 		runs = Math.max(0, loaded.runs);
-		uniques = Math.max(0, loaded.uniques);
 	}
 
 	/** Everything the table holds, in the shape it is stored in. */
@@ -251,8 +212,6 @@ class MilestoneTable
 		Saved saved = new Saved();
 		saved.rows = getRows();
 		saved.runs = runs;
-		saved.uniques = uniques;
-		saved.deaths = Collections.unmodifiableNavigableMap(deaths);
 		saved.recentTarget = recentTarget;
 		saved.recent = Collections.unmodifiableList(recent);
 		return saved;
@@ -266,13 +225,6 @@ class MilestoneTable
 	ResetSummary summary(int target, int sessionResets)
 	{
 		Row row = rows.get(target);
-		int diedShort = 0;
-
-		for (int count : deaths.headMap(target, true).values())
-		{
-			diedShort += count;
-		}
-
 		int recentAverage = 0;
 
 		if (recentTarget == target && !recent.isEmpty())
@@ -289,13 +241,11 @@ class MilestoneTable
 
 		return new ResetSummary(target, runs,
 			row == null ? 0 : row.counted,
-			diedShort,
 			row == null || row.timed == 0 ? 0 : (int) (row.sumTicks / row.timed),
 			row == null ? 0 : row.pbTicks,
 			recentTarget == target ? recent.size() : 0,
 			recentAverage,
-			sessionResets,
-			uniques);
+			sessionResets);
 	}
 
 	NavigableMap<Integer, Row> getRows()

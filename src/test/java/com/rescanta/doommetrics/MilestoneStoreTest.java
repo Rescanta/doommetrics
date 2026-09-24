@@ -86,8 +86,6 @@ public class MilestoneStoreTest
 		table.runStarted();
 		table.runStarted();
 		table.record(100, 61_000);
-		table.died(57);
-		table.claimed(2);
 		table.recordRecent(100, 61_000);
 
 		MilestoneTable restored = new MilestoneTable();
@@ -96,8 +94,6 @@ public class MilestoneStoreTest
 		ResetSummary summary = restored.summary(100, 0);
 		assertEquals(2, summary.runs);
 		assertEquals(1, summary.reached);
-		assertEquals(1, summary.diedShort);
-		assertEquals(2, summary.uniques);
 		assertEquals(61_000, summary.averageTicks);
 		assertEquals(1, summary.recentCount);
 		assertEquals(61_000, summary.recentTicks);

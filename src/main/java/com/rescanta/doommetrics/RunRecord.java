@@ -1,6 +1,5 @@
 package com.rescanta.doommetrics;
 
-import java.util.List;
 
 /**
  * One run as written to the history file. The field names are the file format; {@link #v}
@@ -36,12 +35,6 @@ class RunRecord
 	 * so {@link #delve} is only a floor and {@link #end} is {@link EndReason#ABANDONED}.
 	 */
 	boolean incomplete;
-
-	/**
-	 * The notable drops from this run by name, in the order seen; a drop earned twice is listed
-	 * twice.
-	 */
-	List<String> loot;
 
 	/** What this run's gear and spellbook gave back, or null when nothing was attributed. */
 	CombatTotals combat;
