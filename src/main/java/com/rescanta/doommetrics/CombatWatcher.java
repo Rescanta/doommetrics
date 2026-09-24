@@ -64,6 +64,14 @@ class CombatWatcher
 	private int prayerPoints;
 	private int hitpoints;
 
+	/**
+	 * Damage splatted on us this tick and not yet taken out of the hitpoints level. The splat comes
+	 * just ahead of the drop it causes, on the same tick, so a heal on that tick is the change
+	 * plus this.
+	 */
+	private int taken;
+	private int takenTick;
+
 	private final Regeneration prayerRegeneration = new Regeneration();
 	private final Regeneration hitpointsRegeneration = new Regeneration();
 
@@ -93,6 +101,7 @@ class CombatWatcher
 		specEnergy.forget();
 		prayerPoints = 0;
 		hitpoints = 0;
+		taken = 0;
 		prayerRegeneration.reset();
 		hitpointsRegeneration.reset();
 	}
@@ -174,9 +183,22 @@ class CombatWatcher
 		Actor target = event.getActor();
 		int tick = client.getTickCount();
 
-		// Healing is read off the hitpoints level instead.
+		// Healing is read off the hitpoints level instead, with the hits taken on the tick added
+		// back - see taken.
 		if (target == client.getLocalPlayer())
 		{
+			if (config.debugLogging())
+			{
+				log.debug("Hitsplat {} of type {} on us at tick {}", hitsplat.getAmount(),
+					hitsplat.getHitsplatType(), tick);
+			}
+
+			if (hitsplat.getHitsplatType() != HitsplatID.HEAL && hitsplat.getAmount() > 0)
+			{
+				taken = (takenTick == tick ? taken : 0) + hitsplat.getAmount();
+				takenTick = tick;
+			}
+
 			return;
 		}
 
@@ -350,13 +372,34 @@ class CombatWatcher
 		}
 		else if (event.getSkill() == Skill.HITPOINTS)
 		{
+			int tick = client.getTickCount();
+			int hit = takenTick == tick ? taken : 0;
 			int was = hitpoints;
 			hitpoints = event.getBoostedLevel();
 
-			if (running && hitpoints > was)
+			// Where the level would be had nothing healed; what it is above that was healed.
+			int unhealed = Math.max(0, was - hit);
+
+			if (hitpoints < was)
 			{
+				taken = Math.max(0, hit - (was - hitpoints));
+			}
+
+			if (running && hitpoints > unhealed)
+			{
+				if (hit > 0 && config.debugLogging())
+				{
+					log.debug("Hitpoints went {} -> {} at tick {} with {} taken", was, hitpoints,
+						tick, hit);
+				}
+
+				taken = 0;
 				rose(SpecEffect.Kind.HEAL, hitpointsRegeneration, hitpointsRegenerationPeriod(),
-					was, hitpoints, event.getLevel());
+					unhealed, hitpoints, event.getLevel());
+			}
+			else if (running && hitpoints < was && config.debugLogging())
+			{
+				log.debug("Hitpoints fell by {} at tick {}", was - hitpoints, tick);
 			}
 		}
 	}
