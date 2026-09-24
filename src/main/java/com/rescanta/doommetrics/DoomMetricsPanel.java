@@ -321,18 +321,14 @@ class DoomMetricsPanel extends PluginPanel
 		label.setForeground(value == null ? ColorScheme.LIGHT_GRAY_COLOR : ColorScheme.TEXT_COLOR);
 	}
 
-	/** Retexts one rate. A null tooltip keeps the one set at build time. */
+	/** Retexts one rate. A null tooltip takes the last one down, so a blank rate explains nothing. */
 	private static void apply(PanelStyle.Figure figure, String value, String tooltip)
 	{
 		figure.setText(value == null ? "-" : value);
 		figure.setForeground(value == null || "-".equals(value)
 			? DoomColors.DIMMED
 			: DoomColors.PLAIN);
-
-		if (tooltip != null)
-		{
-			figure.setToolTipText(tooltip);
-		}
+		figure.setToolTipText(tooltip);
 	}
 
 	/** A null snapshot blanks the heroes and collapses the rest of the card to one idle line. */
