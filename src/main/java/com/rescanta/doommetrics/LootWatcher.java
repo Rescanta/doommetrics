@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -54,6 +55,10 @@ class LootWatcher
 
 	private static final String DESCEND_OPTION = "Descend";
 
+	/** Both copies of the loot pile - the claimed one and the one mid-run. */
+	private static final List<Integer> PILES =
+		Arrays.asList(InventoryID.DOM_LOOTPILE, InventoryID.DOM_LOOTPILE_DURING);
+
 	private final Client client;
 	private final ClientThread clientThread;
 	private final GameItems items;
@@ -64,6 +69,18 @@ class LootWatcher
 
 	/** "Claim and leave" was clicked; only then does the claimed loot filling in end the run. */
 	private boolean claimRequested;
+
+	/**
+	 * Loot piles not sent since a run ended, so the client may still hold an earlier trip's. Empty
+	 * when the plugin starts: what it cannot know about, it trusts.
+	 */
+	private final Set<Integer> stalePiles = new HashSet<>();
+
+	/** Stale piles a joined run started with, whose first sending is taken as what it inherited. */
+	private final Set<Integer> baselinePiles = new HashSet<>();
+
+	/** The glowing hole was seen with no run to mark it on - at plugin start it is replayed first. */
+	private boolean glowWithoutRun;
 
 	LootWatcher(Client client, ClientThread clientThread, GameItems items, Supplier<DelveRun> run,
 		Runnable finishRun)
@@ -86,15 +103,45 @@ class LootWatcher
 	void runStarted(DelveRun started, boolean missedDelves)
 	{
 		claimRequested = false;
+		baselinePiles.clear();
+		boolean glowed = glowWithoutRun;
+		glowWithoutRun = false;
 
-		if (missedDelves)
+		if (!missedDelves)
 		{
-			// Already in the pile, from delves we did not see.
-			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE))
-				.forEach(started.loot()::pileAlreadyHeld);
-			notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
-				.forEach(started.loot()::pileAlreadyHeld);
+			return;
 		}
+
+		// Already in the pile, from delves we did not see.
+		for (int pile : PILES)
+		{
+			if (stalePiles.contains(pile))
+			{
+				baselinePiles.add(pile);
+				continue;
+			}
+
+			notableDrops(client.getItemContainer(pile)).forEach(started.loot()::pileAlreadyHeld);
+		}
+
+		// Picked up between delves, beside a hole that was already glowing.
+		if (glowed && started.loot().uniqueSignalled())
+		{
+			log.debug("Picked up beside the glowing hole: a unique is in the pile");
+		}
+	}
+
+	/** Until they are sent again, the piles the client holds are this run's. */
+	void runEnded()
+	{
+		stalePiles.addAll(PILES);
+		glowWithoutRun = false;
+	}
+
+	/** A new scene: the glowing hole seen before it is gone. */
+	void sceneLoaded()
+	{
+		glowWithoutRun = false;
 	}
 
 	/** A new delve started, so no claim is on its way. */
@@ -194,10 +241,16 @@ class LootWatcher
 	void itemContainerChanged(ItemContainerChanged event)
 	{
 		int containerId = event.getContainerId();
+
+		if (!PILES.contains(containerId))
+		{
+			return;
+		}
+
+		stalePiles.remove(containerId);
 		DelveRun current = run.get();
 
-		if (current == null
-			|| (containerId != InventoryID.DOM_LOOTPILE && containerId != InventoryID.DOM_LOOTPILE_DURING))
+		if (current == null)
 		{
 			return;
 		}
@@ -206,15 +259,24 @@ class LootWatcher
 		log.debug("Loot pile {} sent on delve {} (between delves: {}), notable drops {}",
 			containerId, current.currentLevel(), current.dropLevel() != current.currentLevel(), drops);
 
-		drops.forEach((itemId, quantity) ->
+		if (baselinePiles.remove(containerId))
 		{
-			int delve = current.loot().sawInPile(itemId, items.name(itemId), quantity);
-
-			if (delve != RunLoot.NOT_RECORDED)
+			// The first this run has seen of a pile it could not read at its start.
+			drops.forEach(current.loot()::pileAlreadyHeld);
+		}
+		else
+		{
+			drops.forEach((itemId, quantity) ->
 			{
-				log.debug("Item {} recorded on delve {}, pile now holds {}", itemId, delve, quantity);
-			}
-		});
+				int delve = current.loot().sawInPile(itemId, items.name(itemId), quantity);
+
+				if (delve != RunLoot.NOT_RECORDED)
+				{
+					log.debug("Item {} recorded on delve {}, pile now holds {}", itemId, delve,
+						quantity);
+				}
+			});
+		}
 
 		// The claimed loot filling in after "Claim and leave" is the claim going through.
 		if (containerId == InventoryID.DOM_LOOTPILE && claimRequested
@@ -256,13 +318,10 @@ class LootWatcher
 		boolean claimed = widgetId == InterfaceID.DomEndLevelUi.BTN_INV_ALL
 			|| widgetId == InterfaceID.DomEndLevelUi.BTN_BANK_ALL;
 
-		if (claimed)
+		// Leave sits beside them on the claimed loot's screen.
+		if (claimed || widgetId == InterfaceID.DomEndLevelUi.BTN_LEAVE)
 		{
 			finishClaim();
-		}
-		else if (widgetId == InterfaceID.DomEndLevelUi.BTN_LEAVE)
-		{
-			finishRun.run();
 		}
 	}
 
@@ -280,8 +339,18 @@ class LootWatcher
 	{
 		DelveRun current = run.get();
 
-		if (event.getGameObject().getId() != ObjectID.DOM_DESCEND_HOLE_UNIQUE || current == null
-			|| !current.isBetweenDelves())
+		if (event.getGameObject().getId() != ObjectID.DOM_DESCEND_HOLE_UNIQUE)
+		{
+			return;
+		}
+
+		if (current == null)
+		{
+			glowWithoutRun = true;
+			return;
+		}
+
+		if (!current.isBetweenDelves())
 		{
 			return;
 		}
@@ -309,10 +378,18 @@ class LootWatcher
 	{
 		DelveRun current = run.get();
 
-		// Both copies of the pile, taking the larger count of each drop.
-		Map<Integer, Integer> claimed = notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE));
-		notableDrops(client.getItemContainer(InventoryID.DOM_LOOTPILE_DURING))
-			.forEach((itemId, quantity) -> claimed.merge(itemId, quantity, Math::max));
+		// Both copies of the pile, taking the larger count of each drop - but not one last sent on an
+		// earlier trip, whose uniques are not this run's.
+		Map<Integer, Integer> claimed = new LinkedHashMap<>();
+
+		for (int pile : PILES)
+		{
+			if (!stalePiles.contains(pile))
+			{
+				notableDrops(client.getItemContainer(pile))
+					.forEach((itemId, quantity) -> claimed.merge(itemId, quantity, Math::max));
+			}
+		}
 
 		claimed.forEach((itemId, quantity) ->
 		{
