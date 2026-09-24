@@ -3,7 +3,7 @@ package com.rescanta.doommetrics;
 import java.awt.image.BufferedImage;
 
 /**
- * The pictures drawn beside a counter's or a drop's name. Any may be null - still loading, or none
+ * The pictures drawn beside a counter's name. Any may be null - still loading, or none
  * - and callers then draw the name alone.
  */
 interface Icons
@@ -19,18 +19,6 @@ interface Icons
 
 		@Override
 		public BufferedImage smallCounter(CombatMetric metric)
-		{
-			return null;
-		}
-
-		@Override
-		public BufferedImage item(int itemId)
-		{
-			return null;
-		}
-
-		@Override
-		public BufferedImage smallItem(int itemId)
 		{
 			return null;
 		}
@@ -53,12 +41,6 @@ interface Icons
 
 	/** The same, shrunk to stand in for the counter's name - see {@link IconArt#SMALL}. */
 	BufferedImage smallCounter(CombatMetric metric);
-
-	/** An item as the game draws it in the inventory. */
-	BufferedImage item(int itemId);
-
-	/** The same, shrunk to stand in for the item's name. */
-	BufferedImage smallItem(int itemId);
 
 	/** An interface sprite as the game draws it - a skill icon, the boss's icon. */
 	BufferedImage sprite(int spriteId);

@@ -21,12 +21,6 @@ final class PreviewIcons implements Icons
 
 	static
 	{
-		ITEMS.put(ItemID.EYE_OF_AYAK, "eye_of_ayak");
-		ITEMS.put(ItemID.EYE_OF_AYAK_UNCHARGED, "eye_of_ayak_uncharged");
-		ITEMS.put(ItemID.AVERNIC_TREADS, "avernic_treads");
-		ITEMS.put(ItemID.MOKHAIOTL_CLOTH, "mokhaiotl_cloth");
-		ITEMS.put(ItemID.DOMPET, "dom");
-
 		ITEMS.put(ItemID.ANCIENT_GODSWORD, "ancient_godsword");
 		ITEMS.put(ItemID.TOXIC_BLOWPIPE, "toxic_blowpipe");
 		ITEMS.put(ItemID.SGS, "saradomin_godsword");
@@ -80,18 +74,6 @@ final class PreviewIcons implements Icons
 	public BufferedImage smallCounter(CombatMetric metric)
 	{
 		return small.get(fileFor(metric));
-	}
-
-	@Override
-	public BufferedImage item(int itemId)
-	{
-		return full.get(ITEMS.get(itemId));
-	}
-
-	@Override
-	public BufferedImage smallItem(int itemId)
-	{
-		return small.get(ITEMS.get(itemId));
 	}
 
 	@Override

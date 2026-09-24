@@ -456,7 +456,7 @@ Healing         1,035     | 2:00
 ```
 
 The run's figures head the sidebar, with the same Live, Ended or Died word as the side panel and
-the bar towards the target, then the drops and the legend; the chart takes the rest of the window.
+the bar towards the target, then the legend; the chart takes the rest of the window.
 Hovering a delve writes its number and its full and kill times on the chart's top edge, named in
 orange.
 
@@ -514,34 +514,6 @@ counted anything on starts switched off, so the chart is not crowded with flat l
 bottom; it comes on by itself once it counts, and a click puts it on sooner. The legend lists each counter by name with its icon beside it, as the side panel does; hovering
 the row says what feeds it.
 
-### Drops
-
-The eye, avernic treads, mokhaiotl cloth and the pet are drawn as their icons in a lane over the
-counters, each above the delve it came off, and listed under **Drops** beside the chart. A drop is
-placed when the run first learns there is one more of it than before: from the loot pile, from the
-"Your loot contains" warning the game puts up as you try to descend - one per copy, every try - or,
-for the pet, from the line the game posts as you claim. Only a count going up places anything, so an
-eye off delve 10 is on delve 10 alone however many times you are warned about it, and a second eye
-off delve 20 is on delve 20 alone.
-
-A hole left glowing by a unique you have not seen yet is drawn as a gold question mark on the
-delve it was cleared by, and says in the list what it could be. The glow is the only word the game
-gives a client before you investigate the pile, try to descend or claim, so the mark is what stands
-there until one of those names the drop - at which point the real item takes its place, on the
-delve the glow put it on. Only one is ever drawn at a time: the hole goes on glowing for as long as
-a unique sits unclaimed in the pile, so a glow over one you already know about is saying nothing
-new. The pet is the exception: only the first one a character is ever given lights the hole, and
-every duplicate after that lands in the pile without lighting anything, so a pet the hole never
-glowed for is not held against a later glow. A mark still standing when the run ends was a drop the
-run lost, since every way of walking out with it would have named it. A run picked up part way through - the plugin switched on, or the
-client restarted, mid-delve - marks a glowing hole on the delve it was cleared by, which is the
-only delve such a run can name: the drop may well have come off one nobody watched.
-
-A drop you did not walk out with - still in the pile when you died, or left behind - stays where
-it dropped, faded. The pet is no exception: the game only hands it over with the claim, so a death
-loses it with the rest of the pile. Drops close enough together to overlap are stacked, and
-pointing at an icon or a row in the list names it, and says how a lost one was lost.
-
 ### Long runs
 
 The world record is past delve 260 and the chart is built to go further. Past eighty delves the
@@ -561,8 +533,9 @@ lifetime rate, both in the side panel where they always were.
 
 Finished runs are still written to `.runelite/doommetrics/`, one file per character, one JSON line
 per run: when the run ended, how deep it got, how long that took, how it ended, what the counters
-recorded, and the notable drops - the eye, avernic treads, mokhaiotl cloth and the pet. Nothing
-displays that file. It is kept because a run is impossible to recover once it is over and the
+recorded, and the notable drops the claim took - the eye, avernic treads, mokhaiotl cloth and the
+pet. Where in the run a drop landed isn't followed; the Doom loot tracker plugin covers the loot
+itself. Nothing displays that file. It is kept because a run is impossible to recover once it is over and the
 record costs about sixty bytes, so twenty thousand runs is about a megabyte. Appending costs the
 same on the ten thousandth run as on the first, and a write torn by a crash costs the last line
 rather than the whole file.

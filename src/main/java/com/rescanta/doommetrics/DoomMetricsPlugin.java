@@ -15,7 +15,6 @@ import net.runelite.api.GameState;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GraphicChanged;
@@ -33,7 +32,6 @@ import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ClientShutdown;
 import net.runelite.client.events.ConfigChanged;
@@ -118,9 +116,6 @@ public class DoomMetricsPlugin extends Plugin
 	private ClientThread clientThread;
 
 	@Inject
-	private EventBus eventBus;
-
-	@Inject
 	private ConfigManager configManager;
 
 	@Inject
@@ -132,11 +127,6 @@ public class DoomMetricsPlugin extends Plugin
 	private Totals totals;
 	private MilestoneTracker milestones;
 	private PanelFeed feed;
-
-	private LootDiagnostics lootDiagnostics;
-
-	/** Diagnostics are only on the event bus while debug logging is on. */
-	private boolean diagnosticsRegistered;
 
 	private NavigationButton navButton;
 
@@ -226,10 +216,6 @@ public class DoomMetricsPlugin extends Plugin
 		infoBox = new DoomMetricsInfoBox(icon, this, config);
 		infoBoxManager.addInfoBox(infoBox);
 
-		lootDiagnostics = new LootDiagnostics(client, config, () -> run != null,
-			() -> run != null && run.isBetweenDelves());
-		updateDiagnostics();
-
 		// Plugins start on the Swing thread; the run is the client thread's. Queued ahead of the
 		// spawn events the client replays for a plugin starting, so they land on a clean slate.
 		clientThread.invoke(() ->
@@ -249,14 +235,6 @@ public class DoomMetricsPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
-		if (diagnosticsRegistered)
-		{
-			eventBus.unregister(lootDiagnostics);
-			diagnosticsRegistered = false;
-		}
-
-		lootDiagnostics = null;
-
 		overlayManager.remove(overlay);
 		infoBoxManager.removeInfoBox(infoBox);
 		infoBox = null;
@@ -387,7 +365,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		Instant now = Instant.now();
 		resumed.resumeOn(level, now, clearsSince);
-		watch(resumed, profile, now, clearsSince > 0);
+		watch(resumed, profile, now);
 		log.debug("Carried the run on at delve {}, {} delves cleared unwatched", level, clearsSince);
 		return true;
 	}
@@ -527,27 +505,6 @@ public class DoomMetricsPlugin extends Plugin
 		return Math.max(MilestoneTable.INTERVAL, MilestoneTable.milestoneAtOrBelow(config.targetDelve()));
 	}
 
-	private void updateDiagnostics()
-	{
-		boolean wanted = config.debugLogging();
-
-		if (lootDiagnostics == null || wanted == diagnosticsRegistered)
-		{
-			return;
-		}
-
-		if (wanted)
-		{
-			eventBus.register(lootDiagnostics);
-		}
-		else
-		{
-			eventBus.unregister(lootDiagnostics);
-		}
-
-		diagnosticsRegistered = wanted;
-	}
-
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
@@ -556,11 +513,7 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		if ("debugLogging".equals(event.getKey()))
-		{
-			updateDiagnostics();
-		}
-		else if ("hideEmptyCounters".equals(event.getKey()))
+		if ("hideEmptyCounters".equals(event.getKey()))
 		{
 			feed.hideEmptyChanged();
 		}
@@ -577,12 +530,6 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		if (combat.chatMessage(event.getMessage()))
 		{
-			return;
-		}
-
-		if (event.getType() == ChatMessageType.MESBOX)
-		{
-			loot.lootWarning(event.getMessage());
 			return;
 		}
 
@@ -683,12 +630,6 @@ public class DoomMetricsPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onGameObjectSpawned(GameObjectSpawned event)
-	{
-		loot.gameObjectSpawned(event);
-	}
-
-	@Subscribe
 	public void onActorDeath(ActorDeath event)
 	{
 		if (run == null || deathLevel >= 0 || event.getActor() != client.getLocalPlayer())
@@ -749,7 +690,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (config.debugLogging())
 		{
-			log.debug("Counted {} to {} on delve {}", amount, metric.key(), run.dropLevel());
+			log.debug("Counted {} to {} on delve {}", amount, metric.key(), run.creditLevel());
 		}
 	}
 
@@ -1022,7 +963,6 @@ public class DoomMetricsPlugin extends Plugin
 			bossCount = 0;
 			ticksWithoutBoss = 0;
 			combat.sceneCleared();
-			loot.sceneLoaded();
 		}
 
 		// A clean hop or logout has already ended the run via the varp; what reaches here is a
@@ -1061,17 +1001,13 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		settleSuspended();
 		watch(new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null),
-			runHistoryStore.currentProfile(), startedAt, partial);
+			runHistoryStore.currentProfile(), startedAt);
 		milestones.runStarted(partial, level);
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
 	}
 
-	/**
-	 * Makes {@code started} the run in progress.
-	 *
-	 * @param missedDelves whether delves of it went by unwatched
-	 */
-	private void watch(DelveRun started, String profile, Instant sessionFrom, boolean missedDelves)
+	/** Makes {@code started} the run in progress. */
+	private void watch(DelveRun started, String profile, Instant sessionFrom)
 	{
 		run = started;
 		lastRun = null;
@@ -1082,7 +1018,7 @@ public class DoomMetricsPlugin extends Plugin
 		ticksWithoutBoss = 0;
 		deathLevel = -1;
 		combat.runStarted();
-		loot.runStarted(started, missedDelves);
+		loot.runStarted();
 		totals.runStarted(sessionFrom);
 	}
 

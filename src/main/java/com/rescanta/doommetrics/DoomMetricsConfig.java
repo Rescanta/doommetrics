@@ -362,8 +362,7 @@ public interface DoomMetricsConfig extends Config
 		keyName = "debugLogging",
 		name = "Debug logging",
 		description = "Log delve transitions, Doom varplayer changes and what each counter was"
-			+ "<br>credited, at debug level. Around a delve's end it also logs the sounds, objects,"
-			+ "<br>menu clicks, interface text, varbits and scripts the game sends."
+			+ "<br>credited, at debug level."
 			+ "<br>Useful for reporting a problem; leave it off otherwise.",
 		position = 101,
 		section = advancedSection

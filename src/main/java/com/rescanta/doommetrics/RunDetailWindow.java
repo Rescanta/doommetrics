@@ -24,7 +24,7 @@ import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
- * One run, delve by delve: the chart, its legend and the drops. Shows the live run or the last one,
+ * One run, delve by delve: the chart and its legend. Shows the live run or the last one,
  * ignoring the overlay's linger and Clear. Swing thread only; the plugin owns the one instance.
  */
 class RunDetailWindow extends JFrame
@@ -37,7 +37,6 @@ class RunDetailWindow extends JFrame
 
 	private final DelveChart chart = new DelveChart();
 	private final RunLegendPanel legend = new RunLegendPanel();
-	private final RunDropsPanel drops = new RunDropsPanel();
 
 	/** Which way the counters are read, one tab each - see {@link #groupingTabs()}. */
 	private final MaterialTabGroup grouping = new MaterialTabGroup();
@@ -51,8 +50,6 @@ class RunDetailWindow extends JFrame
 	/** The target row, drawn as a meter - see {@link TargetProgress}. */
 	private final TargetProgress target = new TargetProgress(4);
 
-	/** The drops, under their heading - only on show for a run that has any. */
-	private final JPanel dropsSection = PanelStyle.flatSection("Drops", drops);
 	private final JPanel summary = PanelStyle.column(3);
 
 	/** The two figures at the head of the sidebar - see {@link DoomMetricsPanel.Live}. */
@@ -95,18 +92,12 @@ class RunDetailWindow extends JFrame
 			}
 		});
 
-		// Hovering a delve moves the legend and drops list onto it; hovering a name brings a line
-		// forward.
-		chart.setHoverListener(level ->
-		{
-			legend.setDelve(level);
-			drops.setDelve(level);
-		});
+		// Hovering a delve moves the legend onto it; hovering a name brings a line forward.
+		chart.setHoverListener(legend::setDelve);
 		legend.setToggleListener(chart::setHidden);
 		legend.setEmphasisListener(chart::setEmphasis);
 
 		buildSummary();
-		dropsSection.setVisible(false);
 
 		JPanel content = new JPanel(new BorderLayout(10, 0));
 		content.setBackground(PanelStyle.BACKGROUND);
@@ -139,8 +130,6 @@ class RunDetailWindow extends JFrame
 	{
 		chart.setDetail(detail);
 		legend.setDetail(detail);
-		drops.setDetail(detail);
-		dropsSection.setVisible(!detail.drops().isEmpty());
 	}
 
 	/**
@@ -161,9 +150,7 @@ class RunDetailWindow extends JFrame
 
 	void setIcons(Icons icons)
 	{
-		chart.setItemIcons(icons::item);
 		legend.setIcons(icons);
-		drops.setIcons(icons);
 	}
 
 	/** @param live the side panel's live rows, or null when there is no run */
@@ -326,19 +313,14 @@ class RunDetailWindow extends JFrame
 		grouping.select(grouped ? groupedTab : separateTab);
 	}
 
-	/** The run's figures, drops and legend, scrolled together. */
+	/** The run's figures and legend, scrolled together. */
 	private JScrollPane sidebar()
 	{
-		// A hidden section takes its gap with it, so a run without drops lays out as it always did.
-		JPanel lower = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
-		lower.setBackground(PanelStyle.BACKGROUND);
-		lower.add(dropsSection, BorderLayout.NORTH);
-		lower.add(PanelStyle.flatSection("Counters", groupingTabs(), legend), BorderLayout.CENTER);
 
 		JPanel stack = new JPanel(new BorderLayout(0, PanelStyle.SECTION_GAP));
 		stack.setBackground(PanelStyle.BACKGROUND);
 		stack.add(PanelStyle.flatSection("This run", status, PanelStyle.card(summary)), BorderLayout.NORTH);
-		stack.add(lower, BorderLayout.CENTER);
+		stack.add(PanelStyle.flatSection("Counters", groupingTabs(), legend), BorderLayout.CENTER);
 
 		// Wrapped so rows aren't stretched to the viewport height, and held to the sidebar width so
 		// a wide row squeezes its name rather than having its digits clipped.
