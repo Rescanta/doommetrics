@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
@@ -119,6 +120,12 @@ public class DoomMetricsPlugin extends Plugin
 	@Inject
 	private EventBus eventBus;
 
+	@Inject
+	private ConfigManager configManager;
+
+	@Inject
+	private ScheduledExecutorService executor;
+
 	// Built on start up.
 	private LootWatcher loot;
 	private CombatWatcher combat;
@@ -223,15 +230,20 @@ public class DoomMetricsPlugin extends Plugin
 			() -> run != null && run.isBetweenDelves());
 		updateDiagnostics();
 
-		reset();
-		milestones.load();
-		loadTotals();
-
-		// Held by a run from before the client last closed, which cannot be carried on now.
-		if (suspended == null)
+		// Plugins start on the Swing thread; the run is the client thread's. Queued ahead of the
+		// spawn events the client replays for a plugin starting, so they land on a clean slate.
+		clientThread.invoke(() ->
 		{
-			runHistoryStore.releasePending();
-		}
+			reset();
+			milestones.load();
+			loadTotals();
+
+			// Held by a run from before the client last closed, which cannot be carried on now.
+			if (suspended == null)
+			{
+				runHistoryStore.releasePending();
+			}
+		});
 	}
 
 	@Override
@@ -254,17 +266,26 @@ public class DoomMetricsPlugin extends Plugin
 		infoBoxPicture = null;
 		feed.stop();
 
-		suspendRun();
-		totals.flushCombat();
-		reset();
+		// Plugins stop on the Swing thread; the run is the client thread's.
+		clientThread.invoke(() ->
+		{
+			suspendRun();
+			totals.flushCombat();
+			reset();
+		});
 	}
 
-	/** Closing the client does not shut plugins down, so a run still going is written here. */
+	/**
+	 * Closing the client does not shut plugins down, so a run still going is written here. The
+	 * client saves its config while this event is handed round, before the client thread gets to
+	 * the run, so what the run changes in the profile is saved again afterwards.
+	 */
 	@Subscribe
 	public void onClientShutdown(ClientShutdown event)
 	{
 		CompletableFuture<Void> written = new CompletableFuture<>();
 		clientThread.invoke(() -> recordUnfinishedRun()
+			.thenRunAsync(configManager::sendConfig, executor)
 			.whenComplete((ignored, error) -> written.complete(null)));
 		event.waitFor(written);
 	}
