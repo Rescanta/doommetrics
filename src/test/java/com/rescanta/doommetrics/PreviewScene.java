@@ -7,7 +7,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import net.runelite.api.gameval.ItemID;
 
 /**
  * One state of the interface, built out of invented numbers rather than out of a game.
@@ -187,13 +186,7 @@ final class PreviewScene
 
 	private static PreviewScene deep(Instant now)
 	{
-		// A cloth, an eye, and a second eye ten delves later - the second placed where it landed,
-		// and nothing on the delves between, which is what the game's warning on every descend
-		// must not be read as.
-		DelveRun run = run(23, now, counters(1),
-			landing(7, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"),
-			landing(10, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
-			landing(20, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"));
+		DelveRun run = run(23, now, counters(1));
 
 		// Aiming for a delve, which is the fullest the run section gets: the two figures at the
 		// head of it and three rows under them.
@@ -238,12 +231,7 @@ final class PreviewScene
 
 	private static PreviewScene died(Instant now)
 	{
-		// Whatever made the hole glow off the last delve went with the run: no descend was tried
-		// with it in the pile, and no claim reached it, so nothing ever named it. The run's only
-		// unique, because a glow over one already known about places nothing - see
-		// DelveRun#uniqueSignalled. A named drop lost the same way is the lingering scene.
-		DelveRun run = run(31, now, counters(2),
-			landing(31, RunLoot.UNKNOWN_UNIQUE, RunLoot.UNKNOWN_UNIQUE_NAME));
+		DelveRun run = run(31, now, counters(2));
 		// Died a few seconds into delve 32, which the game had announced like any other.
 		run.enterLevel(32, now.minusSeconds(15));
 		run.end(EndReason.DIED, now, 32);
@@ -256,10 +244,7 @@ final class PreviewScene
 
 	private static PreviewScene lingering(Instant now)
 	{
-		// Claimed on the way out, so the treads are kept.
-		DelveRun run = run(27, now, counters(2),
-			landing(14, ItemID.AVERNIC_TREADS, "Avernic treads"));
-		run.loot().recordLoot(ItemID.AVERNIC_TREADS, "Avernic treads", 1);
+		DelveRun run = run(27, now, counters(2));
 		run.end(EndReason.FINISHED, now, 0);
 
 		return new PreviewScene("lingering", "A run walked out of, still up for the linger "
@@ -289,7 +274,7 @@ final class PreviewScene
 			new PreviewConfig(), run(1, now, NOTHING), new CombatTotals(), new CombatTotals(),
 			new DoomMetricsPanel.Stats(DoomFormat.duration(Duration.ofMinutes(2)),
 				DoomFormat.pace(null), "No delves completed yet", "0",
-				DoomFormat.pace(null), "No delves completed yet", null),
+				DoomFormat.pace(null), "No delves completed yet", null, null, null),
 			Collections.emptyList());
 	}
 
@@ -338,15 +323,7 @@ final class PreviewScene
 	 */
 	private static PreviewScene record(Instant now)
 	{
-		// Three drops a few delves apart, which at this width is closer than two icons can sit
-		// side by side - what the lane stacks into rows for. Died, so every one of them is lost.
-		DelveRun run = run(350, now, counters(40),
-			landing(40, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
-			landing(88, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"),
-			landing(91, ItemID.AVERNIC_TREADS, "Avernic treads"),
-			landing(95, ItemID.EYE_OF_AYAK_UNCHARGED, "Eye of ayak (uncharged)"),
-			landing(160, ItemID.DOMPET, "Dom"),
-			landing(301, ItemID.MOKHAIOTL_CLOTH, "Mokhaiotl cloth"));
+		DelveRun run = run(350, now, counters(40));
 		run.enterLevel(351, now.minusSeconds(15));
 		run.end(EndReason.DIED, now, 351);
 
@@ -365,11 +342,8 @@ final class PreviewScene
 	 * one: a counter is credited to whichever delve was being fought when it fired, so a run whose
 	 * figures were added at the end would put every one of them on the delve after the last, and
 	 * the chart would draw an empty run with one spike off the end of it.
-	 *
-	 * <p>The same goes for {@code landings}: each is seen landing in the pile just after the delve
-	 * it came off is cleared, which is where the plugin sees one.
 	 */
-	private static DelveRun run(int reached, Instant now, long[] counters, Landing... landings)
+	private static DelveRun run(int reached, Instant now, long[] counters)
 	{
 		Duration total = Duration.ofSeconds(20);
 
@@ -402,41 +376,9 @@ final class PreviewScene
 
 			at = at.plus(delveLength(level));
 			run.complete(level, at, fightLength(level, random));
-
-			for (Landing landing : landings)
-			{
-				if (landing.level == level && landing.itemId == RunLoot.UNKNOWN_UNIQUE)
-				{
-					run.loot().uniqueSignalled();
-				}
-				else if (landing.level == level)
-				{
-					run.loot().sawInPile(landing.itemId, landing.name, run.loot().held(landing.itemId) + 1);
-				}
-			}
 		}
 
 		return run;
-	}
-
-	/** A notable drop for a scene's run: what it was, and the delve it came off. */
-	private static final class Landing
-	{
-		private final int level;
-		private final int itemId;
-		private final String name;
-
-		private Landing(int level, int itemId, String name)
-		{
-			this.level = level;
-			this.itemId = itemId;
-			this.name = name;
-		}
-	}
-
-	private static Landing landing(int level, int itemId, String name)
-	{
-		return new Landing(level, itemId, name);
 	}
 
 	/**
@@ -520,7 +462,9 @@ final class PreviewScene
 		counters[CombatMetric.OTHER_SPELL_HEAL.ordinal()] = 124L * weight;
 		counters[CombatMetric.AGS_HEAL.ordinal()] = 58L * weight;
 		counters[CombatMetric.BLOWPIPE_HEAL.ordinal()] = 47L * weight;
+		counters[CombatMetric.SGS_HEAL.ordinal()] = 36L * weight;
 		counters[CombatMetric.ELDRITCH_PRAYER.ordinal()] = 210L * weight;
+		counters[CombatMetric.SGS_PRAYER.ordinal()] = 18L * weight;
 		counters[CombatMetric.ZCB_DAMAGE.ordinal()] = 1502L * weight;
 		counters[CombatMetric.OTHER_SPEC_DAMAGE.ordinal()] = 337L * weight;
 		counters[CombatMetric.SCYTHE_PUNISH.ordinal()] = 612L * weight;
@@ -541,7 +485,9 @@ final class PreviewScene
 		totals.add(CombatMetric.OTHER_SPELL_HEAL, 366);
 		totals.add(CombatMetric.AGS_HEAL, 174);
 		totals.add(CombatMetric.BLOWPIPE_HEAL, 141);
+		totals.add(CombatMetric.SGS_HEAL, 108);
 		totals.add(CombatMetric.ELDRITCH_PRAYER, 630);
+		totals.add(CombatMetric.SGS_PRAYER, 54);
 		totals.add(CombatMetric.ZCB_DAMAGE, 4_506);
 		totals.add(CombatMetric.OTHER_SPEC_DAMAGE, 1_011);
 		totals.add(CombatMetric.SCYTHE_PUNISH, 1_836);
@@ -558,7 +504,9 @@ final class PreviewScene
 		totals.add(CombatMetric.OTHER_SPELL_HEAL, 21_408);
 		totals.add(CombatMetric.AGS_HEAL, 9_611);
 		totals.add(CombatMetric.BLOWPIPE_HEAL, 7_842);
+		totals.add(CombatMetric.SGS_HEAL, 5_120);
 		totals.add(CombatMetric.ELDRITCH_PRAYER, 38_150);
+		totals.add(CombatMetric.SGS_PRAYER, 2_560);
 		totals.add(CombatMetric.ZCB_DAMAGE, 271_884);
 		totals.add(CombatMetric.OTHER_SPEC_DAMAGE, 60_337);
 		totals.add(CombatMetric.SCYTHE_PUNISH, 110_762);
@@ -588,7 +536,9 @@ final class PreviewScene
 			DoomFormat.count(session.deep),
 			DoomFormat.pace(lifetime.kph()),
 			tooltip(lifetime),
-			DoomFormat.count(lifetime.deep));
+			DoomFormat.count(lifetime.deep),
+			session.kph(),
+			lifetime.kph());
 	}
 
 	/** Mirrors the tooltip the plugin hangs off a rate, so a hover in the preview reads as one. */
@@ -606,6 +556,26 @@ final class PreviewScene
 		return rows(50);
 	}
 
+	/** The target every scene aims for, which is also the resets card's milestone. */
+	private static final int RESET_TARGET = 50;
+
+	/**
+	 * The resets card: a character a few hundred runs in, or nothing at all for one whose table is
+	 * empty.
+	 */
+	ResetSummary resets()
+	{
+		if (rows.isEmpty())
+		{
+			return new ResetSummary(RESET_TARGET, 0, 0, 0, 0, 0, 0, 0);
+		}
+
+		return new ResetSummary(RESET_TARGET, 297, 184, 12_900, 11_600, 10, 12_450, 6);
+	}
+
+	/** Resets an hour for the card's session line. */
+	static final double RESETS_PER_HOUR = 2.1;
+
 	/** A milestone row every ten delves down to {@code deepest}, one of them freshly beaten. */
 	private static List<MilestoneTablePanel.Row> rows(int deepest)
 	{
@@ -614,7 +584,8 @@ final class PreviewScene
 
 		for (int delve = MilestoneTable.INTERVAL; delve <= deepest; delve += MilestoneTable.INTERVAL)
 		{
-			rows.add(new MilestoneTablePanel.Row(delve, kc, 1_100 + delve * 210, delve == 30));
+			rows.add(new MilestoneTablePanel.Row(delve, kc, 1_100 + delve * 210, delve == 30,
+				delve == RESET_TARGET));
 			kc = Math.max(1, kc / 3);
 		}
 

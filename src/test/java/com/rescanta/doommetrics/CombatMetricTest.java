@@ -29,26 +29,66 @@ public class CombatMetricTest
 	@Test
 	public void theCountersDrawnTakeThePaletteInTheOrderTheyAreListed()
 	{
-		assertEquals(PALETTE.length, CombatMetric.DISPLAYED.size());
+		List<CombatMetric> solid = new ArrayList<>();
+
+		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		{
+			if (!metric.dashed())
+			{
+				solid.add(metric);
+			}
+		}
+
+		assertEquals(PALETTE.length, solid.size());
 
 		for (int i = 0; i < PALETTE.length; i++)
 		{
-			CombatMetric metric = CombatMetric.DISPLAYED.get(i);
+			CombatMetric metric = solid.get(i);
 			assertEquals(metric + " should have palette slot " + (i + 1),
 				PALETTE[i], metric.seriesColor().getRGB() & 0xFFFFFF);
 		}
 	}
 
-	/** Eight lines, eight checked hues: no two lines on the chart can be told apart by name alone. */
+	/**
+	 * Eight solid lines, eight checked hues. A counter past them is dashed and reuses a slot - one
+	 * validated against the lines listed either side of it, so it never shares with them.
+	 */
 	@Test
-	public void everyCounterDrawnHasAColourToItself()
+	public void everyCounterDrawnHasAColourToItselfOrADash()
 	{
 		Set<Color> taken = new HashSet<>();
+		List<CombatMetric> drawn = CombatMetric.DISPLAYED;
 
-		for (CombatMetric metric : CombatMetric.DISPLAYED)
+		for (int i = 0; i < drawn.size(); i++)
 		{
-			assertTrue(metric + " shares its colour", taken.add(metric.seriesColor()));
+			CombatMetric metric = drawn.get(i);
+
+			if (!metric.dashed())
+			{
+				assertTrue(metric + " shares its colour", taken.add(metric.seriesColor()));
+				continue;
+			}
+
+			assertTrue(metric + " reuses a slot", contains(PALETTE,
+				metric.seriesColor().getRGB() & 0xFFFFFF));
+			assertFalse(metric + " looks like the line above it",
+				metric.seriesColor().equals(drawn.get(i - 1).seriesColor()));
+			assertFalse(metric + " looks like the line below it",
+				metric.seriesColor().equals(drawn.get(i + 1).seriesColor()));
 		}
+	}
+
+	private static boolean contains(int[] palette, int rgb)
+	{
+		for (int slot : palette)
+		{
+			if (slot == rgb)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

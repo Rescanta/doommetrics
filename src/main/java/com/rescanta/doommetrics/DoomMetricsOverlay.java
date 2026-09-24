@@ -1,5 +1,6 @@
 package com.rescanta.doommetrics;
 
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -18,8 +19,11 @@ import net.runelite.client.ui.overlay.components.ImageComponent;
 import net.runelite.client.ui.overlay.components.LayoutableRenderableEntity;
 import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.ui.overlay.components.SplitComponent;
-import net.runelite.client.ui.overlay.components.TitleComponent;
 
+/**
+ * The run drawn over the game as one of its own panels: a stone frame, an orange title over an
+ * ember line, names in orange and figures in white, counters in their unit's colour.
+ */
 class DoomMetricsOverlay extends OverlayPanel
 {
 	// Held rather than fetched, because values() hands out a fresh copy of the array every call and
@@ -71,18 +75,21 @@ class DoomMetricsOverlay extends OverlayPanel
 			return null;
 		}
 
+		List<LayoutableRenderableEntity> children = panelComponent.getChildren();
+
 		if (!config.hidePluginName())
 		{
-			panelComponent.getChildren().add(TitleComponent.builder()
-				.text("Doom Metrics")
-				.build());
+			children.add(new OverlayChrome.Title("Doom Metrics",
+				plugin.getIcons().smallSprite(IconArt.BOSS)));
 		}
+
+		int heading = children.size();
 
 		if (run.isFinished())
 		{
 			if (run.getEndReason() == EndReason.DIED)
 			{
-				addLine("Died on", "Delve " + run.getDiedOnLevel());
+				addLine("Died on", "Delve " + run.getDiedOnLevel(), DoomColors.DEATH);
 			}
 
 			if (config.showDelveNumber())
@@ -92,7 +99,8 @@ class DoomMetricsOverlay extends OverlayPanel
 		}
 		else if (config.showDelveNumber())
 		{
-			addLine("Delve", Integer.toString(run.currentLevel()));
+			// In the game's yellow, as it writes a level: the one figure read mid-fight.
+			addLine("Delve", Integer.toString(run.currentLevel()), DoomColors.YELLOW);
 		}
 
 		Instant now = Instant.now();
@@ -129,11 +137,23 @@ class DoomMetricsOverlay extends OverlayPanel
 			{
 				addLine(total, TargetPrediction.totalValue(run, target, now));
 			}
+
+			// Under the target's lines rather than between them, so it closes the run's block.
+			children.add(new OverlayChrome.Progress((double) run.lastLevel() / target));
 		}
 
+		int counters = children.size();
 		addCombatLines(run, now);
 
-		return super.render(graphics);
+		// A rule between the run and its counters, when there are both.
+		if (counters > heading && children.size() > counters)
+		{
+			children.add(counters, new OverlayChrome.Rule());
+		}
+
+		Dimension size = super.render(graphics);
+		OverlayChrome.frame(graphics, size);
+		return size;
 	}
 
 	/**
@@ -167,10 +187,10 @@ class DoomMetricsOverlay extends OverlayPanel
 					}
 
 					// A total has a line to itself even in a grid: its name will not fit in half
-					// of one, and no one picture stands for everything it sums.
+					// of one. Its unit's skill icon goes before the name, not in place of it.
 					flush(row);
-					panelComponent.getChildren().add(amount(group.overlayHeading(), null, total,
-						recent, group.unit(), false));
+					panelComponent.getChildren().add(amount(group.overlayHeading(),
+						icons.smallUnit(group.unit()), true, total, recent, group.unit(), false));
 				}
 			}
 			else if (mode == CounterMode.EACH)
@@ -189,8 +209,8 @@ class DoomMetricsOverlay extends OverlayPanel
 					// A counter whose picture has not arrived yet is drawn by name, and a name
 					// needs the whole width, as a total does.
 					boolean gridded = style == CounterStyle.ICON_GRID && icon != null;
-					LayoutableRenderableEntity line = amount(metric.overlayLabel(), icon, amount,
-						run.recentGain(metric, now), metric.unit(), gridded);
+					LayoutableRenderableEntity line = amount(metric.overlayLabel(), icon, false,
+						amount, run.recentGain(metric, now), metric.unit(), gridded);
 
 					if (!gridded)
 					{
@@ -228,15 +248,17 @@ class DoomMetricsOverlay extends OverlayPanel
 	/**
 	 * One counter's line, its figure in its unit's colour; a zero stays grey.
 	 *
-	 * @param icon   drawn in place of {@code left} when there is one, or null for the words
-	 * @param recent what the counter has just gained, shown instead of the total while above zero
-	 * @param narrow whether the line is one column of a grid - see {@link #figure}
+	 * @param icon     drawn before {@code left} when there is one, or null for the words alone
+	 * @param keepName whether the words stay beside the icon rather than giving way to it
+	 * @param recent   what the counter has just gained, shown instead of the total while above 0
+	 * @param narrow   whether the line is one column of a grid - see {@link #figure}
 	 */
-	private static LayoutableRenderableEntity amount(String left, BufferedImage icon, long amount,
-		long recent, CombatMetric.Unit unit, boolean narrow)
+	private static LayoutableRenderableEntity amount(String left, BufferedImage icon,
+		boolean keepName, long amount, long recent, CombatMetric.Unit unit, boolean narrow)
 	{
 		LineComponent line = LineComponent.builder()
-			.left(icon == null ? left : "")
+			.left(icon == null || keepName ? left : "")
+			.leftColor(DoomColors.ORANGE)
 			.right(figure(amount, recent, narrow))
 			.rightColor(amount > 0 ? unit.color() : DoomColors.DIMMED)
 			.build();
@@ -274,9 +296,17 @@ class DoomMetricsOverlay extends OverlayPanel
 
 	private void addLine(String left, String right)
 	{
+		addLine(left, right, DoomColors.PLAIN);
+	}
+
+	/** A name in the game's orange and its figure in {@code color}. */
+	private void addLine(String left, String right, Color color)
+	{
 		panelComponent.getChildren().add(LineComponent.builder()
 			.left(left)
+			.leftColor(DoomColors.ORANGE)
 			.right(right)
+			.rightColor(color)
 			.build());
 	}
 }

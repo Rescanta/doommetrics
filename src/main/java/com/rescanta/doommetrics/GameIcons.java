@@ -1,7 +1,6 @@
 package com.rescanta.doommetrics;
 
 import java.awt.image.BufferedImage;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,18 +35,20 @@ final class GameIcons implements Icons
 		this.onArrived = onArrived;
 	}
 
-	/** Asks for every counter's picture and each of {@code itemIds} up front. */
-	void preload(Collection<Integer> itemIds)
+	/** Asks for every counter's picture up front. */
+	void preload()
 	{
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			counter(metric);
 		}
 
-		for (int itemId : itemIds)
+		for (CombatMetric.Unit unit : CombatMetric.Unit.values())
 		{
-			askItem(itemId);
+			askSprite(IconArt.spriteFor(unit));
 		}
+
+		askSprite(IconArt.BOSS);
 	}
 
 	@Override
@@ -63,17 +64,17 @@ final class GameIcons implements Icons
 	}
 
 	@Override
-	public BufferedImage item(int itemId)
+	public BufferedImage sprite(int spriteId)
 	{
-		askItem(itemId);
-		return items.get(itemId);
+		askSprite(spriteId);
+		return sprites.get(spriteId);
 	}
 
 	@Override
-	public BufferedImage smallItem(int itemId)
+	public BufferedImage smallSprite(int spriteId)
 	{
-		askItem(itemId);
-		return smallItems.get(itemId);
+		askSprite(spriteId);
+		return smallSprites.get(spriteId);
 	}
 
 	private BufferedImage picture(CombatMetric metric, Map<Integer, BufferedImage> byItem,
@@ -111,7 +112,7 @@ final class GameIcons implements Icons
 
 	private void askSprite(int spriteId)
 	{
-		if (!askedSprites.add(spriteId))
+		if (spriteId < 0 || !askedSprites.add(spriteId))
 		{
 			return;
 		}

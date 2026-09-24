@@ -78,4 +78,37 @@ public class MilestoneStoreTest
 
 		assertTrue(restored.isEmpty());
 	}
+
+	@Test
+	public void theResetCountersSurviveTheRoundTrip()
+	{
+		MilestoneTable table = new MilestoneTable();
+		table.runStarted();
+		table.runStarted();
+		table.record(100, 61_000);
+		table.recordRecent(100, 61_000);
+
+		MilestoneTable restored = new MilestoneTable();
+		restored.replaceAll(store.decode(store.encode(table)));
+
+		ResetSummary summary = restored.summary(100, 0);
+		assertEquals(2, summary.runs);
+		assertEquals(1, summary.reached);
+		assertEquals(61_000, summary.averageTicks);
+		assertEquals(1, summary.recentCount);
+		assertEquals(61_000, summary.recentTicks);
+	}
+
+	/** A value written before the reset counters existed reads back with them at zero. */
+	@Test
+	public void aTableFromBeforeTheResetCountersStillReads()
+	{
+		MilestoneTable restored = new MilestoneTable();
+		restored.replaceAll(store.decode("{\"rows\":{\"10\":{\"kc\":7,\"pbTicks\":900}}}"));
+
+		assertEquals(7, restored.getRows().get(10).kc);
+		assertEquals(900, restored.getRows().get(10).pbTicks);
+		assertEquals(0, restored.getRows().get(10).counted);
+		assertEquals(0, restored.summary(10, 0).runs);
+	}
 }

@@ -44,45 +44,10 @@ final class RunDetail
 		}
 	}
 
-	/** A notable drop, on the delve it came off. */
-	static final class Drop
-	{
-		final int level;
-		final int itemId;
-		final String name;
-
-		/** How many landed on that delve at once - almost always one, and drawn as one icon. */
-		final int quantity;
-
-		/** False once the run is over without this having been claimed. Drawn faded. */
-		final boolean kept;
-
-		Drop(int level, int itemId, String name, int quantity, boolean kept)
-		{
-			this.level = level;
-			this.itemId = itemId;
-			this.name = name;
-			this.quantity = quantity;
-			this.kept = kept;
-		}
-
-		/** A glow mark nothing has named - see {@link DelveRun#uniqueSignalled}. */
-		boolean isUnknown()
-		{
-			return itemId == RunLoot.UNKNOWN_UNIQUE;
-		}
-	}
-
-	static final String UNKNOWN_UNIQUE_CANDIDATES =
-		"Avernic treads, Mokhaiotl cloth or Eye of ayak - or Dom, if it was your first";
-
 	private static final RunDetail EMPTY = new RunDetail(Collections.emptyList(),
-		Collections.emptyList(), new CombatTotals(), false, false, 0);
+		new CombatTotals(), false, false);
 
 	private final List<Delve> delves;
-
-	/** The run's notable drops, in the order they landed, on cleared delves only. */
-	private final List<Drop> drops;
 
 	private final CombatTotals totals;
 
@@ -91,18 +56,12 @@ final class RunDetail
 
 	private final boolean finished;
 
-	/** The delve the player died on, or 0 for a run that is going or ended any other way. */
-	private final int diedOn;
-
-	private RunDetail(List<Delve> delves, List<Drop> drops, CombatTotals totals, boolean started,
-		boolean finished, int diedOn)
+	private RunDetail(List<Delve> delves, CombatTotals totals, boolean started, boolean finished)
 	{
 		this.delves = delves;
-		this.drops = drops;
 		this.totals = totals;
 		this.started = started;
 		this.finished = finished;
-		this.diedOn = diedOn;
 	}
 
 	/** What the window shows before this session has a run in it. */
@@ -157,10 +116,7 @@ final class RunDetail
 					time.estimated));
 		}
 
-		boolean died = run.isFinished() && run.getEndReason() == EndReason.DIED;
-
-		return new RunDetail(Collections.unmodifiableList(delves), dropsOf(run), totals, true,
-			run.isFinished(), died ? Math.max(0, run.getDiedOnLevel()) : 0);
+		return new RunDetail(Collections.unmodifiableList(delves), totals, true, run.isFinished());
 	}
 
 	/**
@@ -185,38 +141,9 @@ final class RunDetail
 		return finished ? splits.size() - 1 : -1;
 	}
 
-	/**
-	 * The run's drops, once their delve has a column. Kept while the run goes on; afterwards only
-	 * if the claim reached the drop's {@code heldAfter}.
-	 */
-	private static List<Drop> dropsOf(DelveRun run)
-	{
-		List<Drop> drops = new ArrayList<>();
-		int deepest = run.lastLevel();
-
-		for (RunLoot.Landed landed : run.loot().getLanded())
-		{
-			if (landed.level < 1 || landed.level > deepest)
-			{
-				continue;
-			}
-
-			boolean kept = !run.isFinished() || run.loot().claimed(landed.itemId) >= landed.heldAfter;
-			drops.add(new Drop(landed.level, landed.itemId, landed.name, landed.quantity, kept));
-		}
-
-		return Collections.unmodifiableList(drops);
-	}
-
 	List<Delve> delves()
 	{
 		return delves;
-	}
-
-	/** The run's notable drops, in the order they landed. */
-	List<Drop> drops()
-	{
-		return drops;
 	}
 
 	/** What the whole run earned - the sum of every delve's tally. */
@@ -241,18 +168,6 @@ final class RunDetail
 		return finished;
 	}
 
-	int diedOn()
-	{
-		return diedOn;
-	}
-
-	/** How a drop the run did not walk out with was lost. */
-	String lostHow()
-	{
-		return diedOn > 0 ? "Lost when you died" : "Lost when the run ended unclaimed";
-	}
-
-	/** The first delve cleared, or 1 for a run that has cleared none. */
 	/** The delves with counters to plot: every one but those cleared while the plugin was off. */
 	List<Delve> watchedDelves()
 	{
@@ -296,7 +211,7 @@ final class RunDetail
 
 	/**
 	 * Changes whenever a new snapshot would differ: the run itself, its deepest clear, anything
-	 * counted in a wait, whether a wait is going, and the drops. Cheap, since it runs every tick.
+	 * counted in a wait, and whether a wait is going. Cheap, since it runs every tick.
 	 */
 	static String keyFor(DelveRun run)
 	{
@@ -306,7 +221,6 @@ final class RunDetail
 		}
 
 		return System.identityHashCode(run) + "|" + run.lastLevel() + "|" + run.isBetweenDelves()
-			+ "|" + run.bankedCombatChanges() + "|" + run.isFinished() + "|" + run.getDiedOnLevel()
-			+ "|" + run.loot().changes();
+			+ "|" + run.bankedCombatChanges() + "|" + run.isFinished() + "|" + run.getDiedOnLevel();
 	}
 }

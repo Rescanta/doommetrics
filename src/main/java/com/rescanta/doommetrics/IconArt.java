@@ -1,16 +1,10 @@
 package com.rescanta.doommetrics;
 
 import java.awt.AlphaComposite;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import java.awt.font.GlyphVector;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.awt.image.RescaleOp;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.SpriteID;
 import net.runelite.client.util.ImageUtil;
@@ -21,57 +15,11 @@ final class IconArt
 	/** A line of text high. */
 	static final int SMALL = 16;
 
-	/** The gold of the glowing hole, which is the one thing an unknown unique is known by. */
-	private static final Color GLOW = new Color(0xFF, 0xC8, 0x40);
-
-	/** The badge's rim: the glow, dimmed, so the mark stands out from it. */
-	private static final Color GLOW_RIM = new Color(0xA8, 0x74, 0x18);
-
-	/** The badge itself: the dark of the hole. */
-	private static final Color HOLE = new Color(0x2A, 0x20, 0x16);
-
-	/** How much of the picture the badge fills, leaving the margin an item sprite has around it. */
-	private static final float BADGE_FILL = 0.875f;
+	/** The boss's own icon, from the hiscores and the collection log. */
+	static final int BOSS = SpriteID.IconBoss25x25.DOOM_OF_MOKHAIOTL;
 
 	private IconArt()
 	{
-	}
-
-	/**
-	 * A gold question mark on a dark badge, for a unique the game signalled without naming. Drawn
-	 * at the size it is shown.
-	 */
-	static BufferedImage unknownUnique(int width, int height)
-	{
-		BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D graphics = image.createGraphics();
-		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		graphics.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
-
-		int diameter = Math.max(1, Math.round(Math.min(width, height) * BADGE_FILL));
-		float rim = Math.max(1f, diameter / 14f);
-		float left = (width - diameter) / 2f;
-		float top = (height - diameter) / 2f;
-		Ellipse2D badge = new Ellipse2D.Float(left + rim / 2, top + rim / 2, diameter - rim, diameter - rim);
-
-		graphics.setColor(HOLE);
-		graphics.fill(badge);
-		graphics.setStroke(new BasicStroke(rim));
-		graphics.setColor(GLOW_RIM);
-		graphics.draw(badge);
-
-		// Centred on what the glyph draws rather than on the font's line, which would sit the mark
-		// low: a question mark has no descender.
-		Font font = new Font(Font.SANS_SERIF, Font.BOLD, Math.max(1, Math.round(diameter * 0.72f)));
-		GlyphVector mark = font.createGlyphVector(graphics.getFontRenderContext(), "?");
-		Rectangle2D drawn = mark.getVisualBounds();
-		graphics.setColor(GLOW);
-		graphics.drawGlyphVector(mark,
-			(float) (left + (diameter - drawn.getWidth()) / 2 - drawn.getX()),
-			(float) (top + (diameter - drawn.getHeight()) / 2 - drawn.getY()));
-
-		graphics.dispose();
-		return image;
 	}
 
 	/** The item a counter is pictured by, or -1 for one pictured by a sprite or not at all. */
@@ -84,6 +32,10 @@ final class IconArt
 
 			case BLOWPIPE_HEAL:
 				return ItemID.TOXIC_BLOWPIPE;
+
+			case SGS_HEAL:
+			case SGS_PRAYER:
+				return ItemID.SGS;
 
 			case ELDRITCH_PRAYER:
 				return ItemID.NIGHTMARE_STAFF_ELDRITCH;
@@ -121,6 +73,22 @@ final class IconArt
 		}
 	}
 
+	/** The skill whose icon stands for a unit: what the figures are counted in. */
+	static int spriteFor(CombatMetric.Unit unit)
+	{
+		switch (unit)
+		{
+			case HITPOINTS:
+				return SpriteID.Staticons.HITPOINTS;
+
+			case PRAYER:
+				return SpriteID.Staticons.PRAYER;
+
+			default:
+				return SpriteID.Staticons.STRENGTH;
+		}
+	}
+
 	/**
 	 * Trims a picture to what is drawn in it, then shrinks it to a {@code box} square. Never
 	 * enlarges.
@@ -149,7 +117,7 @@ final class IconArt
 		return ImageUtil.resizeImage(trimmed, width, height);
 	}
 
-	/** A picture drawn at {@code alpha} of its strength, for a counter or a drop that is off. */
+	/** A picture drawn at {@code alpha} of its strength, for a counter that is off. */
 	static BufferedImage fade(BufferedImage image, float alpha)
 	{
 		BufferedImage faded = new BufferedImage(image.getWidth(), image.getHeight(),
@@ -159,6 +127,15 @@ final class IconArt
 		graphics.drawImage(image, 0, 0, null);
 		graphics.dispose();
 		return faded;
+	}
+
+	/** A picture with its colours brought down to {@code brightness}, its shape kept. */
+	static BufferedImage darken(BufferedImage image, float brightness)
+	{
+		BufferedImage dark = copy(image);
+		new RescaleOp(new float[]{brightness, brightness, brightness, 1f}, new float[4], null)
+			.filter(dark, dark);
+		return dark;
 	}
 
 	/**

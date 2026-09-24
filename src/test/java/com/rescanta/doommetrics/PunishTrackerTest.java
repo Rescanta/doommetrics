@@ -78,6 +78,80 @@ public class PunishTrackerTest
 		assertEquals(list("scythePunish=33", "scythePunish=10"), recorded);
 	}
 
+	/**
+	 * From a trip's log: a bow shot fired at 557 was still in the air when the scythe was switched
+	 * to and swung at 559, and landed on the swing's own tick. The scythe's hits came a tick later.
+	 */
+	@Test
+	public void aHitLandingOnTheSwingsOwnTickIsNotThePunishs()
+	{
+		tickEnded(558, true, null);
+
+		tracker.swung(559);
+		mine(49, 559);
+		tickEnded(559, true, PunishWeapon.SCYTHE);
+
+		mine(4, 560);
+		mine(5, 560);
+		mine(2, 560);
+		tickEnded(560, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=4", "scythePunish=5", "scythePunish=2"), recorded);
+		assertFalse("left to the spec tracker, never held", tracker.mayBePunish(559));
+	}
+
+	/**
+	 * Log 2026-09-19 17:34:02-03: one halberd hit, then its 29 and a 5 on the same tick. The game
+	 * draws a bonus splat per hit, so the 5 is a larva exploding by the boss. So is a splat a tick
+	 * after the swing, before any bonus can land.
+	 */
+	@Test
+	public void aSplatPastOnePerHitOrBeforeTheBonusesIsALarvaExploding()
+	{
+		tickEnded(292, true, null);
+
+		tracker.swung(294);
+		tickEnded(294, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(12, 295);
+		bonus(22, 295);
+		tickEnded(295, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(29, 296);
+		bonus(5, 296);
+		tickEnded(296, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=12", "noxiousHalberdPunish=29"), recorded);
+		assertEquals("an explosion is nobody's hit to hand back", list("0@295"), handedBack);
+	}
+
+	/**
+	 * Log 2026-09-20 20:18:04-05, seen on video: the bow's 43 landed on the halberd swing's tick,
+	 * and the game drew a second bonus splat a tick after the halberd's own. The arrow is no punish,
+	 * but the user wants the extra splat - it looks like, and is, a punish's - counted as one.
+	 */
+	@Test
+	public void theExtraBonusSplatABowHitBringsCountsAsThePunishs()
+	{
+		tickEnded(9949, true, null);
+
+		tracker.swung(9950);
+		mine(43, 9950);
+		tickEnded(9950, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(39, 9951);
+		tickEnded(9951, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(29, 9952);
+		tickEnded(9952, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(27, 9953);
+		tickEnded(9953, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=39", "noxiousHalberdPunish=29",
+			"noxiousHalberdPunish=27"), recorded);
+	}
+
 	@Test
 	public void eachWeaponIsCreditedToItsOwnFigure()
 	{
@@ -177,18 +251,16 @@ public class PunishTrackerTest
 
 	/**
 	 * A blowpipe or a spell into the prayer is an animation too, and turns out not to be a swing
-	 * once the weapon is read. What landed with it goes back whole, and nothing after it is held.
+	 * once the weapon is read, so nothing after it is held.
 	 */
 	@Test
 	public void anAnimationWithoutAMeleeWeaponIsNotASwing()
 	{
 		tickEnded(99, true, null);
 		tracker.swung(100);
-		mine(40, 100);
 		tickEnded(100, true, null);
 
 		assertTrue(recorded.isEmpty());
-		assertEquals(list("40@100"), handedBack);
 		assertFalse(tracker.mayBePunish(101));
 	}
 
@@ -281,7 +353,10 @@ public class PunishTrackerTest
 		if (tracker.mayBePunish(tick))
 		{
 			tracker.hit(amount, true, tick);
+			return;
 		}
+
+		tracker.ownHitNotHeld(tick);
 	}
 
 	/** A strength-bonus splat, which is not one of the types plainly ours. */
