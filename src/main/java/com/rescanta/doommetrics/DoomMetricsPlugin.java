@@ -1090,6 +1090,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (reason == EndReason.ABANDONED)
 		{
+			milestones.runAbandoned(ended.isPartial());
 			return;
 		}
 

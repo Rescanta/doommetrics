@@ -128,6 +128,19 @@ class MilestoneTracker
 		milestoneStore.save(milestones);
 	}
 
+	/** A run walked out of before its first clear comes back off the reach rate's count. */
+	void runAbandoned(boolean partial)
+	{
+		if (partial || !belongsToRun.getAsBoolean())
+		{
+			return;
+		}
+
+		milestones.runAbandoned();
+		milestoneStore.save(milestones);
+		onChanged.run();
+	}
+
 	/**
 	 * Counts how a run ended towards the resets card.
 	 *
