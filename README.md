@@ -26,10 +26,10 @@ otherwise leave the cave. **Dying part way into a delve costs you nothing that w
 done** - the reported total is the time through the previous delve, and the partial delve is
 discarded from every figure.
 
-A connection that drops does not end the run. Hopping and logging out put you back outside the
-entrance, but a reconnect can land you in the delve you were already in, so the plugin waits until
-it can see where the game has put you: back in the delve and the run carries on, back outside and
-it ended where you were last seen.
+A connection that drops does not end the run. Back within a few seconds, the game carries on as
+if nothing happened, and so does the run. Gone longer, the game puts you back outside and the
+unclaimed loot is lost, as in a death - and the run is counted as one, on the delve you were last
+seen on.
 
 ## The two paces
 

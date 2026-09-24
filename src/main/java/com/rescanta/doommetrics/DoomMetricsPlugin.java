@@ -825,7 +825,10 @@ public class DoomMetricsPlugin extends Plugin
 		loadTotals();
 	}
 
-	/** A run held open across a lost connection ends where it was if we come back as an alt. */
+	/**
+	 * A run held open across a lost connection ends where it was if we come back as an alt: the
+	 * character left behind was put outside, as after a long disconnect.
+	 */
 	private void closeRunFromAnotherCharacter()
 	{
 		if (resumeCheck == null || run == null || runProfile == null
@@ -835,7 +838,7 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		log.debug("Back as another character, closing the run held open on the previous one");
-		endRun(EndReason.FINISHED, -1);
+		endRun(EndReason.DIED, run.currentLevel());
 	}
 
 	private void loadTotals()
@@ -911,8 +914,9 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
+		// Put outside with the pile lost, as a death does.
 		log.debug("Back outside the cave, ending the run that was held open");
-		endRun(EndReason.FINISHED, -1);
+		endRun(EndReason.DIED, run.currentLevel());
 	}
 
 	/**
