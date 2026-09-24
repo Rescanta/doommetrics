@@ -481,6 +481,8 @@ class CombatWatcher
 				return;
 			}
 
+			weapon = weapon.fired(items.isMeleeWeapon(itemId));
+
 			combatTracker.specFired(weapon, tick);
 			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
 				current.currentLevel(), weapon, itemId, items.name(itemId), tick);

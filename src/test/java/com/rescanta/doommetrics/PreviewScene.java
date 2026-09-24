@@ -520,6 +520,7 @@ final class PreviewScene
 		counters[CombatMetric.OTHER_SPELL_HEAL.ordinal()] = 124L * weight;
 		counters[CombatMetric.AGS_HEAL.ordinal()] = 58L * weight;
 		counters[CombatMetric.BLOWPIPE_HEAL.ordinal()] = 47L * weight;
+		counters[CombatMetric.SGS_HEAL.ordinal()] = 36L * weight;
 		counters[CombatMetric.ELDRITCH_PRAYER.ordinal()] = 210L * weight;
 		counters[CombatMetric.ZCB_DAMAGE.ordinal()] = 1502L * weight;
 		counters[CombatMetric.OTHER_SPEC_DAMAGE.ordinal()] = 337L * weight;
@@ -541,6 +542,7 @@ final class PreviewScene
 		totals.add(CombatMetric.OTHER_SPELL_HEAL, 366);
 		totals.add(CombatMetric.AGS_HEAL, 174);
 		totals.add(CombatMetric.BLOWPIPE_HEAL, 141);
+		totals.add(CombatMetric.SGS_HEAL, 108);
 		totals.add(CombatMetric.ELDRITCH_PRAYER, 630);
 		totals.add(CombatMetric.ZCB_DAMAGE, 4_506);
 		totals.add(CombatMetric.OTHER_SPEC_DAMAGE, 1_011);
@@ -558,6 +560,7 @@ final class PreviewScene
 		totals.add(CombatMetric.OTHER_SPELL_HEAL, 21_408);
 		totals.add(CombatMetric.AGS_HEAL, 9_611);
 		totals.add(CombatMetric.BLOWPIPE_HEAL, 7_842);
+		totals.add(CombatMetric.SGS_HEAL, 5_120);
 		totals.add(CombatMetric.ELDRITCH_PRAYER, 38_150);
 		totals.add(CombatMetric.ZCB_DAMAGE, 271_884);
 		totals.add(CombatMetric.OTHER_SPEC_DAMAGE, 60_337);

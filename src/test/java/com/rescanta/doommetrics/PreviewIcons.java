@@ -29,6 +29,7 @@ final class PreviewIcons implements Icons
 
 		ITEMS.put(ItemID.ANCIENT_GODSWORD, "ancient_godsword");
 		ITEMS.put(ItemID.TOXIC_BLOWPIPE, "toxic_blowpipe");
+		ITEMS.put(ItemID.SGS, "saradomin_godsword");
 		ITEMS.put(ItemID.NIGHTMARE_STAFF_ELDRITCH, "eldritch_nightmare_staff");
 		ITEMS.put(ItemID.ZARYTE_XBOW, "zaryte_crossbow");
 		ITEMS.put(ItemID.SCYTHE_OF_VITUR, "scythe_of_vitur");

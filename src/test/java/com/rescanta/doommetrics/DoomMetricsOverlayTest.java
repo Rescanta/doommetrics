@@ -236,26 +236,26 @@ public class DoomMetricsOverlayTest
 		config.counterStyle = CounterStyle.ICON_GRID;
 		BufferedImage grid = draw(plugin, config);
 
-		assertEquals("eight counters, a line each", none + ruleHeight() + 8 * lineHeight(), icons);
+		assertEquals("nine counters, a line each", none + ruleHeight() + 9 * lineHeight(), icons);
 		assertEquals("the grid keeps the overlay's width", ComponentConstants.STANDARD_WIDTH,
 			grid.getWidth());
-		assertEquals("eight counters, two to a line", none + ruleHeight() + 4 * lineHeight(),
+		assertEquals("nine counters, two to a line", none + ruleHeight() + 5 * lineHeight(),
 			grid.getHeight());
 
-		// Healing's three counters take two lines, the second only half full; prayer's total
-		// takes one of its own; the four damage counters take two more.
+		// Healing's four counters take two lines; prayer's total takes one of its own; the four
+		// damage counters take two more.
 		config.mode(CombatMetric.Group.PRAYER, CounterMode.TOTAL);
 		assertEquals(none + ruleHeight() + 5 * lineHeight(), draw(plugin, config).getHeight());
 
-		// Without the total between them, the eldritch staff fills the half line healing left.
+		// Without the damage, the eldritch staff starts a line of its own after healing's two.
 		config.mode(CombatMetric.Group.PRAYER, CounterMode.EACH);
 		config.mode(CombatMetric.Group.DAMAGE, CounterMode.OFF);
-		assertEquals("blood barrage, AGS, blowpipe and eldritch - two lines",
-			none + ruleHeight() + 2 * lineHeight(), draw(plugin, config).getHeight());
+		assertEquals("blood barrage, AGS, blowpipe, SGS and eldritch - three lines",
+			none + ruleHeight() + 3 * lineHeight(), draw(plugin, config).getHeight());
 
-		// An odd one out has a line to itself, in the first column.
+		// Healing alone fills its two lines.
 		config.mode(CombatMetric.Group.PRAYER, CounterMode.OFF);
-		assertEquals("three healing counters - two lines, the second half full",
+		assertEquals("four healing counters - two lines",
 			none + ruleHeight() + 2 * lineHeight(), draw(plugin, config).getHeight());
 	}
 

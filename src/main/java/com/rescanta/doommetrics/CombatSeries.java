@@ -35,6 +35,15 @@ interface CombatSeries
 	/** The colour the line is drawn in, and of the swatch beside its name. */
 	Color seriesColor();
 
+	/**
+	 * Whether the line is dashed: a counter past the palette's eight slots shares a hue with
+	 * another line, and the dash tells them apart.
+	 */
+	default boolean dashed()
+	{
+		return false;
+	}
+
 	/** What this line comes to in a tally - one counter's figure, or a heading's total. */
 	long amount(CombatTotals totals);
 

@@ -34,6 +34,9 @@ class RunLegendPanel extends JPanel
 	 */
 	private static final int SWATCH = 9;
 
+	/** The gap splitting a dashed line's swatch in two. */
+	private static final int DASH_GAP = 3;
+
 	/** How much of a switched-off counter's icon is drawn, as its name is drawn in grey. */
 	private static final float OFF_ALPHA = 0.35f;
 
@@ -491,7 +494,7 @@ class RunLegendPanel extends JPanel
 			}
 		}
 
-		/** Filled while the line is on the chart, hollow once it is off. */
+		/** Filled while the line is on the chart, hollow once it is off; split for a dashed line. */
 		private final class Swatch extends JPanel
 		{
 			private Swatch()
@@ -509,6 +512,14 @@ class RunLegendPanel extends JPanel
 				if (off)
 				{
 					g.drawRect(0, y, SWATCH - 1, SWATCH - 1);
+					return;
+				}
+
+				if (series.dashed())
+				{
+					int half = (SWATCH - DASH_GAP) / 2;
+					g.fillRect(0, y, half, SWATCH);
+					g.fillRect(SWATCH - half, y, half, SWATCH);
 					return;
 				}
 
