@@ -203,7 +203,6 @@ class Totals
 		totalsStore.saveCombat(lifetimeCombat);
 	}
 
-	/** Whether the logged in character is the one the run was started on. */
 	/**
 	 * Whether what the run in progress banks may be written to the character logged in: false once
 	 * the client has come back as another one, or while there is none.

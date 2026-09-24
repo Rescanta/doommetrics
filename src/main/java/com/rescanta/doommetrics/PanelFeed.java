@@ -182,7 +182,6 @@ class PanelFeed
 
 	void refreshTable()
 	{
-
 		DoomMetricsPanel target = panel;
 
 		if (target == null)
