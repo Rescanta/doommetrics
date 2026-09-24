@@ -29,9 +29,8 @@ class MilestoneTable
 		int pbTicks;
 
 		/**
-		 * Clears by runs watched from delve 1 since the reset counters began. Unlike {@link #kc}
-		 * it leaves out rows cleared before them, so it can be set against
-		 * {@link MilestoneTable#runs}.
+		 * Clears since the reset counters began. Unlike {@link #kc} it leaves out rows cleared
+		 * before them, so it can be set against {@link MilestoneTable#runs}.
 		 */
 		int counted;
 
@@ -50,7 +49,7 @@ class MilestoneTable
 	{
 		Map<Integer, Row> rows;
 
-		/** Runs watched from delve 1 since the reset counters began. */
+		/** Runs since the reset counters began, joined ones included. */
 		int runs;
 
 		/** Uniques claimed since the reset counters began. */
@@ -88,7 +87,7 @@ class MilestoneTable
 		return Math.max(1, (delve + INTERVAL - 1) / INTERVAL) * INTERVAL;
 	}
 
-	/** Banks a clear from a run watched from delve 1. */
+	/** Banks a clear with an exact time. */
 	boolean record(int delve, int pbTicks)
 	{
 		return record(delve, pbTicks, true);
@@ -98,25 +97,21 @@ class MilestoneTable
 	 * Banks a clear of a milestone delve.
 	 *
 	 * @param pbTicks elapsed ticks from the run start to this clear, or 0 if no time can be trusted
-	 * @param whole   whether the run was watched from delve 1. Only such a run is counted towards
-	 *                the reach rate and the average: a joined run may be a trip counted already,
-	 *                and its time is an upper bound, fair as a best it can only fail to beat
+	 * @param whole   whether the run was watched from delve 1. Only such a run's time goes into
+	 *                the average: a joined run's is an upper bound, fair as a best it can only
+	 *                fail to beat
 	 * @return true if this beat the stored personal best
 	 */
 	boolean record(int delve, int pbTicks, boolean whole)
 	{
 		Row row = rows.computeIfAbsent(delve, d -> new Row());
 		row.kc++;
+		row.counted++;
 
-		if (whole)
+		if (whole && pbTicks > 0)
 		{
-			row.counted++;
-
-			if (pbTicks > 0)
-			{
-				row.timed++;
-				row.sumTicks += pbTicks;
-			}
+			row.timed++;
+			row.sumTicks += pbTicks;
 		}
 
 		if (pbTicks <= 0 || (row.hasPb() && pbTicks >= row.pbTicks))

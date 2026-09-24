@@ -45,6 +45,15 @@ class MilestoneTracker
 	/** Clears of each milestone this session, by delve. */
 	private final Map<Integer, Integer> sessionClears = new HashMap<>();
 
+	/**
+	 * The trip counted last, while it may still be going: TOTAL_DOM_LEVELS less the delves before
+	 * it, or -1. Kept across a toggle or session reset, which drop a run without ending it.
+	 */
+	private int countedTrip = -1;
+
+	/** Whether the run in progress is a counted trip still on delve 1: not an attempt yet. */
+	private boolean takeBackIfAbandoned;
+
 	MilestoneTracker(Client client, MilestoneStore milestoneStore, IntSupplier resetTarget,
 		BooleanSupplier belongsToRun, Runnable onChanged)
 	{
@@ -93,7 +102,7 @@ class MilestoneTracker
 
 		Duration elapsed = run.pbElapsed();
 		int ticks = elapsed == null ? 0 : DoomFormat.toTicks(elapsed);
-		// A joined run's time is an upper bound: fair as a best it failed to beat, not as a run.
+		// A joined run's time is an upper bound: fair as a best it failed to beat, not an average.
 		boolean whole = !run.isPartial();
 
 		if (milestones.record(level, ticks, whole))
@@ -113,25 +122,64 @@ class MilestoneTracker
 	}
 
 	/**
-	 * Counts a run towards the resets card's reach rate - only one watched from delve 1. A joined
-	 * run is often a trip already counted, picked up again after a session reset or the plugin
-	 * being turned off before its first clear, and its clears stay out of the rate to match.
+	 * Counts a run towards the resets card's reach rate. A joined run on the trip counted last is
+	 * that trip picked up again - after a session reset, or the plugin turned off before its first
+	 * clear - and is not counted twice.
+	 *
+	 * @param level the delve the run starts on
 	 */
-	void runStarted(boolean partial)
+	void runStarted(boolean partial, int level)
 	{
-		if (partial || !belongsToRun.getAsBoolean())
+		takeBackIfAbandoned = false;
+
+		if (!belongsToRun.getAsBoolean())
 		{
 			return;
 		}
 
+		int trip = trip(client.getVarpValue(VarPlayerID.TOTAL_DOM_LEVELS), level);
+		takeBackIfAbandoned = level <= 1;
+
+		if (partial && isSameTrip(countedTrip, trip))
+		{
+			log.debug("Joined the trip counted already, not counting it again");
+			return;
+		}
+
+		countedTrip = trip;
 		milestones.runStarted();
 		milestoneStore.save(milestones);
 	}
 
-	/** A run walked out of before its first clear comes back off the reach rate's count. */
-	void runAbandoned(boolean partial)
+	/**
+	 * Names a trip by the game's delve counter less the delves before {@code level}, or -1 while
+	 * the counter hasn't arrived.
+	 */
+	static int trip(int delvesCleared, int level)
 	{
-		if (partial || !belongsToRun.getAsBoolean())
+		return delvesCleared > 0 ? delvesCleared - (level - 1) : -1;
+	}
+
+	/**
+	 * One over is the same trip: the delve counter goes up with a clear, seconds before the delve
+	 * number moves on.
+	 */
+	static boolean isSameTrip(int counted, int trip)
+	{
+		return counted >= 0 && (trip == counted || trip == counted + 1);
+	}
+
+	/**
+	 * A run walked out of on delve 1 comes back off the reach rate's count. One joined deeper had
+	 * clears, unwatched, so it was an attempt.
+	 */
+	void runAbandoned()
+	{
+		boolean takeBack = takeBackIfAbandoned;
+		takeBackIfAbandoned = false;
+		countedTrip = -1;
+
+		if (!takeBack || !belongsToRun.getAsBoolean())
 		{
 			return;
 		}
@@ -149,6 +197,9 @@ class MilestoneTracker
 	 */
 	void runEnded(int diedOn, int uniques)
 	{
+		takeBackIfAbandoned = false;
+		countedTrip = -1;
+
 		if (!belongsToRun.getAsBoolean())
 		{
 			return;
