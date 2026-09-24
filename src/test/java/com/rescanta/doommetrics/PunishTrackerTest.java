@@ -101,6 +101,31 @@ public class PunishTrackerTest
 	}
 
 	/**
+	 * Log 2026-09-19 17:34:02-03: one halberd hit, then its 29 and a 5 on the same tick. The game
+	 * draws a bonus splat per hit, so the 5 is a larva exploding by the boss. So is a splat a tick
+	 * after the swing, before any bonus can land.
+	 */
+	@Test
+	public void aSplatPastOnePerHitOrBeforeTheBonusesIsALarvaExploding()
+	{
+		tickEnded(292, true, null);
+
+		tracker.swung(294);
+		tickEnded(294, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(12, 295);
+		bonus(22, 295);
+		tickEnded(295, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(29, 296);
+		bonus(5, 296);
+		tickEnded(296, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=12", "noxiousHalberdPunish=29"), recorded);
+		assertEquals("an explosion is nobody's hit to hand back", list("0@295"), handedBack);
+	}
+
+	/**
 	 * Log 2026-09-20 20:18:04-05, seen on video: the bow's 43 landed on the halberd swing's tick,
 	 * and the game drew a second bonus splat a tick after the halberd's own. The arrow is no punish,
 	 * but the user wants the extra splat - it looks like, and is, a punish's - counted as one.
@@ -328,7 +353,10 @@ public class PunishTrackerTest
 		if (tracker.mayBePunish(tick))
 		{
 			tracker.hit(amount, true, tick);
+			return;
 		}
+
+		tracker.ownHitNotHeld(tick);
 	}
 
 	/** A strength-bonus splat, which is not one of the types plainly ours. */

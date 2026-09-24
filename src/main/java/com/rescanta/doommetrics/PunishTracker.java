@@ -25,6 +25,9 @@ class PunishTracker
 
 	private static final int MAX_HELD = 16;
 
+	/** A strength-bonus splat lands two ticks after the swing at the soonest, a tick after its hit. */
+	static final int BONUS_FROM = 2;
+
 	private static final int NONE = Integer.MIN_VALUE;
 
 	/** A hitsplat on the boss waiting on the end of its tick. */
@@ -63,6 +66,14 @@ class PunishTracker
 	/** What made that swing, or null until the tick it was made on has ended. */
 	private PunishWeapon weapon;
 
+	/**
+	 * Our hits on the boss since the swing, its own tick included, and the bonus splats credited.
+	 * The game draws a bonus splat per hit, so one past them is something else - a larva
+	 * exploding by the boss.
+	 */
+	private int ownHits;
+	private int bonusesCounted;
+
 	private final List<Held> held = new ArrayList<>();
 
 	/**
@@ -85,6 +96,8 @@ class PunishTracker
 		cancelledAt = NONE;
 		swungAt = NONE;
 		weapon = null;
+		ownHits = 0;
+		bonusesCounted = 0;
 		held.clear();
 	}
 
@@ -107,6 +120,8 @@ class PunishTracker
 
 		swungAt = tick;
 		weapon = null;
+		ownHits = 0;
+		bonusesCounted = 0;
 	}
 
 	/** The boss, standing, cut its beam off. */
@@ -122,6 +137,18 @@ class PunishTracker
 	boolean mayBePunish(int tick)
 	{
 		return swungAt != NONE && tick > swungAt && tick - swungAt <= HIT_WINDOW;
+	}
+
+	/**
+	 * One of our hits on the boss that isn't held, e.g. a bow's landing on the swing's own tick: it
+	 * still brings a bonus splat of its own if the swing was a punish.
+	 */
+	void ownHitNotHeld(int tick)
+	{
+		if (tick == swungAt)
+		{
+			ownHits++;
+		}
 	}
 
 	/**
@@ -142,6 +169,11 @@ class PunishTracker
 		if (held.size() >= MAX_HELD)
 		{
 			settle(held.remove(0), false);
+		}
+
+		if (mine)
+		{
+			ownHits++;
 		}
 
 		held.add(new Held(amount, mine, tick));
@@ -189,6 +221,11 @@ class PunishTracker
 
 	private void settle(Held hit, boolean punish)
 	{
+		if (punish && !hit.mine && !isBonus(hit))
+		{
+			return;
+		}
+
 		if (punish && hit.amount > 0)
 		{
 			sink.record(weapon.metric(), hit.amount);
@@ -198,6 +235,18 @@ class PunishTracker
 		{
 			handback.damaged(punish ? 0 : hit.amount, hit.tick);
 		}
+	}
+
+	/** Whether a splat that isn't plainly ours is one of the punish's bonus splats; counts it. */
+	private boolean isBonus(Held hit)
+	{
+		if (hit.tick - swungAt < BONUS_FROM || bonusesCounted >= ownHits)
+		{
+			return false;
+		}
+
+		bonusesCounted++;
+		return true;
 	}
 
 	/**

@@ -193,6 +193,11 @@ class CombatWatcher
 
 		if (hitsplat.isMine())
 		{
+			if (onBoss)
+			{
+				punishTracker.ownHitNotHeld(tick);
+			}
+
 			// A zero rather than skipped, so the spec's budget is spent on this hit.
 			int amount = countsAsDamage(target) ? hitsplat.getAmount() : 0;
 			logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);

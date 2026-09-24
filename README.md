@@ -203,7 +203,13 @@ A swing counts if the boss was praying when it was made, or if it cut the boss's
 second catches a punish landed so early that the prayer never shows: it brings no strength-bonus
 hitsplats, but its hits are the punish all the same. Only what lands in the three ticks after the
 swing is counted, and no weapon can swing again inside that, so nothing thrown or cast once the
-punish is over is taken for part of it.
+punish is over is taken for part of it. A hit fired before the swing and landing on its tick - an
+arrow still in the air when you switched - is not counted either.
+
+A larva exploding by the boss hurts it too, drawn like a strength-bonus hitsplat. The game draws
+one strength-bonus hitsplat per hit of yours, from two ticks after the swing, so one more than
+that, or one sooner, is taken for an explosion and left out. An explosion landing in place of a
+bonus hitsplat the game didn't draw can't be told apart, and is counted.
 
 Each figure is drawn in the colour of what it is counted in - hitpoints red, prayer blue, damage
 yellow - so which lines are which is legible without reading the labels.
