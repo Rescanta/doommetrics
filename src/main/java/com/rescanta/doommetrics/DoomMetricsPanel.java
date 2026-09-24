@@ -251,13 +251,11 @@ class DoomMetricsPanel extends PluginPanel
 	private final JLabel reachCount = PanelStyle.caption("-", SwingConstants.LEFT);
 	private final JLabel averageTime = PanelStyle.stat("-", SwingConstants.LEFT);
 	private final JLabel bestTime = PanelStyle.caption("-", SwingConstants.LEFT);
-	private final JLabel diedShort = PanelStyle.body("-", SwingConstants.RIGHT);
 	private final JLabel sessionResets = PanelStyle.body("-", SwingConstants.RIGHT);
 	private final JLabel recentTime = PanelStyle.body("-", SwingConstants.RIGHT);
-	private final JLabel uniqueRate = PanelStyle.body("-", SwingConstants.RIGHT);
 	private final JLabel recentCaption = PanelStyle.caption("Last 10", SwingConstants.LEFT);
 	private final JLabel resetsEmpty = PanelStyle.caption("<html><body style='width:150px'>"
-		+ "Nothing counted yet. Runs, deaths and times fill in from your next run.</body></html>",
+		+ "Nothing counted yet. Runs and times fill in from your next run.</body></html>",
 		SwingConstants.LEFT);
 	private final JPanel resetsBody = PanelStyle.column(PanelStyle.ROW_GAP);
 	private final JPanel resetsRows = PanelStyle.column(PanelStyle.ROW_GAP);
@@ -507,18 +505,12 @@ class DoomMetricsPanel extends PluginPanel
 			? "best " + DoomFormat.tickDuration(summary.bestTicks)
 			: "no time yet");
 
-		apply(diedShort, DoomFormat.count(summary.diedShort));
 		apply(sessionResets, DoomFormat.count(summary.sessionResets)
 			+ (sessionPerHour == null ? "" : " (" + DoomFormat.pace(sessionPerHour) + ")"));
 
 		recentCaption.setText("Last " + Math.max(1, summary.recentCount));
 		recentTime.setText(recent(summary));
 		recentTime.setForeground(recentColor(summary));
-
-		apply(uniqueRate, summary.uniques == 0
-			? "0"
-			: summary.uniques + " (1 per " + DoomFormat.count(Math.round(
-				(double) summary.runs / summary.uniques)) + " runs)");
 
 		resetsBody.add(resetsTiles);
 		resetsBody.add(resetsRows);
@@ -587,21 +579,15 @@ class DoomMetricsPanel extends PluginPanel
 		resetsTiles.add(reachTile);
 		resetsTiles.add(averageTile);
 
-		JLabel died = PanelStyle.caption("Died short", SwingConstants.LEFT);
-		died.setToolTipText("Deaths before clearing the target");
 		JLabel session = PanelStyle.caption("This session", SwingConstants.LEFT);
 		session.setToolTipText("Targets cleared this sitting, and how many that is an hour");
 		recentCaption.setToolTipText("The latest runs' average time to the target, and how far it"
 			+ " is off the whole average");
-		JLabel uniques = PanelStyle.caption("Uniques", SwingConstants.LEFT);
-		uniques.setToolTipText("Uniques claimed, and how many runs there have been for each");
 
 		resetsRows.setOpaque(false);
 		resetsRows.setBorder(new EmptyBorder(PanelStyle.GRID, 2, 0, 2));
-		resetsRows.add(line(died, diedShort));
 		resetsRows.add(line(session, sessionResets));
 		resetsRows.add(line(recentCaption, recentTime));
-		resetsRows.add(line(uniques, uniqueRate));
 
 		resetsBody.setOpaque(false);
 		resetsBody.setToolTipText("Counted since this version of the plugin; the target delve is"

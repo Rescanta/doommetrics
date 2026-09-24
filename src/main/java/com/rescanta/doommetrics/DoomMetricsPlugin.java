@@ -5,7 +5,6 @@ import java.awt.image.BufferedImage;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
@@ -47,11 +46,10 @@ import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
 import net.runelite.client.util.ImageUtil;
-import net.runelite.client.util.Text;
 
 /**
  * Tracks the run: when it starts and ends, and which delves it clears. Every game event arrives
- * here and is routed to {@link LootWatcher}, {@link CombatWatcher}, {@link Totals},
+ * here and is routed to {@link ClaimWatcher}, {@link CombatWatcher}, {@link Totals},
  * {@link MilestoneTracker} and {@link PanelFeed}.
  */
 @Slf4j
@@ -115,14 +113,8 @@ public class DoomMetricsPlugin extends Plugin
 	@Inject
 	private ClientThread clientThread;
 
-	@Inject
-	private ConfigManager configManager;
-
-	@Inject
-	private ScheduledExecutorService executor;
-
 	// Built on start up.
-	private LootWatcher loot;
+	private ClaimWatcher claims;
 	private CombatWatcher combat;
 	private Totals totals;
 	private MilestoneTracker milestones;
@@ -187,8 +179,7 @@ public class DoomMetricsPlugin extends Plugin
 	protected void startUp()
 	{
 		GameItems items = new GameItems(client, itemManager);
-		loot = new LootWatcher(client, clientThread, items, () -> run,
-			() -> endRun(EndReason.FINISHED, -1));
+		claims = new ClaimWatcher(clientThread, () -> run, () -> endRun(EndReason.FINISHED, -1));
 		combat = new CombatWatcher(client, clientThread, config, items, () -> run, this::recordCombat);
 		totals = new Totals(totalsStore, runHistoryStore, () -> runProfile);
 		milestones = new MilestoneTracker(client, milestoneStore, this::resetTarget,
@@ -203,7 +194,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		icons = new GameIcons(itemManager, spriteManager,
 			() -> SwingUtilities.invokeLater(feed::iconsArrived));
-		icons.preload(LootWatcher.NOTABLE_DROPS);
+		icons.preload();
 		panel.setIcons(icons);
 		navButton = NavigationButton.builder()
 			.tooltip("Doom Metrics")
@@ -253,17 +244,12 @@ public class DoomMetricsPlugin extends Plugin
 		});
 	}
 
-	/**
-	 * Closing the client does not shut plugins down, so a run still going is written here. The
-	 * client saves its config while this event is handed round, before the client thread gets to
-	 * the run, so what the run changes in the profile is saved again afterwards.
-	 */
+	/** Closing the client does not shut plugins down, so a run still going is written here. */
 	@Subscribe
 	public void onClientShutdown(ClientShutdown event)
 	{
 		CompletableFuture<Void> written = new CompletableFuture<>();
 		clientThread.invoke(() -> recordUnfinishedRun()
-			.thenRunAsync(configManager::sendConfig, executor)
 			.whenComplete((ignored, error) -> written.complete(null)));
 		event.waitFor(written);
 	}
@@ -286,7 +272,6 @@ public class DoomMetricsPlugin extends Plugin
 		// Died a moment ago: the run is over, not unfinished.
 		if (deathLevel >= 0)
 		{
-			milestones.runEnded(deathLevel, unfinished.loot().getClaimed().size());
 			return runHistoryStore.append(
 				recordOf(unfinished, Instant.now(), EndReason.DIED, deathLevel, false),
 				profileOf(runProfile));
@@ -434,7 +419,7 @@ public class DoomMetricsPlugin extends Plugin
 		pickUpPending = true;
 		ticksWithoutBoss = 0;
 		deathLevel = -1;
-		loot.reset();
+		claims.reset();
 		combat.stopTracking();
 		totals.forgetSession();
 		milestones.forgetSession();
@@ -538,13 +523,6 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		// The pet line comes coloured.
-		if (LootWatcher.isPetMessage(Text.removeTags(event.getMessage())))
-		{
-			loot.petClaimed();
-			return;
-		}
-
 		DelveMessage delve = DelveMessage.parse(event.getMessage());
 
 		if (delve == null)
@@ -582,7 +560,7 @@ public class DoomMetricsPlugin extends Plugin
 		else
 		{
 			run.enterLevel(level, Instant.now());
-			loot.delveStarted();
+			claims.reset();
 			log.debug("Delve {} started", level);
 		}
 	}
@@ -614,19 +592,19 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		loot.itemContainerChanged(event);
+		claims.itemContainerChanged(event);
 	}
 
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
-		loot.menuOptionClicked(event);
+		claims.menuOptionClicked(event);
 	}
 
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event)
 	{
-		loot.scriptPreFired(event);
+		claims.scriptPreFired(event);
 	}
 
 	@Subscribe
@@ -766,10 +744,7 @@ public class DoomMetricsPlugin extends Plugin
 		loadTotals();
 	}
 
-	/**
-	 * A run held open across a lost connection ends where it was if we come back as an alt: the
-	 * character left behind was put outside, as after a long disconnect.
-	 */
+	/** A run held open across a lost connection ends where it was if we come back as an alt. */
 	private void closeRunFromAnotherCharacter()
 	{
 		if (resumeCheck == null || run == null || runProfile == null
@@ -779,7 +754,7 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		log.debug("Back as another character, closing the run held open on the previous one");
-		endRun(EndReason.DIED, run.currentLevel());
+		endRun(EndReason.FINISHED, -1);
 	}
 
 	private void loadTotals()
@@ -855,9 +830,8 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		// Put outside with the pile lost, as a death does.
 		log.debug("Back outside the cave, ending the run that was held open");
-		endRun(EndReason.DIED, run.currentLevel());
+		endRun(EndReason.FINISHED, -1);
 	}
 
 	/**
@@ -1018,7 +992,7 @@ public class DoomMetricsPlugin extends Plugin
 		ticksWithoutBoss = 0;
 		deathLevel = -1;
 		combat.runStarted();
-		loot.runStarted();
+		claims.reset();
 		totals.runStarted(sessionFrom);
 	}
 
@@ -1035,7 +1009,7 @@ public class DoomMetricsPlugin extends Plugin
 		DelveRun ended = run;
 		run = null;
 		resumeCheck = null;
-		loot.reset();
+		claims.reset();
 		combat.stopTracking();
 
 		if (ended == null)
@@ -1044,7 +1018,6 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		ended.end(reason, Instant.now(), diedOnLevel);
-		loot.runEnded();
 		log.debug("Doom run ended: {} after {} delves", reason, ended.lastLevel());
 
 		// Delves are already banked; this flushes the combat since the last one, abandoned or not.
@@ -1056,8 +1029,7 @@ public class DoomMetricsPlugin extends Plugin
 			return;
 		}
 
-		milestones.runEnded(reason == EndReason.DIED ? diedOnLevel : 0,
-			ended.loot().getClaimed().size());
+		milestones.runEnded();
 
 		lastRun = ended;
 		lastRunCleared = false;
@@ -1100,7 +1072,6 @@ public class DoomMetricsPlugin extends Plugin
 		record.diedOn = Math.max(0, diedOnLevel);
 		record.partial = run.isPartial();
 		record.incomplete = incomplete;
-		record.loot = run.loot().getClaimed();
 		// Left out entirely for runs that attribute nothing.
 		record.combat = run.getCombat().isEmpty() ? null : run.getCombat().copy();
 		return record;

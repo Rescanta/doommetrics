@@ -15,8 +15,8 @@ import net.runelite.api.GameState;
 import net.runelite.api.gameval.VarPlayerID;
 
 /**
- * Keeps the character's milestone table: banks milestone clears, and the runs, deaths and uniques
- * the resets card counts; loads and seeds it.
+ * Keeps the character's milestone table: banks milestone clears and the runs the resets card
+ * counts; loads and seeds it.
  */
 @Slf4j
 class MilestoneTracker
@@ -189,30 +189,11 @@ class MilestoneTracker
 		onChanged.run();
 	}
 
-	/**
-	 * Counts how a run ended towards the resets card.
-	 *
-	 * @param diedOn the delve died on, or 0 for a run that ended any other way
-	 * @param uniques how many uniques it claimed
-	 */
-	void runEnded(int diedOn, int uniques)
+	/** The trip counted last is over, so a joined run can't be it. */
+	void runEnded()
 	{
 		takeBackIfAbandoned = false;
 		countedTrip = -1;
-
-		if (!belongsToRun.getAsBoolean())
-		{
-			return;
-		}
-
-		if (diedOn > 0)
-		{
-			milestones.died(diedOn);
-		}
-
-		milestones.claimed(uniques);
-		milestoneStore.save(milestones);
-		onChanged.run();
 	}
 
 	/** The resets card's figures, for runs aimed at the current target. */

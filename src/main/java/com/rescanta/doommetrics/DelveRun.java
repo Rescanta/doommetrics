@@ -50,7 +50,6 @@ class DelveRun
 
 	private final List<Split> splits = new ArrayList<>();
 
-	private final RunLoot loot;
 
 	/** From a clear until the game announces the next delve. */
 	private boolean betweenDelves;
@@ -103,7 +102,6 @@ class DelveRun
 		this.currentLevel = currentLevel;
 		this.partial = partial;
 		this.pbAnchor = pbAnchor;
-		this.loot = new RunLoot();
 		this.nextClearTimed = !partial;
 	}
 
@@ -252,11 +250,6 @@ class DelveRun
 	int creditLevel()
 	{
 		return betweenDelves ? lastLevel() : currentLevel;
-	}
-
-	RunLoot loot()
-	{
-		return loot;
 	}
 
 	boolean isBetweenDelves()

@@ -1,7 +1,6 @@
 package com.rescanta.doommetrics;
 
 import java.awt.image.BufferedImage;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,17 +35,12 @@ final class GameIcons implements Icons
 		this.onArrived = onArrived;
 	}
 
-	/** Asks for every counter's picture and each of {@code itemIds} up front. */
-	void preload(Collection<Integer> itemIds)
+	/** Asks for every counter's picture up front. */
+	void preload()
 	{
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
 			counter(metric);
-		}
-
-		for (int itemId : itemIds)
-		{
-			askItem(itemId);
 		}
 
 		for (CombatMetric.Unit unit : CombatMetric.Unit.values())

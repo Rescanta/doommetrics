@@ -28,8 +28,7 @@ discarded from every figure.
 
 A connection that drops does not end the run. Back within a few seconds, the game carries on as
 if nothing happened, and so does the run. Gone longer, the game puts you back outside and the
-unclaimed loot is lost, as in a death - and the run is counted as one, on the delve you were last
-seen on.
+unclaimed loot is lost; the run ends where you were last seen.
 
 ## The two paces
 
@@ -407,10 +406,8 @@ shown on the overlay.
 Delve 100 resets
 Reached  62%            Average time  1:52:10
 184 / 297 runs          best 1:41:30
-Died short                       41
 This session             6 (2.1/hr)
 Last 10           1:49:05 (-3:05)
-Uniques           3 (1 per 99 runs)
 ```
 
 - **Reached** - runs that cleared the target, out of every run started. Walking into delve 1 and
@@ -420,18 +417,15 @@ Uniques           3 (1 per 99 runs)
 - **Average time** - from the start of a run to clearing the target, the same span as a
   milestone's PB, which is shown under it. Only runs watched from delve 1 count here: a joined
   run's time is only an upper bound, though it can still set a PB.
-- **Died short** - deaths before clearing the target, the target delve itself included.
 - **This session** - targets cleared this sitting, and how many that is an hour once the sitting
   is ten minutes old.
 - **Last 10** - the latest ten runs' average time to the target, in green when it is quicker than
   your average and red when it is slower. Changing the target starts this list over.
-- **Uniques** - uniques claimed, and how many runs there have been for each. A pet you already
-  own counts too: the game still announces it and adds it to the collection log.
 
 Everything on the card is a running count kept in the milestone table, not a list of runs, so it
 takes the same room after ten runs as after ten thousand and is synced with the rest of your
 settings. It counts from the version that added it: the KC and PB you already had are kept, but
-nothing before that can be counted towards reach, deaths or averages.
+nothing before that can be counted towards reach or averages.
 
 ## Run detail
 
@@ -533,9 +527,8 @@ lifetime rate, both in the side panel where they always were.
 
 Finished runs are still written to `.runelite/doommetrics/`, one file per character, one JSON line
 per run: when the run ended, how deep it got, how long that took, how it ended, what the counters
-recorded, and the notable drops the claim took - the eye, avernic treads, mokhaiotl cloth and the
-pet. Where in the run a drop landed isn't followed; the Doom loot tracker plugin covers the loot
-itself. Nothing displays that file. It is kept because a run is impossible to recover once it is over and the
+recorded. Loot isn't recorded - the Doom loot tracker plugin covers it. Nothing displays that
+file. It is kept because a run is impossible to recover once it is over and the
 record costs about sixty bytes, so twenty thousand runs is about a megabyte. Appending costs the
 same on the ten thousandth run as on the first, and a write torn by a crash costs the last line
 rather than the whole file.
