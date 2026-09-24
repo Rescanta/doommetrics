@@ -1010,10 +1010,11 @@ public class DoomMetricsPlugin extends Plugin
 			milestones.seedFromDeepestLevel();
 		}
 
+		// Despawns are not delivered across a scene load. A lost connection picked up again in a
+		// few seconds carries on in the same scene, so it keeps them.
 		if (state == GameState.LOADING || state == GameState.LOGIN_SCREEN
-			|| state == GameState.HOPPING || state == GameState.CONNECTION_LOST)
+			|| state == GameState.HOPPING)
 		{
-			// Despawns are not delivered across a scene load.
 			bossCount = 0;
 			ticksWithoutBoss = 0;
 			combat.sceneCleared();
