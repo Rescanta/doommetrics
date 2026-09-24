@@ -100,6 +100,33 @@ public class PunishTrackerTest
 		assertFalse("left to the spec tracker, never held", tracker.mayBePunish(559));
 	}
 
+	/**
+	 * Log 2026-09-20 20:18:04-05, seen on video: the bow's 43 landed on the halberd swing's tick,
+	 * and the game drew a second bonus splat a tick after the halberd's own. The arrow is no punish,
+	 * but the user wants the extra splat - it looks like, and is, a punish's - counted as one.
+	 */
+	@Test
+	public void theExtraBonusSplatABowHitBringsCountsAsThePunishs()
+	{
+		tickEnded(9949, true, null);
+
+		tracker.swung(9950);
+		mine(43, 9950);
+		tickEnded(9950, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(39, 9951);
+		tickEnded(9951, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(29, 9952);
+		tickEnded(9952, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(27, 9953);
+		tickEnded(9953, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=39", "noxiousHalberdPunish=29",
+			"noxiousHalberdPunish=27"), recorded);
+	}
+
 	@Test
 	public void eachWeaponIsCreditedToItsOwnFigure()
 	{
