@@ -405,14 +405,12 @@ Uniques           3 (1 per 99 runs)
 ```
 
 - **Reached** - runs that cleared the target, out of every run started. Walking into delve 1 and
-  straight back out is not counted as a run.
+  straight back out is not counted as a run. A run the plugin joined part way through counts like
+  any other, except a trip it had already counted, picked up again after a session reset or the
+  plugin being turned off and on.
 - **Average time** - from the start of a run to clearing the target, the same span as a
-  milestone's PB, which is shown under it.
-
-Only runs the plugin watched from delve 1 count towards these two. A run it joined part way
-through - after a session reset, or the plugin being turned on mid-trip - may be a trip it has
-already counted, and its time is only an upper bound; it still adds to the milestone KC, and can
-still set a PB.
+  milestone's PB, which is shown under it. Only runs watched from delve 1 count here: a joined
+  run's time is only an upper bound, though it can still set a PB.
 - **Died short** - deaths before clearing the target, the target delve itself included.
 - **This session** - targets cleared this sitting, and how many that is an hour once the sitting
   is ten minutes old.

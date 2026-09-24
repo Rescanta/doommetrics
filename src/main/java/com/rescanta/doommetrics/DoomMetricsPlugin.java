@@ -1057,7 +1057,7 @@ public class DoomMetricsPlugin extends Plugin
 		settleSuspended();
 		watch(new DelveRun(startedAt, level, partial, partial ? sessionAnchor() : null),
 			runHistoryStore.currentProfile(), startedAt, partial);
-		milestones.runStarted(partial);
+		milestones.runStarted(partial, level);
 		log.debug("Doom run started on delve {} (partial={})", level, partial);
 	}
 
@@ -1111,7 +1111,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (reason == EndReason.ABANDONED)
 		{
-			milestones.runAbandoned(ended.isPartial());
+			milestones.runAbandoned();
 			return;
 		}
 

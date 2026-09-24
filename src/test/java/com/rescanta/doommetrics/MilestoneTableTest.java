@@ -207,11 +207,11 @@ public class MilestoneTableTest
 	}
 
 	/**
-	 * A joined run can set a best and adds to the kill count, but it may be a trip already counted,
-	 * picked up again after a reset, so it stays out of the reach rate and the average.
+	 * A joined run's clear counts like any other, and can set a best, but its time is an upper
+	 * bound, so it stays out of the average.
 	 */
 	@Test
-	public void aJoinedRunCountsTowardsKcAndBestButNotTheCard()
+	public void aJoinedRunCountsTowardsTheCardButNotTheAverage()
 	{
 		MilestoneTable table = new MilestoneTable();
 		table.record(100, 70_000, true);
@@ -220,7 +220,7 @@ public class MilestoneTableTest
 		ResetSummary summary = table.summary(100, 0);
 		assertEquals(2, table.getRows().get(100).kc);
 		assertEquals(65_000, summary.bestTicks);
-		assertEquals(1, summary.reached);
+		assertEquals(2, summary.reached);
 		assertEquals(70_000, summary.averageTicks);
 	}
 
