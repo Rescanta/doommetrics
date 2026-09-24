@@ -94,6 +94,15 @@ class CombatWatcher
 		hitpointsRegeneration.reset();
 	}
 
+	/**
+	 * The player died: a window still open would take the respawn's restore, which can be a full
+	 * heal. Punishes held for the tick still settle.
+	 */
+	void playerDied()
+	{
+		combatTracker.reset();
+	}
+
 	/** Forgets every cause in flight. */
 	void stopTracking()
 	{

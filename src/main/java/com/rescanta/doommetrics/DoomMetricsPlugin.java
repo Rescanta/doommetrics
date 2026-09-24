@@ -673,6 +673,7 @@ public class DoomMetricsPlugin extends Plugin
 		// A boss the same ticks' hits killed is cleared a few ticks later, so wait for it.
 		deathLevel = run.currentLevel();
 		ticksSinceDeath = 0;
+		combat.playerDied();
 		log.debug("Died on delve {}, holding the run open for a clear", deathLevel);
 	}
 
