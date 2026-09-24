@@ -161,6 +161,24 @@ public class MilestoneTableTest
 		assertEquals(2, summary.sessionResets);
 	}
 
+	/** Walking into delve 1 and straight back out is no attempt at the target. */
+	@Test
+	public void anAbandonedRunIsTakenBackOffTheCount()
+	{
+		MilestoneTable table = new MilestoneTable();
+		table.runStarted();
+		table.runStarted();
+		table.runAbandoned();
+		table.record(100, 60_000);
+
+		assertEquals(1, table.summary(100, 0).runs);
+		assertEquals(1.0, table.summary(100, 0).reachRate(), 1e-9);
+
+		table.runAbandoned();
+		table.runAbandoned();
+		assertEquals("never below none", 0, table.summary(100, 0).runs);
+	}
+
 	/**
 	 * Kill counts from before the reset counters began are kept but not set against runs, which
 	 * those counters never saw.

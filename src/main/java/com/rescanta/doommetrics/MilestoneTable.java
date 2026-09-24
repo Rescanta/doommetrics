@@ -133,6 +133,12 @@ class MilestoneTable
 		runs++;
 	}
 
+	/** Takes back a run walked out of before its first clear: it was never an attempt. */
+	void runAbandoned()
+	{
+		runs = Math.max(0, runs - 1);
+	}
+
 	/** @param delve the delve the character died on */
 	void died(int delve)
 	{
