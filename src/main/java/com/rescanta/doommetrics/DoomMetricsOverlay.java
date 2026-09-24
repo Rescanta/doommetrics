@@ -79,8 +79,7 @@ class DoomMetricsOverlay extends OverlayPanel
 
 		if (!config.hidePluginName())
 		{
-			children.add(new OverlayChrome.Title("Doom Metrics",
-				plugin.getIcons().smallSprite(IconArt.BOSS)));
+			children.add(new OverlayChrome.Title("Doom Metrics"));
 		}
 
 		int heading = children.size();

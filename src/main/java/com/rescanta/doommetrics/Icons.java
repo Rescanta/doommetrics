@@ -42,7 +42,7 @@ interface Icons
 	/** The same, shrunk to stand in for the counter's name - see {@link IconArt#SMALL}. */
 	BufferedImage smallCounter(CombatMetric metric);
 
-	/** An interface sprite as the game draws it - a skill icon, the boss's icon. */
+	/** An interface sprite as the game draws it - a skill or spell icon. */
 	BufferedImage sprite(int spriteId);
 
 	/** The same, shrunk to a line of text high. */
@@ -52,11 +52,5 @@ interface Icons
 	default BufferedImage smallUnit(CombatMetric.Unit unit)
 	{
 		return smallSprite(IconArt.spriteFor(unit));
-	}
-
-	/** The boss's own icon, which stands for the plugin wherever the game's pictures are used. */
-	default BufferedImage boss()
-	{
-		return sprite(IconArt.BOSS);
 	}
 }

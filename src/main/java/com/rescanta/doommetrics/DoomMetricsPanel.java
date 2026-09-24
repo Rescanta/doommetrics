@@ -205,12 +205,12 @@ class DoomMetricsPanel extends PluginPanel
 
 	/** The two tabs, kept so {@link #showLifetime} can put either in front. */
 	private final MaterialTab sessionTab = PanelStyle.toggle(combatTabs, "Session",
-		"What this sitting has counted, the run in progress included",
+		"Everything counted this session, including the current run",
 		() -> showCombat(false));
 	private final MaterialTab lifetimeTab = PanelStyle.toggle(combatTabs, "Lifetime",
-		"<html>What this character has counted, every sitting added up."
-			+ "<br>Added to as each delve is cleared, so it holds what the run in progress has"
-			+ "<br>banked rather than what it is part way through earning.</html>",
+		"<html>Everything counted on this character, across all sessions."
+			+ "<br>Updated each time you clear a delve, so the delve you're on"
+			+ "<br>isn't in it yet.</html>",
 		() -> showCombat(true));
 
 	private final MilestoneTablePanel tablePanel = new MilestoneTablePanel("No delves completed yet.");
@@ -255,7 +255,7 @@ class DoomMetricsPanel extends PluginPanel
 	private final JLabel recentTime = PanelStyle.body("-", SwingConstants.RIGHT);
 	private final JLabel recentCaption = PanelStyle.caption("Last 10", SwingConstants.LEFT);
 	private final JLabel resetsEmpty = PanelStyle.caption("<html><body style='width:150px'>"
-		+ "Nothing counted yet. Runs and times fill in from your next run.</body></html>",
+		+ "Nothing here yet. Your next run starts filling it in.</body></html>",
 		SwingConstants.LEFT);
 	private final JPanel resetsBody = PanelStyle.column(PanelStyle.ROW_GAP);
 	private final JPanel resetsRows = PanelStyle.column(PanelStyle.ROW_GAP);
@@ -270,7 +270,7 @@ class DoomMetricsPanel extends PluginPanel
 		setLayout(new DynamicGridLayout(0, 1, 0, PanelStyle.SECTION_GAP));
 
 		add(PanelStyle.section("Current run", status, runCard()));
-		// The sitting and the character's lifetime above the tables: what is being earned right
+		// The session and the character's lifetime above the tables: what is being earned right
 		// now is what a player glances at mid-run, and the rest is what they scroll to.
 		add(PanelStyle.section("Session & lifetime", compare()));
 		add(PanelStyle.section("Combat", combatTabs, combatCard()));
@@ -288,7 +288,7 @@ class DoomMetricsPanel extends PluginPanel
 		combatTabs.select(sessionTab);
 	}
 
-	/** Repaints the sitting's and the character's figures. A null snapshot blanks all of them. */
+	/** Repaints the session's and the character's figures. A null snapshot blanks all of them. */
 	void setStats(Stats stats)
 	{
 		apply(sessionLength, stats == null ? null : stats.sessionLength);
@@ -478,7 +478,7 @@ class DoomMetricsPanel extends PluginPanel
 	 * Repaints the resets card.
 	 *
 	 * @param summary        how runs aimed at the target have gone, or null for none yet
-	 * @param sessionPerHour targets cleared per hour this sitting, or null while there is no rate
+	 * @param sessionPerHour targets cleared per hour this session, or null while there is no rate
 	 */
 	void setResets(ResetSummary summary, Double sessionPerHour)
 	{
@@ -571,18 +571,19 @@ class DoomMetricsPanel extends PluginPanel
 		average.add(bestTime, BorderLayout.CENTER);
 
 		JPanel reachTile = PanelStyle.tile(reachCaption, reach);
-		reachTile.setToolTipText("Runs that cleared the target, out of every run started");
+		reachTile.setToolTipText("Runs that cleared this delve, out of all runs started");
 		JPanel averageTile = PanelStyle.tile(averageCaption, average);
-		averageTile.setToolTipText("From the run's start to clearing the target, restocking included");
+		averageTile.setToolTipText("Average time from the start of a run to clearing this delve,"
+			+ " restocking included");
 
 		resetsTiles.setOpaque(false);
 		resetsTiles.add(reachTile);
 		resetsTiles.add(averageTile);
 
 		JLabel session = PanelStyle.caption("This session", SwingConstants.LEFT);
-		session.setToolTipText("Targets cleared this sitting, and how many that is an hour");
-		recentCaption.setToolTipText("The latest runs' average time to the target, and how far it"
-			+ " is off the whole average");
+		session.setToolTipText("Times you cleared this delve this session, and how many per hour");
+		recentCaption.setToolTipText("Average time over your latest runs, and how it compares to"
+			+ " your overall average");
 
 		resetsRows.setOpaque(false);
 		resetsRows.setBorder(new EmptyBorder(PanelStyle.GRID, 2, 0, 2));
@@ -590,8 +591,8 @@ class DoomMetricsPanel extends PluginPanel
 		resetsRows.add(line(recentCaption, recentTime));
 
 		resetsBody.setOpaque(false);
-		resetsBody.setToolTipText("Counted since this version of the plugin; the target delve is"
-			+ " rounded down to a milestone");
+		resetsBody.setToolTipText("Your target delve rounded down to a multiple of 10. Counted"
+			+ " since this plugin version.");
 		return resetsBody;
 	}
 
@@ -649,14 +650,14 @@ class DoomMetricsPanel extends PluginPanel
 		return card;
 	}
 
-	/** Session beside lifetime, a tile each, with the sitting's length under them. */
+	/** Session beside lifetime, a tile each, with the session's length under them. */
 	private JPanel compare()
 	{
-		JLabel length = PanelStyle.caption("Sitting length", SwingConstants.LEFT);
-		length.setToolTipText("How long this sitting has been going, from its first run to now");
+		JLabel length = PanelStyle.caption("Session length", SwingConstants.LEFT);
+		length.setToolTipText("Time logged in since this session's first run");
 		sessionLength.setToolTipText(length.getToolTipText());
-		sessionDeep.setToolTipText("Deep delves completed this sitting");
-		lifetimeDeep.setToolTipText("Deep delves completed by this character");
+		sessionDeep.setToolTipText("Deep delves (8+) cleared this session");
+		lifetimeDeep.setToolTipText("Deep delves (8+) cleared on this character");
 
 		JPanel tiles = new JPanel(new GridLayout(1, 2, PanelStyle.GRID, 0));
 		tiles.setOpaque(false);
@@ -721,9 +722,9 @@ class DoomMetricsPanel extends PluginPanel
 		JPanel panel = new JPanel(new DynamicGridLayout(0, 1, 0, PanelStyle.GRID * 2));
 		panel.setBackground(PanelStyle.BACKGROUND);
 		panel.add(new CardButton("Open run detail",
-			"Break this run down delve by delve, in a window of its own", onOpenDetail));
+			"Open a window breaking this run down delve by delve", onOpenDetail));
 		panel.add(new CardButton("Reset session",
-			"Start the session over and drop the run in progress. Lifetime figures are kept.",
+			"Start a new session and discard the current run. Lifetime figures are kept.",
 			() -> confirmReset(onReset)));
 		return panel;
 	}
@@ -731,7 +732,7 @@ class DoomMetricsPanel extends PluginPanel
 	private void confirmReset(Runnable onReset)
 	{
 		int answer = JOptionPane.showConfirmDialog(this,
-			"Reset the session and drop the run in progress?\n"
+			"Start a new session and discard the current run?\n"
 				+ "Lifetime figures and milestones are kept.",
 			"Reset session", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 

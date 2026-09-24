@@ -178,7 +178,7 @@ class MilestoneTablePanel extends JPanel
 
 		if (data.improved)
 		{
-			pb.setToolTipText("Beaten since the client started");
+			pb.setToolTipText("New PB since the client started");
 		}
 
 		addRow(index + 1, index % 2 == 0 ? PanelStyle.STRIPE : PanelStyle.CARD,

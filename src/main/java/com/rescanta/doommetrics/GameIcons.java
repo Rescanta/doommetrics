@@ -47,8 +47,6 @@ final class GameIcons implements Icons
 		{
 			askSprite(IconArt.spriteFor(unit));
 		}
-
-		askSprite(IconArt.BOSS);
 	}
 
 	@Override

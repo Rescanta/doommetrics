@@ -7,7 +7,7 @@ package com.rescanta.doommetrics;
 public enum DisplayStyle
 {
 	/** Every line you have switched on, drawn as an overlay panel. */
-	PANEL("Panel"),
+	PANEL("Overlay"),
 
 	/** One infobox square, showing the figure picked in the config. */
 	INFOBOX("Infobox"),

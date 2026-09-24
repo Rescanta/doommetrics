@@ -312,7 +312,7 @@ class RunLegendPanel extends JPanel
 
 		RunDetail.Delve at = delve > 0 ? detail.at(delve) : null;
 		heading.setText(delve <= 0 ? "This run"
-			: at != null && !at.watched ? "Delve " + delve + " - not watched" : "Delve " + delve);
+			: at != null && !at.watched ? "Delve " + delve + " - not tracked" : "Delve " + delve);
 	}
 
 	/**
@@ -405,7 +405,7 @@ class RunLegendPanel extends JPanel
 			setBackground(stripe);
 			setBorder(new EmptyBorder(0, 5, 0, 0));
 			setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-			setToolTipText("Click to take this line off the chart");
+			setToolTipText("Click to hide this line");
 			add(swatch(), BorderLayout.WEST);
 			add(name, BorderLayout.CENTER);
 			add(value, BorderLayout.EAST);
@@ -450,9 +450,9 @@ class RunLegendPanel extends JPanel
 
 			// Led by the name, which is the only place it is written when an icon stands in for it.
 			String tooltip = off
-				? "Click to put this line back on the chart"
+				? "Click to show this line on the chart"
 				: DoomFormat.count(amount) + " " + series.unit().description()
-					+ " - click to take this line off the chart";
+					+ " - click to hide this line";
 
 			setToolTipText("<html>" + series.label() + "<br>" + tooltip + sources + "</html>");
 

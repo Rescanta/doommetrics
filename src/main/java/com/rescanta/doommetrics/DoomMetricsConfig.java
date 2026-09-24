@@ -19,28 +19,28 @@ public interface DoomMetricsConfig extends Config
 
 	@ConfigSection(
 		name = "Overlay",
-		description = "What is drawn over the game while a run is on",
+		description = "What shows over the game during a run",
 		position = 10
 	)
 	String overlaySection = "overlay";
 
 	@ConfigSection(
 		name = "Pace & target",
-		description = "How pace is measured, and the delve you are aiming for",
+		description = "How pace is worked out, and the delve you're aiming for",
 		position = 20
 	)
 	String paceSection = "pace";
 
 	@ConfigSection(
 		name = "Counters",
-		description = "Overlay lines for what your gear gives back",
+		description = "Overlay lines for healing, prayer and damage",
 		position = 30
 	)
 	String countersSection = "counters";
 
 	@ConfigSection(
 		name = "Chat",
-		description = "Messages posted to chat during and after a run",
+		description = "Chat messages during and after a run",
 		position = 40,
 		closedByDefault = true
 	)
@@ -48,7 +48,7 @@ public interface DoomMetricsConfig extends Config
 
 	@ConfigSection(
 		name = "Advanced",
-		description = "Diagnostics",
+		description = "Troubleshooting",
 		position = 100,
 		closedByDefault = true
 	)
@@ -57,12 +57,11 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "displayStyle",
 		name = "Display",
-		description = "What the plugin draws over the game while a run is on."
-			+ "<br>Panel is the overlay of lines, built from the switches in this section."
-			+ "<br>Infobox is a single square holding the one figure picked underneath,"
-			+ "<br>with the rest of it in the tooltip."
-			+ "<br>Off draws nothing. Delves are still timed and everything is still counted,"
-			+ "<br>and the side panel and the chat messages carry on as they were.",
+		description = "How your run is shown over the game."
+			+ "<br>Overlay: a box of lines, picked with the settings in this section."
+			+ "<br>Infobox: one square showing the Infobox figure. Hover it for details."
+			+ "<br>Off: nothing over the game. Delves are still timed and counted,"
+			+ "<br>and the side panel and chat messages still work.",
 		position = 11,
 		section = overlaySection
 	)
@@ -74,14 +73,12 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "infoboxFigure",
 		name = "Infobox figure",
-		description = "Which single figure the infobox square holds."
-			+ "<br>Only used when Display is set to Infobox."
-			+ "<br>The counters here are independent of the Counters settings,"
-			+ "<br>which choose what the panel draws."
-			+ "<br>Time to target counts down to the delve set under Target delve,"
-			+ "<br>whether or not Show target delve is switched on."
-			+ "<br>Predicted run time is the time from delve 1 to that delve,"
-			+ "<br>and the real time once you reach it.",
+		description = "The figure the infobox shows. Only used when Display is Infobox."
+			+ "<br>Any counter can be picked here; the Counters section only affects the overlay."
+			+ "<br>Time to target counts down to your Target delve,"
+			+ "<br>even if Show target delve is off."
+			+ "<br>Predicted run time is the time from delve 1 to your Target delve,"
+			+ "<br>and the actual time once you get there.",
 		position = 12,
 		section = overlaySection
 	)
@@ -93,7 +90,7 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "hidePluginName",
 		name = "Hide plugin name",
-		description = "Leave the Doom Metrics title off the top of the overlay.",
+		description = "Leave the Doom Metrics title off the overlay.",
 		position = 13,
 		section = overlaySection
 	)
@@ -105,7 +102,7 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "showDelveNumber",
 		name = "Show delve number",
-		description = "Show the delve you are currently on in the overlay.",
+		description = "Show which delve you're on.",
 		position = 14,
 		section = overlaySection
 	)
@@ -117,7 +114,7 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "showRunTimer",
 		name = "Show run timer",
-		description = "Show total elapsed time for the current run in the overlay.",
+		description = "Show how long the current run has taken.",
 		position = 15,
 		section = overlaySection
 	)
@@ -129,7 +126,7 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "showPace",
 		name = "Show pace",
-		description = "Show the pace figure in the overlay.",
+		description = "Show the run's pace. The Pace setting picks which one.",
 		position = 16,
 		section = overlaySection
 	)
@@ -140,11 +137,12 @@ public interface DoomMetricsConfig extends Config
 
 	@ConfigItem(
 		keyName = "resultLingerMinutes",
-		name = "Keep result for",
-		description = "Minutes the overlay keeps showing a finished run after you die or leave,"
-			+ "<br>so the numbers are still there when you get back."
-			+ "<br>Set to 0 to hide it straight away."
-			+ "<br>Right-click the overlay and pick Clear to dismiss it early.",
+		name = "Show ended run for",
+		description = "Minutes a run stays on screen after you die or leave, so you can still"
+			+ "<br>read it afterwards. Covers the overlay, the infobox and the side panel's"
+			+ "<br>Current run card. Session and lifetime figures don't depend on it."
+			+ "<br>0 hides the run as soon as it ends."
+			+ "<br>To hide it sooner, right-click the overlay and pick Clear.",
 		position = 17,
 		section = overlaySection
 	)
@@ -157,9 +155,12 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "paceMode",
 		name = "Pace",
-		description = "Deep pace averages your delve 9+ times."
-			+ "<br>Full pace counts deep delves completed per hour of the whole run, shallow delves"
-			+ " included.",
+		description = "Which pace the run shows."
+			+ "<br>Deep pace: delves per hour at your average delve 9+ time."
+			+ "<br>Full pace: deep delves (8+) cleared per hour of the whole run,"
+			+ "<br>counting the time spent on delves 1-7 and restocking."
+			+ "<br>An ended run always shows Full pace, and so do the side panel's"
+			+ "<br>session and lifetime pace.",
 		position = 21,
 		section = paceSection
 	)
@@ -171,9 +172,10 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "showTargetDelve",
 		name = "Show target delve",
-		description = "Show the delve you are aiming for and how long it is predicted to take,"
-			+ "<br>in the overlay and the side panel. Prediction picks which times are shown."
-			+ "<br>Reaching it is always announced in chat, whatever the chat interval is set to.",
+		description = "Show your target delve and how long it should take to get there,"
+			+ "<br>on the overlay and in the side panel. Prediction picks which times."
+			+ "<br>Reaching the target is always announced in chat,"
+			+ "<br>even when Chat every N delves is 0.",
 		position = 22,
 		section = paceSection
 	)
@@ -185,10 +187,11 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "targetDelve",
 		name = "Target delve",
-		description = "The delve to aim for."
-			+ "<br>The predicted time is what your delve 9+ average says the delves between here"
-			+ "<br>and there will take, so it appears once this run has cleared a delve 9."
-			+ "<br>Delves get slower the deeper they go, so a distant target reads short.",
+		description = "The delve you're aiming for."
+			+ "<br>Predictions use this run's average delve 9+ time, so they appear"
+			+ "<br>once you clear delve 9. Deeper delves take longer, so the further away"
+			+ "<br>the target, the more the prediction undershoots."
+			+ "<br>The side panel's Resets card uses this, rounded down to a multiple of 10.",
 		position = 23,
 		section = paceSection
 	)
@@ -201,11 +204,11 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "targetPrediction",
 		name = "Prediction",
-		description = "Which predicted times the target rows show."
-			+ "<br>Remaining is To go, the time from now to the target delve."
-			+ "<br>Full run is Total, the time from delve 1 to the target delve."
-			+ "<br>Both shows the two."
-			+ "<br>Once the target is reached, To go is dropped and the Target row says so.",
+		description = "Which predicted times to show for the target."
+			+ "<br>Remaining: To go, the time from now until you reach it."
+			+ "<br>Full run: Total, the time from delve 1 to the target."
+			+ "<br>Both: the two of them."
+			+ "<br>Once you reach the target, To go disappears and Target reads Target reached.",
 		position = 24,
 		section = paceSection
 	)
@@ -217,10 +220,11 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "healingCounters",
 		name = "Healing",
-		description = "Overlay lines for the hitpoints healed: blood spells and the ancient godsword"
-			+ "<br>and blowpipe specs."
-			+ "<br>Total is one line with everything healed, other spells and specs included."
-			+ "<br>Each is a line per source. Off draws none.",
+		description = "Overlay lines for hitpoints healed by blood spells and by ancient godsword,"
+			+ "<br>blowpipe and Saradomin godsword specs."
+			+ "<br>Total: one line for all healing, other spells and specs included."
+			+ "<br>Each: a line per source."
+			+ "<br>Off: no lines.",
 		position = 31,
 		section = countersSection
 	)
@@ -232,9 +236,11 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "prayerCounters",
 		name = "Prayer",
-		description = "Overlay lines for the prayer points the eldritch staff spec has restored."
-			+ "<br>Total and Each are the same figure; Each draws it as the staff's icon"
-			+ "<br>when Counter style is set to icons. Off draws none.",
+		description = "Overlay lines for prayer points restored by eldritch staff and"
+			+ "<br>Saradomin godsword specs."
+			+ "<br>Total: one line for both."
+			+ "<br>Each: a line per weapon."
+			+ "<br>Off: no lines.",
 		position = 32,
 		section = countersSection
 	)
@@ -246,11 +252,12 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "damageCounters",
 		name = "Damage",
-		description = "Overlay lines for the damage the zaryte crossbow spec dealt, and what your"
-			+ "<br>scythe and halberds dealt punishing the boss's prayer, strength-bonus hitsplats"
-			+ "<br>and halberd specs included."
-			+ "<br>Total is one line with all of it, other specs and melee weapons included."
-			+ "<br>Each is a line per weapon. Off draws none.",
+		description = "Overlay lines for zaryte crossbow spec damage, and for scythe and halberd"
+			+ "<br>damage that punishes the boss's prayer, including strength-bonus hitsplats"
+			+ "<br>and halberd specs."
+			+ "<br>Total: one line for all of it, other specs and melee weapons included."
+			+ "<br>Each: a line per weapon."
+			+ "<br>Off: no lines.",
 		position = 33,
 		section = countersSection
 	)
@@ -262,12 +269,13 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "counterStyle",
 		name = "Counter style",
-		description = "How each counter's overlay line is led."
-			+ "<br>Names spells out what it counts. Icons draws the weapon or spell in its place,"
-			+ "<br>and Icon grid fits two of those to a line."
-			+ "<br>A Total line keeps its name and a line of its own, since it has no one icon."
-			+ "<br>The infobox takes the icon when it holds a single counter and this is not Names."
-			+ "<br>The side panel and the run detail window always list counters by icon.",
+		description = "How counters are labelled on the overlay."
+			+ "<br>Names: written out."
+			+ "<br>Icons: the weapon or spell icon instead of the name."
+			+ "<br>Icon grid: icons, two counters to a line."
+			+ "<br>Total lines always keep their name and a line of their own."
+			+ "<br>The infobox shows a counter's icon unless this is Names."
+			+ "<br>The side panel and run detail window always show icons.",
 		position = 34,
 		section = countersSection
 	)
@@ -279,13 +287,12 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "hideEmptyCounters",
 		name = "Hide counters at 0",
-		description = "Leave a counter off the overlay and the side panel until it has counted"
-			+ "<br>something, so Each only draws the gear you are actually using."
-			+ "<br>A line appears when its counter first counts."
-			+ "<br>The side panel has a Show all link under its counters to see the rest."
-			+ "<br>The run detail window starts those counters switched off,"
-			+ "<br>so their flat lines are not on the chart. Click one there to put it back."
-			+ "<br>Untick to draw every counter from the start, greyed at 0.",
+		description = "Hide a counter until it counts something, so Each only shows"
+			+ "<br>the gear you're actually using."
+			+ "<br>The side panel has a Show all link under its counters for the rest."
+			+ "<br>The run detail window starts them hidden from the chart;"
+			+ "<br>click one in its list to show it."
+			+ "<br>Turn off to show every counter from the start, greyed out at 0.",
 		position = 35,
 		section = countersSection
 	)
@@ -333,10 +340,9 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "chatIntervalDelves",
 		name = "Chat every N delves",
-		description = "Post elapsed time and pace to chat whenever the delve number is a multiple"
-			+ " of this."
-			+ "<br>Shallow delves are skipped, so 5 reports at delve 10, 15, 20 and so on."
-			+ "<br>Set to 0 to turn the messages off.",
+		description = "Post the run time and pace to chat every N delves, from delve 8 on."
+			+ "<br>For example, 5 posts at delves 10, 15, 20 and so on."
+			+ "<br>0 turns these messages off.",
 		position = 41,
 		section = chatSection
 	)
@@ -349,7 +355,7 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "announceRunEnd",
 		name = "Announce run end",
-		description = "Post a summary to chat when you claim loot, leave, or die.",
+		description = "Post a summary to chat when you claim the loot, leave or die.",
 		position = 42,
 		section = chatSection
 	)
@@ -361,9 +367,9 @@ public interface DoomMetricsConfig extends Config
 	@ConfigItem(
 		keyName = "debugLogging",
 		name = "Debug logging",
-		description = "Log delve transitions, Doom varplayer changes and what each counter was"
-			+ "<br>credited, at debug level."
-			+ "<br>Useful for reporting a problem; leave it off otherwise.",
+		description = "Write delve changes, Doom varplayer changes and what each counter"
+			+ "<br>was credited to the client log, at debug level."
+			+ "<br>Useful when reporting a problem. Otherwise leave it off.",
 		position = 101,
 		section = advancedSection
 	)

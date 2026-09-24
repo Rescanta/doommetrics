@@ -288,11 +288,11 @@ class RunDetailWindow extends JFrame
 	private MaterialTabGroup groupingTabs()
 	{
 		separateTab = PanelStyle.toggle(grouping, "Sources",
-			"A line for each counter, named by what it counts", () -> showGrouping(false));
+			"One line per counter", () -> showGrouping(false));
 		groupedTab = PanelStyle.toggle(grouping, "Grouped",
-			"<html>A line for each heading, summing the counters under it."
-				+ "<br>Counts the sources with no line of their own too - a punish thrown"
-				+ "<br>with a weapon this plugin does not name is in the figure here.</html>",
+			"<html>One line per heading, adding up everything under it."
+				+ "<br>Includes sources without a line of their own, such as punishes"
+				+ "<br>with a weapon the plugin doesn't list.</html>",
 			() -> showGrouping(true));
 		grouping.setOpaque(false);
 		grouping.select(separateTab);
