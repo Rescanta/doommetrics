@@ -152,6 +152,120 @@ public class PunishTrackerTest
 			"noxiousHalberdPunish=27"), recorded);
 	}
 
+	/**
+	 * 2026-09-30 tick 640, on video: a twisted bow shot at 638 landed with the scythe's three hits.
+	 * The XP drops read 44 ranged and 250 strength (5 and 28 damage), a third of that as hitpoints.
+	 */
+	@Test
+	public void theExperienceEachAttackEarnedSaysWhichHitWasTheArrow()
+	{
+		tickEnded(637, true, null);
+		tracker.experienceGained(15, 638);
+		tickEnded(638, true, null);
+
+		tracker.swung(639);
+		tracker.experienceGained(83, 639);
+		tickEnded(639, true, PunishWeapon.SCYTHE);
+
+		mine(5, 640);
+		mine(23, 640);
+		mine(1, 640);
+		mine(4, 640);
+		tickEnded(640, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=23", "scythePunish=1", "scythePunish=4"), recorded);
+		assertEquals(list("5@640", "0@640", "0@640", "0@640"), handedBack);
+	}
+
+	/** Tick 659, the same trip: 250 ranged and 143 strength - the 28 was the bow's. */
+	@Test
+	public void theArrowCanBeTheBiggestHit()
+	{
+		tickEnded(656, true, null);
+		tracker.experienceGained(83, 657);
+		tickEnded(657, true, null);
+
+		tracker.swung(658);
+		tracker.experienceGained(48, 658);
+		tickEnded(658, true, PunishWeapon.SCYTHE);
+
+		mine(28, 659);
+		mine(9, 659);
+		mine(4, 659);
+		mine(3, 659);
+		tickEnded(659, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=9", "scythePunish=4", "scythePunish=3"), recorded);
+		assertEquals(list("28@659", "0@659", "0@659", "0@659"), handedBack);
+	}
+
+	/**
+	 * 2026-09-30 22:43 run, tick 442: bow 36, scythe 38, hits 16 12 4 1. A point or two of
+	 * experience can follow an attack a tick later; it is the bow's, not an attack of its own.
+	 */
+	@Test
+	public void experienceTrailingAnAttackIsCountedWithIt()
+	{
+		tickEnded(438, true, null);
+		tracker.experienceGained(34, 440);
+		tickEnded(440, true, null);
+		tracker.experienceGained(2, 441);
+		tickEnded(441, true, null);
+
+		tracker.swung(442);
+		tracker.experienceGained(38, 442);
+		tickEnded(442, true, PunishWeapon.SCYTHE);
+
+		mine(16, 443);
+		mine(12, 443);
+		mine(4, 443);
+		mine(1, 443);
+		tickEnded(443, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=12", "scythePunish=4", "scythePunish=1"), recorded);
+		assertEquals("16@443", handedBack.get(0));
+	}
+
+	/** With no experience seen for the attacks, nothing tells the arrow apart. */
+	@Test
+	public void withoutExperienceAnExtraHitStaysThePunishs()
+	{
+		tickEnded(638, true, null);
+		tracker.swung(639);
+		tickEnded(639, true, PunishWeapon.SCYTHE);
+
+		mine(5, 640);
+		mine(23, 640);
+		mine(1, 640);
+		mine(4, 640);
+		tickEnded(640, false, PunishWeapon.SCYTHE);
+
+		assertEquals(4, recorded.size());
+	}
+
+	/**
+	 * 2026-09-25 tick 589: the scythe's three hits at 590, and a bow shot fired at 587 landing
+	 * at 592. A scythe's hits all land the tick after the swing.
+	 */
+	@Test
+	public void aHitOfOursAfterTheSwingsTickIsNotAScythes()
+	{
+		tickEnded(588, true, null);
+		tracker.swung(589);
+		tickEnded(589, true, PunishWeapon.SCYTHE);
+
+		mine(1, 590);
+		mine(1, 590);
+		mine(6, 590);
+		tickEnded(590, false, PunishWeapon.SCYTHE);
+
+		mine(3, 592);
+		tickEnded(592, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=1", "scythePunish=1", "scythePunish=6"), recorded);
+		assertEquals(list("0@590", "0@590", "0@590", "3@592"), handedBack);
+	}
+
 	@Test
 	public void eachWeaponIsCreditedToItsOwnFigure()
 	{
@@ -232,9 +346,10 @@ public class PunishTrackerTest
 	@Test
 	public void aHitPastTheWindowIsNotThePunishs()
 	{
+		// A weapon whose hits may land late; a scythe's all land the tick after the swing.
 		tickEnded(99, true, null);
 		tracker.swung(100);
-		tickEnded(100, false, PunishWeapon.SCYTHE);
+		tickEnded(100, false, PunishWeapon.OTHER);
 
 		// The window's last tick is still inside it.
 		mine(30, 100 + PunishTracker.HIT_WINDOW);
@@ -244,9 +359,9 @@ public class PunishTrackerTest
 		// the same check the plugin makes before it holds a hit for the punish.
 		assertFalse(tracker.mayBePunish(100 + PunishTracker.HIT_WINDOW + 1));
 		mine(25, 100 + PunishTracker.HIT_WINDOW + 1);
-		tickEnded(100 + PunishTracker.HIT_WINDOW + 1, false, PunishWeapon.SCYTHE);
+		tickEnded(100 + PunishTracker.HIT_WINDOW + 1, false, PunishWeapon.OTHER);
 
-		assertEquals(list("scythePunish=30"), recorded);
+		assertEquals(list("otherMeleePunish=30"), recorded);
 	}
 
 	/**

@@ -64,6 +64,7 @@ class CombatWatcher
 	// Last seen values, so a change can be read as a difference.
 	private int prayerPoints;
 	private int hitpoints;
+	private int hitpointsXp;
 
 	/**
 	 * Damage splatted on us this tick and not yet taken out of the hitpoints level. The splat comes
@@ -102,6 +103,7 @@ class CombatWatcher
 		specEnergy.forget();
 		prayerPoints = 0;
 		hitpoints = 0;
+		hitpointsXp = 0;
 		taken = 0;
 		prayerRegeneration.reset();
 		hitpointsRegeneration.reset();
@@ -136,6 +138,7 @@ class CombatWatcher
 		specEnergy.seed(client.getVarpValue(VarPlayerID.SA_ENERGY));
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
+		hitpointsXp = client.getSkillExperience(Skill.HITPOINTS);
 	}
 
 	void bossSpawned(NPC npc)
@@ -433,6 +436,7 @@ class CombatWatcher
 		else if (event.getSkill() == Skill.HITPOINTS)
 		{
 			int tick = client.getTickCount();
+			experienceChanged(event.getXp(), running, tick);
 			int hit = takenTick == tick ? taken : 0;
 			int was = hitpoints;
 			hitpoints = event.getBoostedLevel();
@@ -461,6 +465,26 @@ class CombatWatcher
 			{
 				log.debug("Hitpoints fell by {} at tick {}", was - hitpoints, tick);
 			}
+		}
+	}
+
+	/** Every attack earns hitpoints experience in proportion to its damage - thralls' don't. */
+	private void experienceChanged(int xp, boolean running, int tick)
+	{
+		int gained = xp - hitpointsXp;
+		boolean known = hitpointsXp > 0;
+		hitpointsXp = xp;
+
+		if (!running || !known || gained <= 0)
+		{
+			return;
+		}
+
+		punishTracker.experienceGained(gained, tick);
+
+		if (config.debugLogging())
+		{
+			log.debug("Hitpoints experience +{} at tick {}", gained, tick);
 		}
 	}
 
