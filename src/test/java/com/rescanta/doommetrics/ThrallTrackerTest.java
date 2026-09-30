@@ -72,6 +72,42 @@ public class ThrallTrackerTest
 		assertFalse(thralls.isThrallHit(2, 107));
 	}
 
+	/** 2026-09-30 tick 4351: spawned, 2 at 4356 taken as a 4th scythe punish splat. */
+	@Test
+	public void aGhostsFirstAttackIsExpectedFromItsSpawn()
+	{
+		thralls.spawned(NpcID.ARCEUUS_THRALL_GHOST_GREATER, 4351);
+
+		assertFalse(thralls.isThrallHit(0, 4354));
+		assertTrue(thralls.isThrallHit(2, 4356));
+		assertFalse(thralls.isThrallHit(1, 4356));
+	}
+
+	/** 2026-09-25 tick 1284: animated a tick late, its hit at +7 and a 2 of ours at +6. */
+	@Test
+	public void aGhostsAnimatedFirstAttackReplacesTheExpectedOne()
+	{
+		thralls.spawned(NpcID.ARCEUUS_THRALL_GHOST_GREATER, 1284);
+		thralls.attacked(ThrallTracker.Style.MAGIC, 1289);
+
+		assertFalse(thralls.isThrallHit(2, 1289));
+		assertTrue(thralls.isThrallHit(2, 1290));
+		assertFalse(thralls.isThrallHit(0, 1291));
+	}
+
+	/** Skeletons animate their first attack. */
+	@Test
+	public void noOtherThrallIsExpectedFromItsSpawn()
+	{
+		thralls.spawned(NpcID.ARCEUUS_THRALL_SKELETON_GREATER, 100);
+		thralls.spawned(NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER, 100);
+
+		for (int tick = 101; tick <= 110; tick++)
+		{
+			assertFalse(thralls.isThrallHit(0, tick));
+		}
+	}
+
 	@Test
 	public void theStyleComesFromTheAttackAnimation()
 	{

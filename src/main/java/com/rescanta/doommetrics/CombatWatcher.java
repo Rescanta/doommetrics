@@ -143,10 +143,17 @@ class CombatWatcher
 		boss = npc;
 	}
 
-	/** Thralls are logged so their hits on the boss can be told apart - see {@link #isThrall}. */
+	/** A ghost thrall's first attack is never animated, so it is expected from the spawn. */
 	void npcSpawned(NPC npc)
 	{
-		if (run.get() != null && config.debugLogging() && isThrall(npc))
+		if (run.get() == null || !isThrall(npc))
+		{
+			return;
+		}
+
+		thrallTracker.spawned(npc.getId(), client.getTickCount());
+
+		if (config.debugLogging())
 		{
 			log.debug("Thrall spawned: {} at tick {}", npc.getId(), client.getTickCount());
 		}
