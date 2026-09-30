@@ -41,15 +41,22 @@ class ThrallTracker
 	/** More than any thrall can have in flight; a guard against leaks, not a limit in play. */
 	private static final int MAX_PENDING = 4;
 
+	/** A ghost's first attack comes as its spawn animation ends, with no attack animation. */
+	private static final int GHOST_FIRST_ATTACK = 4;
+
 	private static final class Attack
 	{
 		private final int tick;
 		private final Style style;
 
-		private Attack(int tick, Style style)
+		/** Never animated, only expected; an attack that is seen replaces it. */
+		private final boolean unseen;
+
+		private Attack(int tick, Style style, boolean unseen)
 		{
 			this.tick = tick;
 			this.style = style;
+			this.unseen = unseen;
 		}
 
 		private boolean covers(int at)
@@ -92,14 +99,32 @@ class ThrallTracker
 		}
 	}
 
+	/**
+	 * A ghost attacks as its spawn animation ends, four ticks in, and that attack is never
+	 * animated. When it waits a tick longer it is animated, and {@link #attacked} replaces this one.
+	 */
+	void spawned(int npcId, int tick)
+	{
+		if (npcId >= NpcID.ARCEUUS_THRALL_GHOST_LESSER && npcId <= NpcID.ARCEUUS_THRALL_GHOST_GREATER)
+		{
+			add(new Attack(tick + GHOST_FIRST_ATTACK, Style.MAGIC, true));
+		}
+	}
+
 	void attacked(Style style, int tick)
+	{
+		pending.removeIf(attack -> attack.unseen);
+		add(new Attack(tick, style, false));
+	}
+
+	private void add(Attack attack)
 	{
 		if (pending.size() >= MAX_PENDING)
 		{
 			pending.remove(0);
 		}
 
-		pending.add(new Attack(tick, style));
+		pending.add(attack);
 	}
 
 	/**
