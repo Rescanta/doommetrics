@@ -92,7 +92,7 @@ class CombatWatcher
 		this.run = run;
 		this.sink = sink;
 		this.combatTracker = new CombatTracker(sink);
-		this.punishTracker = new PunishTracker(sink, this::handBack);
+		this.punishTracker = new PunishTracker(sink, new HandedBack());
 	}
 
 	/** Forgets everything, including the levels last seen. */
@@ -248,10 +248,7 @@ class CombatWatcher
 
 		if (hitsplat.isMine())
 		{
-			if (onBoss)
-			{
-				punishTracker.ownHitNotHeld(tick);
-			}
+			punishTracker.ownHitNotHeld(tick, onBoss);
 
 			// A zero rather than skipped, so the spec's budget is spent on this hit.
 			int amount = countsAsDamage(target) ? hitsplat.getAmount() : 0;
@@ -289,11 +286,38 @@ class CombatWatcher
 			punishTracker.mayBePunish(tick) ? ", held for the punish check" : "");
 	}
 
-	/** A hit held for the punish check, back to be counted as ordinary damage. */
-	private void handBack(int amount, int tick)
+	/** Hits held for the punish check, back for the spec tracker. */
+	private final class HandedBack implements PunishTracker.Handback
 	{
-		logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
-		combatTracker.damaged(amount, tick);
+		@Override
+		public void damaged(int amount, int tick)
+		{
+			logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
+			combatTracker.damaged(amount, tick);
+		}
+
+		@Override
+		public void strayed(int amount, int tick, int swing)
+		{
+			CombatMetric metric = combatTracker.damagedBefore(amount, tick, swing);
+
+			if (config.debugLogging())
+			{
+				log.debug("DAMAGE of {} at tick {}, from before the swing at {} -> {}", amount, tick,
+					swing, metric == null ? "nothing open" : metric.key());
+			}
+		}
+
+		@Override
+		public void punished(int tick, int swing)
+		{
+			CombatMetric metric = combatTracker.spent(tick, swing);
+
+			if (metric != null && config.debugLogging())
+			{
+				log.debug("Punish hit at tick {} spent a hit of {}", tick, metric.key());
+			}
+		}
 	}
 
 	/** Only hits on the standing or burrowed boss count as damage. */

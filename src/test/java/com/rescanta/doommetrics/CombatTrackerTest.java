@@ -330,6 +330,36 @@ public class CombatTrackerTest
 	}
 
 	/**
+	 * A crossbow spec fired just before the switch to a scythe: the punish's hits land first and
+	 * are not the bolt, so they leave its one hit for it.
+	 */
+	@Test
+	public void aPunishDoesNotSpendASpecFiredBeforeItsSwing()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 99);
+		tracker.spent(101, 100);
+		tracker.spent(101, 100);
+		tracker.spent(101, 100);
+		tracker.damagedBefore(80, 102, 100);
+
+		assertEquals(list("zcbDamage=80"), recorded);
+	}
+
+	/**
+	 * A halberd's spec swung at a punish is counted as the punish, and spends the spec's hits. An
+	 * arrow fired before the swing and landing with it is not that spec's.
+	 */
+	@Test
+	public void aSpecSwungAsAPunishTakesNoHitFromBeforeIt()
+	{
+		tracker.specFired(SpecWeapon.OTHER, 100);
+		tracker.damagedBefore(61, 101, 100);
+		tracker.spent(101, 100);
+
+		assertEquals(list("otherSpecDamage=0"), recorded);
+	}
+
+	/**
 	 * A block is a zero, and it is still the hit the spec spent itself on. Counting it against the
 	 * budget is what stops the auto-attack behind a missed spec being read as the spec.
 	 */
