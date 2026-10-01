@@ -214,10 +214,47 @@ class CombatTracker
 
 	private void credit(SpecEffect.Kind kind, long amount, int tick)
 	{
-		if (credit(kind, amount, tick, Integer.MIN_VALUE, Integer.MAX_VALUE) == null)
+		prune(tick);
+
+		long rest = amount;
+
+		// Two causes on one tick arrive as one amount: a cause that can only be so much of it
+		// takes up to that much first, and the rest is the other's.
+		for (Pending part = limited(kind, rest, tick); part != null && rest > 0;
+			part = limited(kind, rest, tick))
 		{
-			hold(kind, amount, tick);
+			long share = Math.min(rest, part.effect.most());
+			part.left--;
+			sink.record(part.effect.metric(), share);
+			rest -= share;
 		}
+
+		if (rest == 0 && amount > 0)
+		{
+			return;
+		}
+
+		if (credit(kind, rest, tick, Integer.MIN_VALUE, Integer.MAX_VALUE) == null)
+		{
+			hold(kind, rest, tick);
+		}
+	}
+
+	/** The most recently opened window that accepts the effect and has a limit to what it takes. */
+	private Pending limited(SpecEffect.Kind kind, long amount, int tick)
+	{
+		Pending limited = null;
+
+		for (Pending candidate : pending)
+		{
+			if (candidate.effect.most() != SpecEffect.NO_LIMIT && candidate.accepts(kind, amount, tick)
+				&& (limited == null || candidate.openedAt >= limited.openedAt))
+			{
+				limited = candidate;
+			}
+		}
+
+		return limited;
 	}
 
 	/** Credits an effect to a window opened between two ticks, inclusive; null if none takes it. */
