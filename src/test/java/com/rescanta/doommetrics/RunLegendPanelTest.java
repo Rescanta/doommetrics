@@ -202,6 +202,7 @@ public class RunLegendPanelTest
 	@Test
 	public void aFoldOnlyAppliesReadingSeparately()
 	{
+		legend.setHideEmpty(false);
 		legend.setFolded(EnumSet.of(CombatMetric.Group.HEALING));
 		int folded = legend.getComponentCount();
 
@@ -211,6 +212,57 @@ public class RunLegendPanelTest
 
 		legend.setGrouped(false);
 		assertEquals(folded, legend.getComponentCount());
+	}
+
+	/** A counter the run counted nothing on has no row, until the link under the column is asked. */
+	@Test
+	public void countersTheRunCountedNothingOnAreLeftOut()
+	{
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+
+		assertEquals("the top row, three headings, the crossbow's row and the link",
+			1 + CombatMetric.Group.values().length + 1 + 1, legend.getComponentCount());
+
+		legend.setShowingAll(true);
+		assertEquals("every row, and the link to hide them again", everyRow() + 1,
+			legend.getComponentCount());
+
+		legend.setShowingAll(false);
+		legend.setHideEmpty(false);
+		assertEquals("nothing is left out, so there is no link", everyRow(),
+			legend.getComponentCount());
+	}
+
+	/** Clicked on, a counter at 0 is a line on the chart, so its row stays up to click off again. */
+	@Test
+	public void anEmptyCounterClickedOnKeepsItsRow()
+	{
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+		int compact = legend.getComponentCount();
+
+		legend.setShowingAll(true);
+		legend.toggle(CombatMetric.AGS_HEAL);
+		legend.setShowingAll(false);
+		assertEquals(compact + 1, legend.getComponentCount());
+
+		legend.toggle(CombatMetric.AGS_HEAL);
+		assertEquals(compact, legend.getComponentCount());
+	}
+
+	/** Grouped, a heading is left out only when nothing under it counted. */
+	@Test
+	public void groupedHeadingsThatCountedNothingAreLeftOut()
+	{
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+		legend.setGrouped(true);
+
+		assertEquals("the top row, the damage row and the link", 3, legend.getComponentCount());
+	}
+
+	/** The top row, a heading per group and a row per counter. */
+	private static int everyRow()
+	{
+		return 1 + CombatMetric.Group.values().length + CombatMetric.DISPLAYED.size();
 	}
 
 	/** Two delves, with the crossbow's spec on the first and nothing else counted. */
