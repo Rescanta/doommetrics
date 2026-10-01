@@ -5,6 +5,7 @@ import java.util.List;
 import net.runelite.api.gameval.ItemID;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -357,6 +358,62 @@ public class CombatTrackerTest
 		tracker.spent(101, 100);
 
 		assertEquals(list("otherSpecDamage=0"), recorded);
+	}
+
+	/**
+	 * 2026-10-01 22:33 tick 546: a crossbow spec with ruby bolts missed, a thrall's window took the
+	 * bolt's 0, and the thrall's 2 three ticks on was counted as the bolt's. A bolt that hits takes
+	 * 22% of the boss's hitpoints, so a 2 is nobody's bolt.
+	 */
+	@Test
+	public void aHitTooSmallForARubyBoltIsNotTheCrossbowSpecs()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 546, SpecWeapon.leastRubyBoltHit(400));
+		tracker.damaged(2, 549);
+		tracker.damaged(1, 550);
+
+		assertTrue(recorded.isEmpty());
+	}
+
+	/**
+	 * Tick 429, the same run: the boss was on 439 of delve 1's 525 and the bolt hit 96, 22% of
+	 * that. A miss is the spec's hit all the same.
+	 */
+	@Test
+	public void aRubyBoltsHitAndItsMissAreBothTheCrossbowSpecs()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 429, SpecWeapon.leastRubyBoltHit(439));
+		tracker.damaged(96, 432);
+
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 546, SpecWeapon.leastRubyBoltHit(439));
+		tracker.damaged(0, 549);
+		tracker.damaged(2, 549);
+
+		assertEquals(list("zcbDamage=96", "zcbDamage=0"), recorded);
+	}
+
+	/** Half of 22% of the hitpoints, to the 110 the crossbow caps it at; nothing if unread. */
+	@Test
+	public void theLeastARubyBoltHitsForFollowsTheBosssHitpoints()
+	{
+		assertEquals(48, SpecWeapon.leastRubyBoltHit(439));
+		assertEquals(55, SpecWeapon.leastRubyBoltHit(525));
+		assertEquals(55, SpecWeapon.leastRubyBoltHit(900));
+		assertEquals(0, SpecWeapon.leastRubyBoltHit(0));
+	}
+
+	@Test
+	public void rubyBoltsAreKnownByIdAndByName()
+	{
+		assertTrue(SpecWeapon.isRubyBolt(ItemID.DRAGON_BOLTS_ENCHANTED_RUBY, null));
+		assertTrue(SpecWeapon.isRubyBolt(
+			ItemID.XBOWS_CROSSBOW_BOLTS_ADAMANTITE_TIPPED_RUBY_ENCHANTED, null));
+		assertTrue(SpecWeapon.isRubyBolt(999_999, "Ruby dragon bolts (e)"));
+
+		assertFalse(SpecWeapon.isRubyBolt(999_999, "Diamond bolts (e)"));
+		assertFalse(SpecWeapon.isRubyBolt(ItemID.XBOWS_CROSSBOW_BOLTS_ADAMANTITE_TIPPED_RUBY,
+			"Ruby bolts"));
+		assertFalse(SpecWeapon.isRubyBolt(0, null));
 	}
 
 	/**

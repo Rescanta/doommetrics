@@ -84,6 +84,14 @@ enum SpecWeapon
 
 	private static final int SACRIFICE_DAMAGE = 25;
 
+	/**
+	 * Blood Forfeit, the ruby bolt effect a Zaryte crossbow spec that hits always sets off: 22% of
+	 * the target's hitpoints, to 110.
+	 */
+	private static final int FORFEIT_PERCENT = 22;
+
+	private static final int FORFEIT_CAP = 110;
+
 	private final String label;
 	private final List<SpecEffect> effects;
 
@@ -148,6 +156,34 @@ enum SpecWeapon
 	String label()
 	{
 		return label;
+	}
+
+	/**
+	 * The least a Zaryte crossbow spec with ruby bolts can hit for, short of missing: half of what
+	 * Blood Forfeit takes from a target with this many hitpoints, in case they were read a little
+	 * out of step. 0 when they can't be read.
+	 */
+	static int leastRubyBoltHit(int targetHitpoints)
+	{
+		return Math.min(FORFEIT_CAP, Math.max(0, targetHitpoints) * FORFEIT_PERCENT / 100) / 2;
+	}
+
+	/**
+	 * Whether the ammunition is enchanted ruby bolts, adamant or dragon, falling back to its name
+	 * for ids we don't list.
+	 *
+	 * @param name the item's name from the cache, or null if it could not be read
+	 */
+	static boolean isRubyBolt(int itemId, String name)
+	{
+		if (itemId == ItemID.XBOWS_CROSSBOW_BOLTS_ADAMANTITE_TIPPED_RUBY_ENCHANTED
+			|| itemId == ItemID.DRAGON_BOLTS_ENCHANTED_RUBY)
+		{
+			return true;
+		}
+
+		String lower = name == null ? "" : name.toLowerCase();
+		return lower.startsWith("ruby") && lower.endsWith("bolts (e)");
 	}
 
 	/** {@link #OTHER_FIRED} for an unnamed weapon that isn't melee; any other weapon unchanged. */

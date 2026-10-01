@@ -32,19 +32,24 @@ class CombatTracker
 	{
 		private final int openedAt;
 		private final SpecEffect effect;
+
+		/** The least a hit of this cause's can be, short of a 0; 0 when anything can be. */
+		private final int leastHit;
+
 		private int left;
 
-		private Pending(int openedAt, SpecEffect effect)
+		private Pending(int openedAt, SpecEffect effect, int leastHit)
 		{
 			this.openedAt = openedAt;
 			this.effect = effect;
+			this.leastHit = effect.kind() == SpecEffect.Kind.DAMAGE ? leastHit : 0;
 			this.left = effect.budget();
 		}
 
 		private boolean accepts(SpecEffect.Kind kind, long amount, int tick)
 		{
 			return left > 0 && effect.kind() == kind && effect.covers(tick - openedAt)
-				&& effect.isSized(amount);
+				&& effect.isSized(amount) && (amount == 0 || amount >= leastHit);
 		}
 
 		private boolean isExpired(int tick)
@@ -95,12 +100,21 @@ class CombatTracker
 	/** The special attack energy was spent while {@code weapon} was held. */
 	void specFired(SpecWeapon weapon, int tick)
 	{
+		specFired(weapon, tick, 0);
+	}
+
+	/**
+	 * @param leastHit the least the spec can hit for unless it misses, where that is known - see
+	 *                 {@link SpecWeapon#leastRubyBoltHit}; a smaller hit is left for something else
+	 */
+	void specFired(SpecWeapon weapon, int tick, int leastHit)
+	{
 		if (weapon == null)
 		{
 			return;
 		}
 
-		open(weapon.effects(), tick);
+		open(weapon.effects(), tick, leastHit);
 	}
 
 	/** @param metric which spell's heal to credit - blood barrage, or the grouped rest */
@@ -116,7 +130,7 @@ class CombatTracker
 		lastSpellTick = tick;
 
 		open(Collections.singletonList(new SpecEffect(
-			SpecEffect.Kind.HEAL, metric, 0, SPELL_WINDOW, 1)), tick);
+			SpecEffect.Kind.HEAL, metric, 0, SPELL_WINDOW, 1)), tick, 0);
 	}
 
 	/** A heal hitsplat landed on the player. */
@@ -181,7 +195,7 @@ class CombatTracker
 		return source == null ? null : source.effect.metric();
 	}
 
-	private void open(List<SpecEffect> effects, int tick)
+	private void open(List<SpecEffect> effects, int tick, int leastHit)
 	{
 		prune(tick);
 
@@ -192,7 +206,7 @@ class CombatTracker
 				pending.remove(0);
 			}
 
-			Pending opened = new Pending(tick, effect);
+			Pending opened = new Pending(tick, effect, leastHit);
 			pending.add(opened);
 			claimHeld(opened);
 		}

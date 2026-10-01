@@ -651,10 +651,35 @@ class CombatWatcher
 
 			weapon = weapon.fired(items.isMeleeWeapon(itemId));
 
-			combatTracker.specFired(weapon, tick);
+			combatTracker.specFired(weapon, tick, leastHit(weapon));
 			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
 				current.currentLevel(), weapon, itemId, items.name(itemId), tick);
 		});
+	}
+
+	/**
+	 * A Zaryte crossbow spec with ruby bolts takes a share of the boss's hitpoints, so a small hit
+	 * in its window is something else's. 0 for any other spec.
+	 */
+	private int leastHit(SpecWeapon weapon)
+	{
+		int ammo = items.equipped(EquipmentInventorySlot.AMMO);
+
+		if (weapon != SpecWeapon.ZARYTE_CROSSBOW || !SpecWeapon.isRubyBolt(ammo, items.name(ammo)))
+		{
+			return 0;
+		}
+
+		int bossHitpoints = client.getVarbitValue(VarbitID.HPBAR_HUD_HP);
+		int least = SpecWeapon.leastRubyBoltHit(bossHitpoints);
+
+		if (config.debugLogging())
+		{
+			log.debug("Ruby bolts with the boss on {} hitpoints: a hit under {} is not the bolt's",
+				bossHitpoints, least);
+		}
+
+		return least;
 	}
 
 	/** Boss prayer and weapon in hand are both settled at the end of the tick. */
