@@ -25,7 +25,8 @@ import net.runelite.client.ui.DynamicGridLayout;
 
 /**
  * The chart's legend, which is also its table of figures: the whole run, or the hovered delve.
- * Clicking a row toggles its line; hovering brings it forward. Swing thread only.
+ * Clicking a row toggles its line; hovering brings it forward. Rows the run counted nothing on are
+ * left out, and a link under the column shows every row. Swing thread only.
  */
 class RunLegendPanel extends JPanel
 {
@@ -59,8 +60,16 @@ class RunLegendPanel extends JPanel
 	/** Counters whose lines are off the chart, clicked off or empty, as the chart was last told. */
 	private Set<CombatSeries> hidden = new HashSet<>();
 
-	/** Whether a counter the run has not counted anything on starts switched off. */
+	/** Whether a counter the run has not counted anything on starts switched off and left out. */
 	private boolean hideEmpty = true;
+
+	/** Whether the reader has asked for every row despite {@link #hideEmpty}. */
+	private boolean showingAll;
+
+	/** The lines off for want of anything counted, which are the rows {@link #hideEmpty} leaves out. */
+	private final Set<CombatSeries> empty = new HashSet<>();
+
+	private final JLabel showAll = PanelStyle.link(() -> setShowingAll(!showingAll));
 
 	/** Whether the counters are folded into their headings - see {@link #setGrouped}. */
 	private boolean grouped;
@@ -118,7 +127,6 @@ class RunLegendPanel extends JPanel
 		top.add(heading, BorderLayout.EAST);
 
 		CombatMetric.Group group = null;
-		int striped = 0;
 
 		for (CombatMetric metric : CombatMetric.DISPLAYED)
 		{
@@ -129,36 +137,47 @@ class RunLegendPanel extends JPanel
 				heading.foldable(() -> toggleFold(each));
 				headings.put(each, heading);
 				group = each;
-				striped = 0;
 			}
 
-			rows.put(metric, new Row(metric,
-				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE));
+			rows.put(metric, new Row(metric));
 		}
-
-		striped = 0;
 
 		for (CombatMetric.Group each : CombatMetric.Group.values())
 		{
 			// Grouped, a heading's row is led by its unit's skill icon, as the heading is.
-			rows.put(each, new Row(each,
-				striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE));
+			rows.put(each, new Row(each));
 		}
 	}
 
 	/**
-	 * Puts up the rows for the way the run is being read, which is all that changes between them.
+	 * Puts up the rows for the way the run is being read, less the ones left out for counting
+	 * nothing. Removed rather than hidden, since the grid leaves a gap for a hidden component.
 	 */
 	private void layOut()
 	{
 		removeAll();
 		add(top);
 
+		int left = 0;
+		int striped = 0;
+
 		if (grouped)
 		{
 			for (CombatMetric.Group group : CombatMetric.Group.values())
 			{
-				add(rows.get(group));
+				if (empty.contains(group))
+				{
+					left++;
+
+					if (!showingAll)
+					{
+						continue;
+					}
+				}
+
+				Row row = rows.get(group);
+				row.setStripe(striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE);
+				add(row);
 			}
 		}
 		else
@@ -173,13 +192,37 @@ class RunLegendPanel extends JPanel
 					GroupHeading heading = headings.get(group);
 					heading.setFolded(folded.contains(group));
 					add(heading);
+					// Restarted under each heading, so the stripes read as a block per group.
+					striped = 0;
 				}
 
-				if (!folded.contains(group))
+				if (folded.contains(group))
 				{
-					add(rows.get(metric));
+					continue;
 				}
+
+				if (empty.contains(metric))
+				{
+					left++;
+
+					if (!showingAll)
+					{
+						continue;
+					}
+				}
+
+				Row row = rows.get(metric);
+				row.setStripe(striped++ % 2 == 0 ? PanelStyle.CARD : PanelStyle.STRIPE);
+				add(row);
 			}
+		}
+
+		if (left > 0)
+		{
+			showAll.setText(showingAll
+				? "Hide counters at 0"
+				: "Show all (" + left + " at 0)");
+			add(showAll);
 		}
 
 		revalidate();
@@ -203,6 +246,7 @@ class RunLegendPanel extends JPanel
 
 	/**
 	 * @param hideEmpty whether a counter the run has not counted anything on starts switched off
+	 *                  and is left out of the column; the link under it brings those back
 	 */
 	void setHideEmpty(boolean hideEmpty)
 	{
@@ -213,6 +257,13 @@ class RunLegendPanel extends JPanel
 
 		this.hideEmpty = hideEmpty;
 		refresh();
+	}
+
+	/** Every row despite {@link #hideEmpty}, or back to leaving the ones that counted nothing out. */
+	void setShowingAll(boolean showingAll)
+	{
+		this.showingAll = showingAll;
+		layOut();
 	}
 
 	void setGrouped(boolean grouped)
@@ -281,7 +332,12 @@ class RunLegendPanel extends JPanel
 	/** Redraws every figure. Meters are scaled per unit, not across the table. */
 	private void refresh()
 	{
-		updateHidden();
+		// Only a counter crossing from 0, or a click on one still there, changes which rows are up.
+		if (updateHidden())
+		{
+			layOut();
+		}
+
 		CombatTotals totals = totals();
 		long[] largest = new long[CombatMetric.Unit.values().length];
 
@@ -318,16 +374,24 @@ class RunLegendPanel extends JPanel
 	/**
 	 * Lines are off when clicked off, or when the run counted nothing on them and they weren't
 	 * clicked back on. Tells the chart when that changes.
+	 *
+	 * @return whether the rows left out of the column have changed
 	 */
-	private void updateHidden()
+	private boolean updateHidden()
 	{
 		CombatTotals run = detail.totals();
 		Set<CombatSeries> off = new HashSet<>();
+		Set<CombatSeries> nowEmpty = new HashSet<>();
 
 		for (CombatSeries line : series())
 		{
-			if (clickedOff.contains(line)
-				|| (hideEmpty && line.amount(run) <= 0 && !clickedOn.contains(line)))
+			// Asked of the run rather than the delve being read, so hovering moves no rows.
+			if (hideEmpty && line.amount(run) <= 0 && !clickedOn.contains(line))
+			{
+				nowEmpty.add(line);
+				off.add(line);
+			}
+			else if (clickedOff.contains(line))
 			{
 				off.add(line);
 			}
@@ -338,6 +402,15 @@ class RunLegendPanel extends JPanel
 			hidden = off;
 			onHiddenChanged.accept(new HashSet<>(off));
 		}
+
+		if (nowEmpty.equals(empty))
+		{
+			return false;
+		}
+
+		empty.clear();
+		empty.addAll(nowEmpty);
+		return true;
 	}
 
 	/** What the column is reading: one delve's figures, or the run's. */
@@ -375,7 +448,7 @@ class RunLegendPanel extends JPanel
 	private final class Row extends JPanel
 	{
 		private final CombatSeries series;
-		private final Color stripe;
+		private Color stripe = PanelStyle.CARD;
 		private final JLabel name;
 		private final JLabel value = PanelStyle.body("0", SwingConstants.RIGHT);
 
@@ -389,11 +462,10 @@ class RunLegendPanel extends JPanel
 		private BufferedImage shownIcon;
 		private boolean shownOff;
 
-		private Row(CombatSeries series, Color stripe)
+		private Row(CombatSeries series)
 		{
 			super(new BorderLayout(4, 0));
 			this.series = series;
-			this.stripe = stripe;
 			this.name = PanelStyle.body(series.label(), SwingConstants.LEFT);
 
 			List<String> from = series.sources();
@@ -430,6 +502,13 @@ class RunLegendPanel extends JPanel
 					onEmphasis.accept(null);
 				}
 			});
+		}
+
+		/** Its place in the alternation, which moves as the rows around it are left out. */
+		private void setStripe(Color stripe)
+		{
+			this.stripe = stripe;
+			setBackground(stripe);
 		}
 
 		/** The line's colour, drawn as the segment of line it stands for. */
