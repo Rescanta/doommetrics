@@ -14,7 +14,14 @@ class PunishTracker
 	/** Where a hit of ours goes once it is settled - see {@link #tickEnded}. */
 	interface Handback
 	{
+		/** No punish's: counted as any other hit is. */
 		void damaged(int amount, int tick);
+
+		/** At a punish, but from an attack made before its swing at {@code swing}. */
+		void strayed(int amount, int tick, int swing);
+
+		/** The punish's own, counted here: a spec swung as the punish has spent a hit on it. */
+		void punished(int tick, int swing);
 	}
 
 	/**
@@ -24,6 +31,20 @@ class PunishTracker
 	static final int HIT_WINDOW = 3;
 
 	private static final int MAX_HELD = 16;
+
+	/**
+	 * How far before the swing an attack can be fired and still land with the swing's hits: a
+	 * projectile lands up to four ticks after it's fired, the swing's hits one.
+	 */
+	private static final int EARLIER_ATTACK = 3;
+
+	private static final int MAX_ATTACKS = 8;
+
+	/**
+	 * How far, in damage, a hit may be from the earlier attack's share and still be taken for it,
+	 * with a weapon whose hits can't be counted.
+	 */
+	private static final int SHARE_SLACK = 1;
 
 	/** A strength-bonus splat lands two ticks after the swing at the soonest, a tick after its hit. */
 	static final int BONUS_FROM = 2;
@@ -37,11 +58,27 @@ class PunishTracker
 		private final boolean mine;
 		private final int tick;
 
+		/** Ours, but from an attack made before the swing. */
+		private boolean stray;
+
 		private Held(int amount, boolean mine, int tick)
 		{
 			this.amount = amount;
 			this.mine = mine;
 			this.tick = tick;
+		}
+	}
+
+	/** The hitpoints experience an attack earned, on the tick it was made. */
+	private static final class Attack
+	{
+		private final int tick;
+		private int xp;
+
+		private Attack(int tick, int xp)
+		{
+			this.tick = tick;
+			this.xp = xp;
 		}
 	}
 
@@ -74,12 +111,19 @@ class PunishTracker
 	private int ownHits;
 	private int bonusesCounted;
 
+	/** Our hits held since the swing, as of the end of the last tick. */
+	private int landed;
+
+	/** The tick a hit of ours last landed, held or not, or {@link #NONE}. */
+	private int landedAt = NONE;
+
 	private final List<Held> held = new ArrayList<>();
+	private final List<Attack> attacks = new ArrayList<>();
 
 	/**
 	 * @param sink     where a punish's damage is credited
-	 * @param handback where our other hits go: whole if no punish, as zero if it was one, so a spec
-	 *                 swung at a punish still spends its budget
+	 * @param handback where our hits go for the spec tracker: whole if not the punish's, and as
+	 *                 spent if they were, so a spec swung at a punish still spends its budget
 	 */
 	PunishTracker(CombatTracker.Sink sink, Handback handback)
 	{
@@ -98,7 +142,10 @@ class PunishTracker
 		weapon = null;
 		ownHits = 0;
 		bonusesCounted = 0;
+		landed = 0;
+		landedAt = NONE;
 		held.clear();
+		attacks.clear();
 	}
 
 	boolean isPraying()
@@ -122,6 +169,29 @@ class PunishTracker
 		weapon = null;
 		ownHits = 0;
 		bonusesCounted = 0;
+		landed = 0;
+	}
+
+	/**
+	 * Hitpoints experience gained, on the tick an attack is made rather than when it lands. It is
+	 * the same per damage for every style, so it says how two attacks' hits divide between them.
+	 */
+	void experienceGained(int xp, int tick)
+	{
+		Attack last = attacks.isEmpty() ? null : attacks.get(attacks.size() - 1);
+
+		if (last != null && last.tick == tick)
+		{
+			last.xp += xp;
+			return;
+		}
+
+		if (attacks.size() >= MAX_ATTACKS)
+		{
+			attacks.remove(0);
+		}
+
+		attacks.add(new Attack(tick, xp));
 	}
 
 	/** The boss, standing, cut its beam off. */
@@ -140,12 +210,14 @@ class PunishTracker
 	}
 
 	/**
-	 * One of our hits on the boss that isn't held, e.g. a bow's landing on the swing's own tick: it
-	 * still brings a bonus splat of its own if the swing was a punish.
+	 * One of our hits that isn't held. On the boss on the swing's own tick, e.g. a bow's, it still
+	 * brings a bonus splat of its own if the swing was a punish.
 	 */
-	void ownHitNotHeld(int tick)
+	void ownHitNotHeld(int tick, boolean onBoss)
 	{
-		if (tick == swungAt)
+		landedAt = tick;
+
+		if (onBoss && tick == swungAt)
 		{
 			ownHits++;
 		}
@@ -211,12 +283,113 @@ class PunishTracker
 
 		boolean punish = swungAt != NONE && isPunish();
 
+		if (punish && tick == swungAt + 1)
+		{
+			findStray(tick);
+		}
+
 		for (Held hit : held)
 		{
 			settle(hit, punish);
 		}
 
+		for (Held hit : held)
+		{
+			if (hit.mine)
+			{
+				landed++;
+				landedAt = hit.tick;
+			}
+		}
+
 		held.clear();
+	}
+
+	/**
+	 * One hit of ours too many with the swing's own: an arrow fired just before the switch landed
+	 * with them. The share of experience its attack earned says which hit it was. A weapon whose
+	 * hits can't be counted has one too many only if a hit comes to that share. A swing that earned
+	 * no experience has none of its own to tell apart.
+	 */
+	private void findStray(int tick)
+	{
+		List<Held> own = new ArrayList<>();
+		int total = 0;
+
+		for (Held hit : held)
+		{
+			if (hit.mine && hit.tick == tick)
+			{
+				own.add(hit);
+				total += hit.amount;
+			}
+		}
+
+		boolean counted = weapon.hits() > 0;
+
+		// With no hit count to go by, an earlier attack counts only if nothing of ours landed since.
+		int earliest = Math.max(swungAt - EARLIER_ATTACK, counted ? NONE : landedAt);
+
+		int swingXp = experienceBetween(swungAt, swungAt);
+		int earlierXp = experienceBetween(earliest, swungAt - 1);
+
+		if (earlierXp <= 0)
+		{
+			return;
+		}
+
+		// A swing that earned nothing hit for nothing, so what landed with it is the other attack's.
+		if (swingXp <= 0)
+		{
+			for (Held hit : own)
+			{
+				hit.stray = hit.amount > 0;
+			}
+
+			return;
+		}
+
+		if (counted ? own.size() != weapon.hits() + 1 : own.size() < 2)
+		{
+			return;
+		}
+
+		double share = (double) total * earlierXp / (earlierXp + swingXp);
+		Held stray = own.get(0);
+
+		for (Held hit : own)
+		{
+			if (Math.abs(hit.amount - share) < Math.abs(stray.amount - share))
+			{
+				stray = hit;
+			}
+		}
+
+		if (!counted && Math.abs(stray.amount - share) > SHARE_SLACK)
+		{
+			return;
+		}
+
+		stray.stray = true;
+	}
+
+	/**
+	 * The experience gained between the two ticks. Summed: a point or two from a larva or a
+	 * volatile earth hit on the way often follows an attack's own.
+	 */
+	private int experienceBetween(int from, int to)
+	{
+		int xp = 0;
+
+		for (Attack attack : attacks)
+		{
+			if (attack.tick >= from && attack.tick <= to)
+			{
+				xp += attack.xp;
+			}
+		}
+
+		return xp;
 	}
 
 	private void settle(Held hit, boolean punish)
@@ -226,15 +399,37 @@ class PunishTracker
 			return;
 		}
 
+		// Ours but not the swing's: counted as any other hit is.
+		if (punish && hit.mine && isStray(hit))
+		{
+			handback.strayed(hit.amount, hit.tick, swungAt);
+			return;
+		}
+
 		if (punish && hit.amount > 0)
 		{
 			sink.record(weapon.metric(), hit.amount);
 		}
 
-		if (hit.mine)
+		if (!hit.mine)
 		{
-			handback.damaged(punish ? 0 : hit.amount, hit.tick);
+			return;
 		}
+
+		if (punish)
+		{
+			handback.punished(hit.tick, swungAt);
+		}
+		else
+		{
+			handback.damaged(hit.amount, hit.tick);
+		}
+	}
+
+	/** Once the hits a weapon draws have landed, a later hit of ours is not one of them. */
+	private boolean isStray(Held hit)
+	{
+		return hit.stray || (weapon.hits() > 0 && landed >= weapon.hits());
 	}
 
 	/** Whether a splat that isn't plainly ours is one of the punish's bonus splats; counts it. */

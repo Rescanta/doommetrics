@@ -8,25 +8,39 @@ import net.runelite.api.gameval.ItemID;
  */
 enum PunishWeapon
 {
-	SCYTHE(CombatMetric.SCYTHE_PUNISH),
-	NOXIOUS_HALBERD(CombatMetric.NOXIOUS_HALBERD_PUNISH),
-	CRYSTAL_HALBERD(CombatMetric.CRYSTAL_HALBERD_PUNISH),
+	SCYTHE(CombatMetric.SCYTHE_PUNISH, 3),
+	NOXIOUS_HALBERD(CombatMetric.NOXIOUS_HALBERD_PUNISH, 1),
+
+	/** Its spec hits a large target twice and a plain swing once, so there is no one count. */
+	CRYSTAL_HALBERD(CombatMetric.CRYSTAL_HALBERD_PUNISH, 0),
 
 	/**
 	 * Any other melee weapon. Which ones are melee is the caller's to say - see {@link #isMelee}.
 	 */
-	OTHER(CombatMetric.OTHER_MELEE_PUNISH);
+	OTHER(CombatMetric.OTHER_MELEE_PUNISH, 0);
 
 	private final CombatMetric metric;
+	private final int hits;
 
-	PunishWeapon(CombatMetric metric)
+	PunishWeapon(CombatMetric metric, int hits)
 	{
 		this.metric = metric;
+		this.hits = hits;
 	}
 
 	CombatMetric metric()
 	{
 		return metric;
+	}
+
+	/**
+	 * How many splats a swing draws on the boss, all on the tick after it, spec or not; 0 where
+	 * that isn't known (claws land over two ticks) and an arrow among them is found by its share
+	 * of the experience alone.
+	 */
+	int hits()
+	{
+		return hits;
 	}
 
 	/**

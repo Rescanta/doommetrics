@@ -54,6 +54,7 @@ class CombatWatcher
 
 	private final CombatTracker combatTracker;
 	private final PunishTracker punishTracker;
+	private final ThrallTracker thrallTracker = new ThrallTracker();
 
 	/** Held from its spawn; the same NPC across its standing, shielded and burrowed forms. */
 	private NPC boss;
@@ -63,6 +64,15 @@ class CombatWatcher
 	// Last seen values, so a change can be read as a difference.
 	private int prayerPoints;
 	private int hitpoints;
+	private int hitpointsXp;
+
+	/**
+	 * Damage splatted on us this tick and not yet taken out of the hitpoints level. The splat comes
+	 * just ahead of the drop it causes, on the same tick, so a heal on that tick is the change
+	 * plus this.
+	 */
+	private int taken;
+	private int takenTick;
 
 	private final Regeneration prayerRegeneration = new Regeneration();
 	private final Regeneration hitpointsRegeneration = new Regeneration();
@@ -82,7 +92,7 @@ class CombatWatcher
 		this.run = run;
 		this.sink = sink;
 		this.combatTracker = new CombatTracker(sink);
-		this.punishTracker = new PunishTracker(sink, this::handBack);
+		this.punishTracker = new PunishTracker(sink, new HandedBack());
 	}
 
 	/** Forgets everything, including the levels last seen. */
@@ -93,6 +103,8 @@ class CombatWatcher
 		specEnergy.forget();
 		prayerPoints = 0;
 		hitpoints = 0;
+		hitpointsXp = 0;
+		taken = 0;
 		prayerRegeneration.reset();
 		hitpointsRegeneration.reset();
 	}
@@ -111,6 +123,7 @@ class CombatWatcher
 	{
 		combatTracker.reset();
 		punishTracker.reset();
+		thrallTracker.reset();
 	}
 
 	/**
@@ -125,6 +138,7 @@ class CombatWatcher
 		specEnergy.seed(client.getVarpValue(VarPlayerID.SA_ENERGY));
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
+		hitpointsXp = client.getSkillExperience(Skill.HITPOINTS);
 	}
 
 	void bossSpawned(NPC npc)
@@ -174,9 +188,22 @@ class CombatWatcher
 		Actor target = event.getActor();
 		int tick = client.getTickCount();
 
-		// Healing is read off the hitpoints level instead.
+		// Healing is read off the hitpoints level instead, with the hits taken on the tick added
+		// back - see taken.
 		if (target == client.getLocalPlayer())
 		{
+			if (config.debugLogging())
+			{
+				log.debug("Hitsplat {} of type {} on us at tick {}", hitsplat.getAmount(),
+					hitsplat.getHitsplatType(), tick);
+			}
+
+			if (hitsplat.getHitsplatType() != HitsplatID.HEAL && hitsplat.getAmount() > 0)
+			{
+				taken = (takenTick == tick ? taken : 0) + hitsplat.getAmount();
+				takenTick = tick;
+			}
+
 			return;
 		}
 
@@ -185,6 +212,17 @@ class CombatWatcher
 		if (onBoss)
 		{
 			logBossHitsplat(hitsplat, tick);
+		}
+
+		if (isThrallSplat(hitsplat) && thrallTracker.isThrallHit(hitsplat.getAmount(), tick, onBoss))
+		{
+			if (config.debugLogging())
+			{
+				log.debug("Thrall hit {} at tick {}{}, not counted", hitsplat.getAmount(), tick,
+					onBoss ? "" : " off the boss");
+			}
+
+			return;
 		}
 
 		// Only a spec burns (the scorching bow's, burning claws'), and the fight is solo, so a burn
@@ -210,16 +248,20 @@ class CombatWatcher
 
 		if (hitsplat.isMine())
 		{
-			if (onBoss)
-			{
-				punishTracker.ownHitNotHeld(tick);
-			}
+			punishTracker.ownHitNotHeld(tick, onBoss);
 
 			// A zero rather than skipped, so the spec's budget is spent on this hit.
 			int amount = countsAsDamage(target) ? hitsplat.getAmount() : 0;
 			logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
 			combatTracker.damaged(amount, tick);
 		}
+	}
+
+	/** A thrall's hit or miss is drawn as ours; it never brings a punish bonus splat. */
+	private static boolean isThrallSplat(Hitsplat hitsplat)
+	{
+		int type = hitsplat.getHitsplatType();
+		return hitsplat.isMine() && (type == HitsplatID.DAMAGE_ME || type == HitsplatID.BLOCK_ME);
 	}
 
 	/**
@@ -238,16 +280,44 @@ class CombatWatcher
 			return;
 		}
 
-		log.debug("Boss hitsplat {} of type {} at tick {}{}", hitsplat.getAmount(),
-			hitsplat.getHitsplatType(), tick,
+		log.debug("Boss hitsplat {} of type {} ({}) at tick {}{}", hitsplat.getAmount(),
+			hitsplat.getHitsplatType(),
+			hitsplat.isMine() ? "mine" : hitsplat.isOthers() ? "others" : "neither", tick,
 			punishTracker.mayBePunish(tick) ? ", held for the punish check" : "");
 	}
 
-	/** A hit held for the punish check, back to be counted as ordinary damage. */
-	private void handBack(int amount, int tick)
+	/** Hits held for the punish check, back for the spec tracker. */
+	private final class HandedBack implements PunishTracker.Handback
 	{
-		logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
-		combatTracker.damaged(amount, tick);
+		@Override
+		public void damaged(int amount, int tick)
+		{
+			logAttribution(SpecEffect.Kind.DAMAGE, amount, tick);
+			combatTracker.damaged(amount, tick);
+		}
+
+		@Override
+		public void strayed(int amount, int tick, int swing)
+		{
+			CombatMetric metric = combatTracker.damagedBefore(amount, tick, swing);
+
+			if (config.debugLogging())
+			{
+				log.debug("DAMAGE of {} at tick {}, from before the swing at {} -> {}", amount, tick,
+					swing, metric == null ? "nothing open" : metric.key());
+			}
+		}
+
+		@Override
+		public void punished(int tick, int swing)
+		{
+			CombatMetric metric = combatTracker.spent(tick, swing);
+
+			if (metric != null && config.debugLogging())
+			{
+				log.debug("Punish hit at tick {} spent a hit of {}", tick, metric.key());
+			}
+		}
 	}
 
 	/** Only hits on the standing or burrowed boss count as damage. */
@@ -318,6 +388,34 @@ class CombatWatcher
 			return;
 		}
 
+		if (actor instanceof NPC)
+		{
+			int id = ((NPC) actor).getId();
+			ThrallTracker.Style style = ThrallTracker.attackStyle(id, animation);
+
+			if (style != null)
+			{
+				thrallTracker.attacked(style, tick);
+
+				if (config.debugLogging())
+				{
+					log.debug("Thrall {} attacked at tick {}", style, tick);
+				}
+			}
+			else if (ThrallTracker.isSummoning(animation))
+			{
+				// A ghost's first attack is never animated, so it is expected from here.
+				thrallTracker.spawned(id, tick);
+
+				if (config.debugLogging())
+				{
+					log.debug("Thrall spawned: {} at tick {}", id, tick);
+				}
+			}
+
+			return;
+		}
+
 		if (actor != client.getLocalPlayer() || animation < 0 || animation == AnimationID.HUMAN_EAT)
 		{
 			return;
@@ -350,14 +448,53 @@ class CombatWatcher
 		}
 		else if (event.getSkill() == Skill.HITPOINTS)
 		{
+			int tick = client.getTickCount();
+			experienceChanged(event.getXp(), running, tick);
+			int hit = takenTick == tick ? taken : 0;
 			int was = hitpoints;
 			hitpoints = event.getBoostedLevel();
 
-			if (running && hitpoints > was)
+			// One update carries the whole tick, so the hits taken are all in this one.
+			taken = 0;
+
+			// Where the level would be had nothing healed; what it is above that was healed.
+			int unhealed = Math.max(0, was - hit);
+
+			if (running && hitpoints > unhealed)
 			{
+				if (hit > 0 && config.debugLogging())
+				{
+					log.debug("Hitpoints went {} -> {} at tick {} with {} taken", was, hitpoints,
+						tick, hit);
+				}
+
 				rose(SpecEffect.Kind.HEAL, hitpointsRegeneration, hitpointsRegenerationPeriod(),
-					was, hitpoints, event.getLevel());
+					unhealed, hitpoints, event.getLevel());
 			}
+			else if (running && hitpoints < was && config.debugLogging())
+			{
+				log.debug("Hitpoints fell by {} at tick {}", was - hitpoints, tick);
+			}
+		}
+	}
+
+	/** Every attack earns hitpoints experience in proportion to its damage - thralls' don't. */
+	private void experienceChanged(int xp, boolean running, int tick)
+	{
+		int gained = xp - hitpointsXp;
+		boolean known = hitpointsXp > 0;
+		hitpointsXp = xp;
+
+		if (!running || !known || gained <= 0)
+		{
+			return;
+		}
+
+		punishTracker.experienceGained(gained, tick);
+
+		if (config.debugLogging())
+		{
+			log.debug("Hitpoints experience +{} at tick {}", gained, tick);
 		}
 	}
 
@@ -514,10 +651,35 @@ class CombatWatcher
 
 			weapon = weapon.fired(items.isMeleeWeapon(itemId));
 
-			combatTracker.specFired(weapon, tick);
+			combatTracker.specFired(weapon, tick, leastHit(weapon));
 			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
 				current.currentLevel(), weapon, itemId, items.name(itemId), tick);
 		});
+	}
+
+	/**
+	 * A Zaryte crossbow spec with ruby bolts takes a share of the boss's hitpoints, so a small hit
+	 * in its window is something else's. 0 for any other spec.
+	 */
+	private int leastHit(SpecWeapon weapon)
+	{
+		int ammo = items.equipped(EquipmentInventorySlot.AMMO);
+
+		if (weapon != SpecWeapon.ZARYTE_CROSSBOW || !SpecWeapon.isRubyBolt(ammo, items.name(ammo)))
+		{
+			return 0;
+		}
+
+		int bossHitpoints = client.getVarbitValue(VarbitID.HPBAR_HUD_HP);
+		int least = SpecWeapon.leastRubyBoltHit(bossHitpoints);
+
+		if (config.debugLogging())
+		{
+			log.debug("Ruby bolts with the boss on {} hitpoints: a hit under {} is not the bolt's",
+				bossHitpoints, least);
+		}
+
+		return least;
 	}
 
 	/** Boss prayer and weapon in hand are both settled at the end of the tick. */

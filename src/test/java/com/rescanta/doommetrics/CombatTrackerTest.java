@@ -5,6 +5,7 @@ import java.util.List;
 import net.runelite.api.gameval.ItemID;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -110,6 +111,19 @@ public class CombatTrackerTest
 		assertEquals(SpecWeapon.ANCIENT_GODSWORD, SpecWeapon.ANCIENT_GODSWORD.fired(false));
 	}
 
+	/** A scorching bow spec lands four ticks after the energy drops; the next shot after that. */
+	@Test
+	public void aFiredSpecMayLandFourTicksLater()
+	{
+		tracker.specFired(SpecWeapon.OTHER.fired(false), 5094);
+		tracker.damaged(12, 5098);
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 6000);
+		tracker.damaged(80, 6004);
+		tracker.damaged(30, 6005);
+
+		assertEquals(list("otherSpecDamage=12", "zcbDamage=80"), recorded);
+	}
+
 	/**
 	 * An unnamed spec heals nothing. The one that took a Blood Sacrifice heal in a trip's logs was a
 	 * Scorching bow fired seven ticks after the godsword.
@@ -127,19 +141,21 @@ public class CombatTrackerTest
 		assertEquals(list("agsHeal=10"), recorded);
 	}
 
-	/** Healing Blade heals and restores prayer as the swing lands, a tick after the spec. */
+	/**
+	 * Healing Blade heals and restores prayer on the spec's own tick, read before the energy drop,
+	 * with the hitsplat a tick later.
+	 */
 	@Test
-	public void aSaradominGodswordSpecHealsWithItsHit()
+	public void aSaradominGodswordSpecHealsOnItsOwnTick()
 	{
-		tracker.healed(9, 100);
+		tracker.healed(24, 100);
+		tracker.prayerGained(12, 100);
 		tracker.specFired(SpecWeapon.SARADOMIN_GODSWORD, 100);
 		tracker.damaged(48, 101);
-		tracker.healed(24, 101);
-		tracker.prayerGained(12, 101);
 		tracker.healed(20, 102);
 		tracker.prayerGained(8, 102);
 
-		assertEquals(list("otherSpecDamage=48", "sgsHeal=24", "sgsPrayer=12"), recorded);
+		assertEquals(list("sgsHeal=24", "sgsPrayer=12", "otherSpecDamage=48"), recorded);
 	}
 
 	/** Held only for the tick it arrived on: a brew is not the next tick's barrage. */
@@ -315,6 +331,92 @@ public class CombatTrackerTest
 	}
 
 	/**
+	 * A crossbow spec fired just before the switch to a scythe: the punish's hits land first and
+	 * are not the bolt, so they leave its one hit for it.
+	 */
+	@Test
+	public void aPunishDoesNotSpendASpecFiredBeforeItsSwing()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 99);
+		tracker.spent(101, 100);
+		tracker.spent(101, 100);
+		tracker.spent(101, 100);
+		tracker.damagedBefore(80, 102, 100);
+
+		assertEquals(list("zcbDamage=80"), recorded);
+	}
+
+	/**
+	 * A halberd's spec swung at a punish is counted as the punish, and spends the spec's hits. An
+	 * arrow fired before the swing and landing with it is not that spec's.
+	 */
+	@Test
+	public void aSpecSwungAsAPunishTakesNoHitFromBeforeIt()
+	{
+		tracker.specFired(SpecWeapon.OTHER, 100);
+		tracker.damagedBefore(61, 101, 100);
+		tracker.spent(101, 100);
+
+		assertEquals(list("otherSpecDamage=0"), recorded);
+	}
+
+	/**
+	 * 2026-10-01 22:33 tick 546: a crossbow spec with ruby bolts missed, a thrall's window took the
+	 * bolt's 0, and the thrall's 2 three ticks on was counted as the bolt's. A bolt that hits takes
+	 * 22% of the boss's hitpoints, so a 2 is nobody's bolt.
+	 */
+	@Test
+	public void aHitTooSmallForARubyBoltIsNotTheCrossbowSpecs()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 546, SpecWeapon.leastRubyBoltHit(400));
+		tracker.damaged(2, 549);
+		tracker.damaged(1, 550);
+
+		assertTrue(recorded.isEmpty());
+	}
+
+	/**
+	 * Tick 429, the same run: the boss was on 439 of delve 1's 525 and the bolt hit 96, 22% of
+	 * that. A miss is the spec's hit all the same.
+	 */
+	@Test
+	public void aRubyBoltsHitAndItsMissAreBothTheCrossbowSpecs()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 429, SpecWeapon.leastRubyBoltHit(439));
+		tracker.damaged(96, 432);
+
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 546, SpecWeapon.leastRubyBoltHit(439));
+		tracker.damaged(0, 549);
+		tracker.damaged(2, 549);
+
+		assertEquals(list("zcbDamage=96", "zcbDamage=0"), recorded);
+	}
+
+	/** Half of 22% of the hitpoints, to the 110 the crossbow caps it at; nothing if unread. */
+	@Test
+	public void theLeastARubyBoltHitsForFollowsTheBosssHitpoints()
+	{
+		assertEquals(48, SpecWeapon.leastRubyBoltHit(439));
+		assertEquals(55, SpecWeapon.leastRubyBoltHit(525));
+		assertEquals(55, SpecWeapon.leastRubyBoltHit(900));
+		assertEquals(0, SpecWeapon.leastRubyBoltHit(0));
+	}
+
+	@Test
+	public void rubyBoltsAreKnownByIdAndByName()
+	{
+		assertTrue(SpecWeapon.isRubyBolt(ItemID.DRAGON_BOLTS_ENCHANTED_RUBY, null));
+		assertTrue(SpecWeapon.isRubyBolt(
+			ItemID.XBOWS_CROSSBOW_BOLTS_ADAMANTITE_TIPPED_RUBY_ENCHANTED, null));
+		assertTrue(SpecWeapon.isRubyBolt(999_999, "Ruby dragon bolts (e)"));
+
+		assertFalse(SpecWeapon.isRubyBolt(999_999, "Diamond bolts (e)"));
+		assertFalse(SpecWeapon.isRubyBolt(ItemID.XBOWS_CROSSBOW_BOLTS_ADAMANTITE_TIPPED_RUBY,
+			"Ruby bolts"));
+		assertFalse(SpecWeapon.isRubyBolt(0, null));
+	}
+
+	/**
 	 * A block is a zero, and it is still the hit the spec spent itself on. Counting it against the
 	 * budget is what stops the auto-attack behind a missed spec being read as the spec.
 	 */
@@ -341,6 +443,94 @@ public class CombatTrackerTest
 		tracker.healed(25, 108);
 
 		assertEquals(list("otherSpecDamage=52", "otherSpecDamage=25", "agsHeal=25"), recorded);
+	}
+
+	/**
+	 * 2026-10-01 23:03 tick 357: a blood barrage landed on the tick a sacrifice from 349 paid out,
+	 * and the two heals came as one rise of 29, all of it the barrage's. Blood Sacrifice heals 25,
+	 * so that much is its own and the 4 left is the barrage's. Eight such in the logs, 25 to 34.
+	 */
+	@Test
+	public void aSacrificeAndABarrageHealingOnOneTickAreToldApart()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.damaged(0, 350);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 357);
+		tracker.healed(29, 357);
+
+		assertEquals(list("otherSpecDamage=0", "agsHeal=25", "bloodBarrage=4"), recorded);
+	}
+
+	/** The same, with the heal reaching us ahead of the barrage's signal. */
+	@Test
+	public void theBarragesShareWaitsForItsSpell()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.healed(29, 357);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 357);
+
+		assertEquals(list("agsHeal=25", "bloodBarrage=4"), recorded);
+	}
+
+	/** A barrage that healed nothing on the sacrifice's tick: the 25 is the sacrifice's. */
+	@Test
+	public void aSacrificesWholeHealIsItsOwnWithABarrageOpen()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 357);
+		tracker.healed(25, 357);
+
+		assertEquals(list("agsHeal=25"), recorded);
+	}
+
+	/**
+	 * With fewer than 25 hitpoints missing the two heals come to less than 25, and the sacrifice,
+	 * which heals first, has taken all the room there was.
+	 */
+	@Test
+	public void aSacrificeComesFirstWhenTheHealIsSmall()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 357);
+		tracker.healed(20, 357);
+
+		assertEquals(list("agsHeal=20"), recorded);
+	}
+
+	/**
+	 * Every sacrifice heal in the logs, over 400 of them, came eight ticks after its spec. A barrage
+	 * landing a tick before that is not it.
+	 */
+	@Test
+	public void aHealBeforeTheSacrificePaysOutIsNotTheSacrifices()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 356);
+		tracker.healed(6, 356);
+		tracker.healed(25, 357);
+		tracker.healed(20, 359);
+
+		assertEquals(list("bloodBarrage=6", "agsHeal=25"), recorded);
+	}
+
+	/** Food eaten on the sacrifice's tick is not the sacrifice's: it heals 25 and no more. */
+	@Test
+	public void aSacrificeNeverHealsMoreThanItCan()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.healed(45, 357);
+
+		assertEquals(list("agsHeal=25"), recorded);
+	}
+
+	/** Fewer than 25 hitpoints missing: the heal is what there was room for. */
+	@Test
+	public void aSacrificeHealsLessWhenFewerHitpointsAreMissing()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 1026);
+		tracker.healed(11, 1034);
+
+		assertEquals(list("agsHeal=11"), recorded);
 	}
 
 	/**
