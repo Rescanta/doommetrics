@@ -19,12 +19,36 @@ public class PunishTrackerTest
 	/** What was credited to a punish. */
 	private final List<String> recorded = new ArrayList<>();
 
-	/** What was handed back to be counted as any other hit is. */
+	/** What was handed back for the spec tracker; a punish's own hit goes back as nothing. */
 	private final List<String> handedBack = new ArrayList<>();
+
+	/** Which swing each hit at a punish was handed back against, and as what. */
+	private final List<String> against = new ArrayList<>();
 
 	private final PunishTracker tracker = new PunishTracker(
 		(metric, amount) -> recorded.add(metric.key() + "=" + amount),
-		(amount, tick) -> handedBack.add(amount + "@" + tick));
+		new PunishTracker.Handback()
+		{
+			@Override
+			public void damaged(int amount, int tick)
+			{
+				handedBack.add(amount + "@" + tick);
+			}
+
+			@Override
+			public void strayed(int amount, int tick, int swing)
+			{
+				handedBack.add(amount + "@" + tick);
+				against.add("before " + swing);
+			}
+
+			@Override
+			public void punished(int tick, int swing)
+			{
+				handedBack.add("0@" + tick);
+				against.add("from " + swing);
+			}
+		});
 
 	/**
 	 * The one the plugin exists for: the boss prays, the scythe goes in, and the swing's three hits
@@ -175,6 +199,9 @@ public class PunishTrackerTest
 
 		assertEquals(list("scythePunish=23", "scythePunish=1", "scythePunish=4"), recorded);
 		assertEquals(list("5@640", "0@640", "0@640", "0@640"), handedBack);
+
+		// The arrow can only be a spec's from before the swing; the rest only one swung with it.
+		assertEquals(list("before 639", "from 639", "from 639", "from 639"), against);
 	}
 
 	/** Tick 659, the same trip: 250 ranged and 143 strength - the 28 was the bow's. */
@@ -224,6 +251,30 @@ public class PunishTrackerTest
 
 		assertEquals(list("scythePunish=12", "scythePunish=4", "scythePunish=1"), recorded);
 		assertEquals("16@443", handedBack.get(0));
+	}
+
+	/**
+	 * A swing that earns no experience hit for nothing, so the one hit landing with it is the
+	 * arrow's. All 31 scythe and halberd swings that hit in the two runs with experience logged
+	 * earned it on the swing's tick, and the 7 that missed earned none.
+	 */
+	@Test
+	public void aHitLandingWithASwingThatEarnedNothingIsTheArrows()
+	{
+		tickEnded(98, true, null);
+		tracker.experienceGained(66, 99);
+		tickEnded(99, true, null);
+
+		tracker.swung(100);
+		tickEnded(100, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(30, 101);
+		mine(0, 101);
+		tickEnded(101, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertTrue(recorded.isEmpty());
+		assertEquals(list("30@101", "0@101"), handedBack);
+		assertEquals(list("before 100", "from 100"), against);
 	}
 
 	/** With no experience seen for the attacks, nothing tells the arrow apart. */
@@ -290,11 +341,36 @@ public class PunishTrackerTest
 	}
 
 	/**
-	 * 2026-09-25 tick 589: the scythe's three hits at 590, and a bow shot fired at 587 landing
-	 * at 592. A scythe's hits all land the tick after the swing.
+	 * The arrow had landed on the swing's own tick, so the two hits a tick later are both the
+	 * swing's, though one of them comes to the arrow's share of the experience.
 	 */
 	@Test
-	public void aHitOfOursAfterTheSwingsTickIsNotAScythes()
+	public void anArrowThatHasLandedIsNotLookedForAmongAnotherWeaponsHits()
+	{
+		tickEnded(98, true, null);
+		tracker.experienceGained(66, 99);
+		tickEnded(99, true, null);
+
+		tracker.swung(100);
+		tracker.experienceGained(66, 100);
+		mine(30, 100);
+		tickEnded(100, true, PunishWeapon.OTHER);
+
+		mine(15, 101);
+		mine(15, 101);
+		tickEnded(101, false, PunishWeapon.OTHER);
+
+		assertEquals(list("otherMeleePunish=15", "otherMeleePunish=15"), recorded);
+		assertEquals(list("0@101", "0@101"), handedBack);
+	}
+
+	/**
+	 * 2026-09-25 tick 589: the scythe's three hits at 590 and a 3 at 592, which was the skeleton
+	 * thrall's (it attacked at 590) before thralls were told apart. Once a scythe's three hits have
+	 * landed, a later hit of ours is something else.
+	 */
+	@Test
+	public void aHitOfOursAfterTheScythesThreeIsNotAScythes()
 	{
 		tickEnded(588, true, null);
 		tracker.swung(589);
@@ -310,6 +386,55 @@ public class PunishTrackerTest
 
 		assertEquals(list("scythePunish=1", "scythePunish=1", "scythePunish=6"), recorded);
 		assertEquals(list("0@590", "0@590", "0@590", "3@592"), handedBack);
+	}
+
+	/**
+	 * The first animation with the scythe in hand need not be the swing - a block, or the bow shot
+	 * before the switch - and the swing's hits then land a tick later than expected. None seen
+	 * among 260 scythe and halberd swings in the logs; a godsword's are often read this way.
+	 */
+	@Test
+	public void aScythesHitsLandingATickLateAreStillItsOwn()
+	{
+		tickEnded(99, true, null);
+		tracker.swung(100);
+		tickEnded(100, true, PunishWeapon.SCYTHE);
+
+		tracker.swung(101);
+		tickEnded(101, true, PunishWeapon.SCYTHE);
+
+		mine(30, 102);
+		mine(15, 102);
+		mine(7, 102);
+		tickEnded(102, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=30", "scythePunish=15", "scythePunish=7"), recorded);
+		assertEquals(list("0@102", "0@102", "0@102"), handedBack);
+	}
+
+	/**
+	 * A thrall's window took the scythe's own 2, so the thrall's 3 a tick later stands in for it:
+	 * the swap {@link ThrallTracker} allows for, which keeps the scythe at three hits.
+	 */
+	@Test
+	public void aThrallsHitStandsInForTheScytheHitItsWindowTook()
+	{
+		tickEnded(99, true, null);
+		tracker.swung(100);
+		tickEnded(100, true, PunishWeapon.SCYTHE);
+
+		mine(13, 101);
+		mine(6, 101);
+		tickEnded(101, false, PunishWeapon.SCYTHE);
+
+		mine(3, 102);
+		tickEnded(102, false, PunishWeapon.SCYTHE);
+
+		mine(40, 103);
+		tickEnded(103, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=13", "scythePunish=6", "scythePunish=3"), recorded);
+		assertEquals(list("0@101", "0@101", "0@102", "40@103"), handedBack);
 	}
 
 	@Test
@@ -517,7 +642,7 @@ public class PunishTrackerTest
 			return;
 		}
 
-		tracker.ownHitNotHeld(tick);
+		tracker.ownHitNotHeld(tick, true);
 	}
 
 	/** A strength-bonus splat, which is not one of the types plainly ours. */

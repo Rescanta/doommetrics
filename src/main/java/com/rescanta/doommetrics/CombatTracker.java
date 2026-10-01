@@ -139,6 +139,29 @@ class CombatTracker
 		}
 	}
 
+	/**
+	 * A hitsplat of ours from an attack made before the swing at {@code swing}, so no spec fired
+	 * from then on is its cause.
+	 *
+	 * @return what it was credited to, or null
+	 */
+	CombatMetric damagedBefore(int amount, int tick, int swing)
+	{
+		return amount < 0 ? null
+			: credit(SpecEffect.Kind.DAMAGE, amount, tick, Integer.MIN_VALUE, swing - 1);
+	}
+
+	/**
+	 * A hit of the swing at {@code swing} counted elsewhere: a spec fired with that swing or after
+	 * has spent a hit on it, and one fired before has not.
+	 *
+	 * @return the figure whose spec spent the hit, or null
+	 */
+	CombatMetric spent(int tick, int swing)
+	{
+		return credit(SpecEffect.Kind.DAMAGE, 0, tick, swing, Integer.MAX_VALUE);
+	}
+
 	/** The player's prayer points went up by {@code amount}. */
 	void prayerGained(int amount, int tick)
 	{
@@ -154,7 +177,7 @@ class CombatTracker
 	 */
 	CombatMetric wouldCredit(SpecEffect.Kind kind, long amount, int tick)
 	{
-		Pending source = best(kind, amount, tick);
+		Pending source = best(kind, amount, tick, Integer.MIN_VALUE, Integer.MAX_VALUE);
 		return source == null ? null : source.effect.metric();
 	}
 
@@ -177,18 +200,27 @@ class CombatTracker
 
 	private void credit(SpecEffect.Kind kind, long amount, int tick)
 	{
+		if (credit(kind, amount, tick, Integer.MIN_VALUE, Integer.MAX_VALUE) == null)
+		{
+			hold(kind, amount, tick);
+		}
+	}
+
+	/** Credits an effect to a window opened between two ticks, inclusive; null if none takes it. */
+	private CombatMetric credit(SpecEffect.Kind kind, long amount, int tick, int from, int to)
+	{
 		prune(tick);
 
-		Pending source = best(kind, amount, tick);
+		Pending source = best(kind, amount, tick, from, to);
 
 		if (source == null)
 		{
-			hold(kind, amount, tick);
-			return;
+			return null;
 		}
 
 		source.left--;
 		sink.record(source.effect.metric(), amount);
+		return source.effect.metric();
 	}
 
 	/** Keeps an effect that nothing explained yet, in case its cause is still to be noticed. */
@@ -220,14 +252,15 @@ class CombatTracker
 		}
 	}
 
-	/** The most recently opened window that accepts the effect. */
-	private Pending best(SpecEffect.Kind kind, long amount, int tick)
+	/** The most recently opened window that accepts the effect, of those opened in a range. */
+	private Pending best(SpecEffect.Kind kind, long amount, int tick, int from, int to)
 	{
 		Pending best = null;
 
 		for (Pending candidate : pending)
 		{
-			if (candidate.accepts(kind, amount, tick)
+			if (candidate.openedAt >= from && candidate.openedAt <= to
+				&& candidate.accepts(kind, amount, tick)
 				&& (best == null || candidate.openedAt >= best.openedAt))
 			{
 				best = candidate;

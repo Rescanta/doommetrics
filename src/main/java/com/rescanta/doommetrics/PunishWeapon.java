@@ -11,7 +11,7 @@ enum PunishWeapon
 	SCYTHE(CombatMetric.SCYTHE_PUNISH, 3),
 	NOXIOUS_HALBERD(CombatMetric.NOXIOUS_HALBERD_PUNISH, 1),
 
-	/** Its spec hits a large target twice, not seen in a log yet. */
+	/** Its spec hits a large target twice and a plain swing once, so there is no one count. */
 	CRYSTAL_HALBERD(CombatMetric.CRYSTAL_HALBERD_PUNISH, 0),
 
 	/**
