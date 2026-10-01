@@ -84,6 +84,14 @@ enum SpecWeapon
 
 	private static final int SACRIFICE_DAMAGE = 25;
 
+	/** What Blood Sacrifice heals: 15% of the target's hitpoints, to 25 on an NPC. */
+	private static final int SACRIFICE_HEAL = 25;
+
+	/** When it heals: eight ticks after the spec every time it was logged, and one to spare. */
+	private static final int SACRIFICE_HEAL_FROM = 8;
+
+	private static final int SACRIFICE_HEAL_TO = 9;
+
 	/**
 	 * Blood Forfeit, the ruby bolt effect a Zaryte crossbow spec that hits always sets off: 22% of
 	 * the target's hitpoints, to 110.
@@ -138,11 +146,11 @@ enum SpecWeapon
 			SACRIFICE_FROM, SACRIFICE_TO, 1, SACRIFICE_DAMAGE);
 	}
 
-	/** The heal after it, not pinned: it is capped by missing hitpoints. */
+	/** The heal with it: 25, or less when fewer hitpoints are missing, so limited and not pinned. */
 	private static SpecEffect sacrificeHeal()
 	{
 		return new SpecEffect(SpecEffect.Kind.HEAL, CombatMetric.AGS_HEAL,
-			SACRIFICE_FROM, SACRIFICE_TO + 1, 1);
+			SACRIFICE_HEAL_FROM, SACRIFICE_HEAL_TO, 1).cappedAt(SACRIFICE_HEAL);
 	}
 
 	List<SpecEffect> effects()

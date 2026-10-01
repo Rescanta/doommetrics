@@ -446,6 +446,94 @@ public class CombatTrackerTest
 	}
 
 	/**
+	 * 2026-10-01 23:03 tick 357: a blood barrage landed on the tick a sacrifice from 349 paid out,
+	 * and the two heals came as one rise of 29, all of it the barrage's. Blood Sacrifice heals 25,
+	 * so that much is its own and the 4 left is the barrage's. Eight such in the logs, 25 to 34.
+	 */
+	@Test
+	public void aSacrificeAndABarrageHealingOnOneTickAreToldApart()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.damaged(0, 350);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 357);
+		tracker.healed(29, 357);
+
+		assertEquals(list("otherSpecDamage=0", "agsHeal=25", "bloodBarrage=4"), recorded);
+	}
+
+	/** The same, with the heal reaching us ahead of the barrage's signal. */
+	@Test
+	public void theBarragesShareWaitsForItsSpell()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.healed(29, 357);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 357);
+
+		assertEquals(list("agsHeal=25", "bloodBarrage=4"), recorded);
+	}
+
+	/** A barrage that healed nothing on the sacrifice's tick: the 25 is the sacrifice's. */
+	@Test
+	public void aSacrificesWholeHealIsItsOwnWithABarrageOpen()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 357);
+		tracker.healed(25, 357);
+
+		assertEquals(list("agsHeal=25"), recorded);
+	}
+
+	/**
+	 * With fewer than 25 hitpoints missing the two heals come to less than 25, and the sacrifice,
+	 * which heals first, has taken all the room there was.
+	 */
+	@Test
+	public void aSacrificeComesFirstWhenTheHealIsSmall()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 357);
+		tracker.healed(20, 357);
+
+		assertEquals(list("agsHeal=20"), recorded);
+	}
+
+	/**
+	 * Every sacrifice heal in the logs, over 400 of them, came eight ticks after its spec. A barrage
+	 * landing a tick before that is not it.
+	 */
+	@Test
+	public void aHealBeforeTheSacrificePaysOutIsNotTheSacrifices()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 356);
+		tracker.healed(6, 356);
+		tracker.healed(25, 357);
+		tracker.healed(20, 359);
+
+		assertEquals(list("bloodBarrage=6", "agsHeal=25"), recorded);
+	}
+
+	/** Food eaten on the sacrifice's tick is not the sacrifice's: it heals 25 and no more. */
+	@Test
+	public void aSacrificeNeverHealsMoreThanItCan()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 349);
+		tracker.healed(45, 357);
+
+		assertEquals(list("agsHeal=25"), recorded);
+	}
+
+	/** Fewer than 25 hitpoints missing: the heal is what there was room for. */
+	@Test
+	public void aSacrificeHealsLessWhenFewerHitpointsAreMissing()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 1026);
+		tracker.healed(11, 1034);
+
+		assertEquals(list("agsHeal=11"), recorded);
+	}
+
+	/**
 	 * Taken from a trip's logs, where it cost the figure a third of itself. A bow firing into the
 	 * three ticks the sacrifice is expected in landed first, took the window, and the sacrifice
 	 * arriving on the same tick behind it found nothing open - so the figure gained a 58 it never
