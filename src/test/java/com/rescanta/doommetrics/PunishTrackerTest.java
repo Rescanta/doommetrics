@@ -201,7 +201,7 @@ public class PunishTrackerTest
 
 	/**
 	 * 2026-09-30 22:43 run, tick 442: bow 36, scythe 38, hits 16 12 4 1. A point or two of
-	 * experience can follow an attack a tick later; it is the bow's, not an attack of its own.
+	 * experience can follow an attack a tick later, from a larva hit on the way.
 	 */
 	@Test
 	public void experienceTrailingAnAttackIsCountedWithIt()
@@ -241,6 +241,52 @@ public class PunishTrackerTest
 		tickEnded(640, false, PunishWeapon.SCYTHE);
 
 		assertEquals(4, recorded.size());
+	}
+
+	/**
+	 * Any other melee weapon's hits can't be counted, so the arrow is only taken out when a hit
+	 * comes to its share of the experience: 61 and 20 of 81, as the halberd's did at tick 2732.
+	 */
+	@Test
+	public void anArrowWithAnotherWeaponsHitIsFoundByItsShareAlone()
+	{
+		tickEnded(2729, true, null);
+		tracker.experienceGained(136, 2730);
+		tickEnded(2730, true, null);
+
+		tracker.swung(2731);
+		tracker.experienceGained(45, 2731);
+		tickEnded(2731, true, PunishWeapon.OTHER);
+
+		mine(61, 2732);
+		mine(20, 2732);
+		tickEnded(2732, false, PunishWeapon.OTHER);
+
+		assertEquals(list("otherMeleePunish=20"), recorded);
+		assertEquals(list("61@2732", "0@2732"), handedBack);
+	}
+
+	/**
+	 * Two hits that don't divide the way the experience did are both the swing's - claws, with an
+	 * arrow that had already landed.
+	 */
+	@Test
+	public void hitsThatDoNotMatchTheShareStayThePunishs()
+	{
+		tickEnded(2729, true, null);
+		tracker.experienceGained(136, 2730);
+		tickEnded(2730, true, null);
+
+		tracker.swung(2731);
+		tracker.experienceGained(90, 2731);
+		tickEnded(2731, true, PunishWeapon.OTHER);
+
+		mine(20, 2732);
+		mine(10, 2732);
+		tickEnded(2732, false, PunishWeapon.OTHER);
+
+		assertEquals(list("otherMeleePunish=20", "otherMeleePunish=10"), recorded);
+		assertEquals(list("0@2732", "0@2732"), handedBack);
 	}
 
 	/**

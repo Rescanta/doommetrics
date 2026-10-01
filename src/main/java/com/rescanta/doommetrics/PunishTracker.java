@@ -33,6 +33,12 @@ class PunishTracker
 
 	private static final int MAX_ATTACKS = 8;
 
+	/**
+	 * How far, in damage, a hit may be from the earlier attack's share and still be taken for it,
+	 * with a weapon whose hits can't be counted.
+	 */
+	private static final int SHARE_SLACK = 1;
+
 	/** A strength-bonus splat lands two ticks after the swing at the soonest, a tick after its hit. */
 	static final int BONUS_FROM = 2;
 
@@ -274,7 +280,8 @@ class PunishTracker
 
 	/**
 	 * One hit of ours too many with the swing's own: an arrow fired just before the switch landed
-	 * with them. The share of experience its attack earned says which hit it was.
+	 * with them. The share of experience its attack earned says which hit it was. A weapon whose
+	 * hits can't be counted has one too many only if a hit comes to that share.
 	 */
 	private void findStray(int tick)
 	{
@@ -293,7 +300,10 @@ class PunishTracker
 		int swingXp = experienceBetween(swungAt, swungAt);
 		int earlierXp = experienceBetween(swungAt - EARLIER_ATTACK, swungAt - 1);
 
-		if (weapon.hits() == 0 || own.size() != weapon.hits() + 1 || swingXp <= 0 || earlierXp <= 0)
+		boolean counted = weapon.hits() > 0;
+
+		if (swingXp <= 0 || earlierXp <= 0
+			|| (counted ? own.size() != weapon.hits() + 1 : own.size() < 2))
 		{
 			return;
 		}
@@ -309,12 +319,17 @@ class PunishTracker
 			}
 		}
 
+		if (!counted && Math.abs(stray.amount - share) > SHARE_SLACK)
+		{
+			return;
+		}
+
 		stray.stray = true;
 	}
 
 	/**
-	 * The experience gained between the two ticks. Summed: an attack's experience sometimes has a
-	 * point or two more a tick after it, which is not an attack of its own.
+	 * The experience gained between the two ticks. Summed: a point or two from a larva or a
+	 * volatile earth hit on the way often follows an attack's own.
 	 */
 	private int experienceBetween(int from, int to)
 	{

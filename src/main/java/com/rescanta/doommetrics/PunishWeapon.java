@@ -35,7 +35,8 @@ enum PunishWeapon
 
 	/**
 	 * How many splats a swing draws on the boss, all on the tick after it, spec or not; 0 where
-	 * that isn't known (claws land over two ticks).
+	 * that isn't known (claws land over two ticks) and an arrow among them is found by its share
+	 * of the experience alone.
 	 */
 	int hits()
 	{
