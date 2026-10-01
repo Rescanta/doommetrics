@@ -146,29 +146,6 @@ class CombatWatcher
 		boss = npc;
 	}
 
-	/** A ghost thrall's first attack is never animated, so it is expected from the spawn. */
-	void npcSpawned(NPC npc)
-	{
-		if (run.get() == null || !isThrall(npc))
-		{
-			return;
-		}
-
-		thrallTracker.spawned(npc.getId(), client.getTickCount());
-
-		if (config.debugLogging())
-		{
-			log.debug("Thrall spawned: {} at tick {}", npc.getId(), client.getTickCount());
-		}
-	}
-
-	/** By id: a thrall's name reads "null" through the client. */
-	private static boolean isThrall(NPC npc)
-	{
-		int id = npc.getId();
-		return id >= NpcID.ARCEUUS_THRALL_GHOST_LESSER && id <= NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER;
-	}
-
 	void npcDespawned(NPC npc)
 	{
 		if (npc == boss)
@@ -237,11 +214,12 @@ class CombatWatcher
 			logBossHitsplat(hitsplat, tick);
 		}
 
-		if (isThrallSplat(hitsplat) && thrallTracker.isThrallHit(hitsplat.getAmount(), tick))
+		if (isThrallSplat(hitsplat) && thrallTracker.isThrallHit(hitsplat.getAmount(), tick, onBoss))
 		{
 			if (config.debugLogging())
 			{
-				log.debug("Thrall hit {} at tick {}, not counted", hitsplat.getAmount(), tick);
+				log.debug("Thrall hit {} at tick {}{}, not counted", hitsplat.getAmount(), tick,
+					onBoss ? "" : " off the boss");
 			}
 
 			return;
@@ -388,7 +366,8 @@ class CombatWatcher
 
 		if (actor instanceof NPC)
 		{
-			ThrallTracker.Style style = ThrallTracker.attackStyle(((NPC) actor).getId(), animation);
+			int id = ((NPC) actor).getId();
+			ThrallTracker.Style style = ThrallTracker.attackStyle(id, animation);
 
 			if (style != null)
 			{
@@ -397,6 +376,16 @@ class CombatWatcher
 				if (config.debugLogging())
 				{
 					log.debug("Thrall {} attacked at tick {}", style, tick);
+				}
+			}
+			else if (ThrallTracker.isSummoning(animation))
+			{
+				// A ghost's first attack is never animated, so it is expected from here.
+				thrallTracker.spawned(id, tick);
+
+				if (config.debugLogging())
+				{
+					log.debug("Thrall spawned: {} at tick {}", id, tick);
 				}
 			}
 

@@ -8,8 +8,9 @@ import net.runelite.api.gameval.NpcID;
 /**
  * Tells a thrall's hits from ours. Its splats are drawn as the player's own, so each attack opens
  * a window for the one hit it lands, and the first small splat of ours inside it is taken as that
- * hit. When one of our own 0-3s beats the thrall's to it, the swap costs at most three damage and
- * still leaves the right number of hits. No RuneLite types.
+ * hit. When one of our own 0-3s beats the thrall's to it, the swap costs at most three damage.
+ * What a thrall aims at can't be read, so a small splat off the boss doesn't shut the window to
+ * one on it. No RuneLite types.
  */
 class ThrallTracker
 {
@@ -51,6 +52,9 @@ class ThrallTracker
 
 		/** Never animated, only expected; an attack that is seen replaces it. */
 		private final boolean unseen;
+
+		/** A small splat off the boss was already left to it. */
+		private boolean tookOther;
 
 		private Attack(int tick, Style style, boolean unseen)
 		{
@@ -100,6 +104,17 @@ class ThrallTracker
 	}
 
 	/**
+	 * Whether a thrall has just been summoned. Read off its spawn animation, not its spawning: a
+	 * thrall coming back into view spawns again and attacks on its own time.
+	 */
+	static boolean isSummoning(int animation)
+	{
+		return animation == AnimationID.GHOST_UPDATE_THRALL_SPAWN_RAISED
+			|| animation == AnimationID.SKELETON_UPDATE_THRALL_SPAWN_RAISED
+			|| animation == AnimationID.ZOMBIE_UPDATE_THRAWL_SPAWN_RAISED;
+	}
+
+	/**
 	 * A ghost attacks as its spawn animation ends, four ticks in, and that attack is never
 	 * animated. When it waits a tick longer it is animated, and {@link #attacked} replaces this one.
 	 */
@@ -128,11 +143,14 @@ class ThrallTracker
 	}
 
 	/**
-	 * Whether a splat of ours is the thrall's, which spends the attack it came from.
+	 * Whether a splat of ours is the thrall's. One on the boss spends the attack it came from. One
+	 * anywhere else is left to the thrall once and keeps the attack open: it may be our own hit on
+	 * a larva, with the thrall's still to land on the boss.
 	 *
 	 * @param amount the splat's amount; a 0 is a thrall's miss as much as ours
+	 * @param onBoss whether it landed where damage counts
 	 */
-	boolean isThrallHit(int amount, int tick)
+	boolean isThrallHit(int amount, int tick, boolean onBoss)
 	{
 		pending.removeIf(attack -> tick - attack.tick > attack.style.to);
 
@@ -144,9 +162,22 @@ class ThrallTracker
 		// The oldest first: the next attack's window can open before this one's closes.
 		for (int i = 0; i < pending.size(); i++)
 		{
-			if (pending.get(i).covers(tick))
+			Attack attack = pending.get(i);
+
+			if (!attack.covers(tick))
+			{
+				continue;
+			}
+
+			if (onBoss)
 			{
 				pending.remove(i);
+				return true;
+			}
+
+			if (!attack.tookOther)
+			{
+				attack.tookOther = true;
 				return true;
 			}
 		}
