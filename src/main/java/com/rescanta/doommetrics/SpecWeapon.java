@@ -38,12 +38,12 @@ enum SpecWeapon
 
 	/**
 	 * Saradomin godsword. Healing Blade heals half of what the swing hits for and restores a
-	 * quarter as prayer, as it lands.
+	 * quarter as prayer, both on the spec's own tick - a tick ahead of the hitsplat.
 	 */
 	SARADOMIN_GODSWORD("Saradomin godsword",
 		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		swingHeal(CombatMetric.SGS_HEAL),
-		swingPrayer(CombatMetric.SGS_PRAYER)),
+		healingBlade(SpecEffect.Kind.HEAL, CombatMetric.SGS_HEAL),
+		healingBlade(SpecEffect.Kind.PRAYER, CombatMetric.SGS_PRAYER)),
 
 	/** Eldritch nightmare staff. Restores prayer rather than hitpoints, both when the spell lands. */
 	ELDRITCH_STAFF("Eldritch staff",
@@ -56,7 +56,7 @@ enum SpecWeapon
 	/** Every other ranged or magic spec, whose hits have to fly - see {@link #FLIGHT}. */
 	OTHER_FIRED(null, projectile(CombatMetric.OTHER_SPEC_DAMAGE, 4));
 
-	/** How long a spec's own hit may take to arrive, in ticks. */
+	/** How long a melee spec's own hit may take to arrive, in ticks. */
 	private static final int PROMPT = 3;
 
 	/**
@@ -68,6 +68,12 @@ enum SpecWeapon
 	/** The earliest a thrown or fired spec can land; keeps out the auto-attack thrown before it. */
 	private static final int FLIGHT = 2;
 
+	/** The latest a thrown or fired spec lands: a bow at range, and the scorching bow's spec. */
+	private static final int LANDED = 4;
+
+	/** The last tick after an SGS spec its heal and prayer may arrive; seen only on the first. */
+	private static final int HEALING_BLADE = 1;
+
 	/** How long after an Eldritch spec its restore may arrive: it lands when the spell does. */
 	private static final int RESTORE = 7;
 
@@ -77,6 +83,22 @@ enum SpecWeapon
 	private static final int SACRIFICE_TO = 10;
 
 	private static final int SACRIFICE_DAMAGE = 25;
+
+	/** What Blood Sacrifice heals: 15% of the target's hitpoints, to 25 on an NPC. */
+	private static final int SACRIFICE_HEAL = 25;
+
+	/** When it heals: eight ticks after the spec every time it was logged, and one to spare. */
+	private static final int SACRIFICE_HEAL_FROM = 8;
+
+	private static final int SACRIFICE_HEAL_TO = 9;
+
+	/**
+	 * Blood Forfeit, the ruby bolt effect a Zaryte crossbow spec that hits always sets off: 22% of
+	 * the target's hitpoints, to 110.
+	 */
+	private static final int FORFEIT_PERCENT = 22;
+
+	private static final int FORFEIT_CAP = 110;
 
 	private final String label;
 	private final List<SpecEffect> effects;
@@ -95,25 +117,19 @@ enum SpecWeapon
 	/** A spec's hit that has to fly to its target - see {@link #FLIGHT}. */
 	private static SpecEffect projectile(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, LANDED, budget);
 	}
 
-	/** A heal that lands with a melee spec's hit. */
-	private static SpecEffect swingHeal(CombatMetric metric)
+	/** The SGS's heal or prayer restore, from the spec's own tick. */
+	private static SpecEffect healingBlade(SpecEffect.Kind kind, CombatMetric metric)
 	{
-		return new SpecEffect(SpecEffect.Kind.HEAL, metric, SWING, PROMPT, 1);
-	}
-
-	/** A prayer restore that lands with a melee spec's hit. */
-	private static SpecEffect swingPrayer(CombatMetric metric)
-	{
-		return new SpecEffect(SpecEffect.Kind.PRAYER, metric, SWING, PROMPT, 1);
+		return new SpecEffect(kind, metric, 0, HEALING_BLADE, 1);
 	}
 
 	/** A heal that lands with a projectile's hit. */
 	private static SpecEffect projectileHeal(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.HEAL, metric, FLIGHT, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.HEAL, metric, FLIGHT, LANDED, budget);
 	}
 
 	private static SpecEffect prayer(CombatMetric metric, int budget)
@@ -130,11 +146,11 @@ enum SpecWeapon
 			SACRIFICE_FROM, SACRIFICE_TO, 1, SACRIFICE_DAMAGE);
 	}
 
-	/** The heal after it, not pinned: it is capped by missing hitpoints. */
+	/** The heal with it: 25, or less when fewer hitpoints are missing, so limited and not pinned. */
 	private static SpecEffect sacrificeHeal()
 	{
 		return new SpecEffect(SpecEffect.Kind.HEAL, CombatMetric.AGS_HEAL,
-			SACRIFICE_FROM, SACRIFICE_TO + 1, 1);
+			SACRIFICE_HEAL_FROM, SACRIFICE_HEAL_TO, 1).cappedAt(SACRIFICE_HEAL);
 	}
 
 	List<SpecEffect> effects()
@@ -148,6 +164,34 @@ enum SpecWeapon
 	String label()
 	{
 		return label;
+	}
+
+	/**
+	 * The least a Zaryte crossbow spec with ruby bolts can hit for, short of missing: half of what
+	 * Blood Forfeit takes from a target with this many hitpoints, in case they were read a little
+	 * out of step. 0 when they can't be read.
+	 */
+	static int leastRubyBoltHit(int targetHitpoints)
+	{
+		return Math.min(FORFEIT_CAP, Math.max(0, targetHitpoints) * FORFEIT_PERCENT / 100) / 2;
+	}
+
+	/**
+	 * Whether the ammunition is enchanted ruby bolts, adamant or dragon, falling back to its name
+	 * for ids we don't list.
+	 *
+	 * @param name the item's name from the cache, or null if it could not be read
+	 */
+	static boolean isRubyBolt(int itemId, String name)
+	{
+		if (itemId == ItemID.XBOWS_CROSSBOW_BOLTS_ADAMANTITE_TIPPED_RUBY_ENCHANTED
+			|| itemId == ItemID.DRAGON_BOLTS_ENCHANTED_RUBY)
+		{
+			return true;
+		}
+
+		String lower = name == null ? "" : name.toLowerCase();
+		return lower.startsWith("ruby") && lower.endsWith("bolts (e)");
 	}
 
 	/** {@link #OTHER_FIRED} for an unnamed weapon that isn't melee; any other weapon unchanged. */

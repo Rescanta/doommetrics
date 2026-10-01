@@ -2,13 +2,16 @@ package com.rescanta.doommetrics;
 
 /**
  * One thing a cause is expected to produce, and when: a range of ticks, so two specs in flight
- * don't steal each other's effects. {@link #budget} caps how many hitsplats it claims, and
- * {@link #exactly} pins the size where it is known.
+ * don't steal each other's effects. {@link #budget} caps how many hitsplats it claims,
+ * {@link #exactly} pins the size where it is known, and {@link #most} limits it where only that is.
  */
 final class SpecEffect
 {
 	/** What {@link #exactly} holds for an effect whose size cannot be known ahead of it. */
 	static final int ANY_AMOUNT = -1;
+
+	/** What {@link #most} holds for an effect that may be any size. */
+	static final int NO_LIMIT = Integer.MAX_VALUE;
 
 	enum Kind
 	{
@@ -37,6 +40,9 @@ final class SpecEffect
 	/** The amount this effect always arrives as, or {@link #ANY_AMOUNT} when it varies. */
 	private final int exactly;
 
+	/** The most this effect can arrive as, or {@link #NO_LIMIT}. */
+	private final int most;
+
 	SpecEffect(Kind kind, CombatMetric metric, int from, int to, int budget)
 	{
 		this(kind, metric, from, to, budget, ANY_AMOUNT);
@@ -44,12 +50,28 @@ final class SpecEffect
 
 	SpecEffect(Kind kind, CombatMetric metric, int from, int to, int budget, int exactly)
 	{
+		this(kind, metric, from, to, budget, exactly, NO_LIMIT);
+	}
+
+	private SpecEffect(Kind kind, CombatMetric metric, int from, int to, int budget, int exactly,
+		int most)
+	{
 		this.kind = kind;
 		this.metric = metric;
 		this.from = from;
 		this.to = to;
 		this.budget = budget;
 		this.exactly = exactly;
+		this.most = most;
+	}
+
+	/**
+	 * The same effect, never more than {@code most} at once. What arrives in its window is its own
+	 * first, up to that much, and the rest another cause's.
+	 */
+	SpecEffect cappedAt(int most)
+	{
+		return new SpecEffect(kind, metric, from, to, budget, exactly, most);
 	}
 
 	Kind kind()
@@ -70,6 +92,11 @@ final class SpecEffect
 	int to()
 	{
 		return to;
+	}
+
+	int most()
+	{
+		return most;
 	}
 
 	boolean covers(int ticksSince)
