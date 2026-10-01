@@ -454,13 +454,11 @@ class CombatWatcher
 			int was = hitpoints;
 			hitpoints = event.getBoostedLevel();
 
+			// One update carries the whole tick, so the hits taken are all in this one.
+			taken = 0;
+
 			// Where the level would be had nothing healed; what it is above that was healed.
 			int unhealed = Math.max(0, was - hit);
-
-			if (hitpoints < was)
-			{
-				taken = Math.max(0, hit - (was - hitpoints));
-			}
 
 			if (running && hitpoints > unhealed)
 			{
@@ -470,7 +468,6 @@ class CombatWatcher
 						tick, hit);
 				}
 
-				taken = 0;
 				rose(SpecEffect.Kind.HEAL, hitpointsRegeneration, hitpointsRegenerationPeriod(),
 					unhealed, hitpoints, event.getLevel());
 			}
