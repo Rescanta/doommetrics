@@ -182,6 +182,12 @@ class DelveRun
 		return from.isBefore(until) ? from : null;
 	}
 
+	/** Waits cut so far. A cut can shorten a delve already drawn - see {@link RunDetail#keyFor}. */
+	int afkCount()
+	{
+		return afk.size();
+	}
+
 	/** The time between two moments of the run, less the time away in it. */
 	private Duration active(Instant from, Instant to)
 	{
