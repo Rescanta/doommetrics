@@ -665,4 +665,122 @@ public class DelveRunTest
 		assertEquals(Duration.ofSeconds(80), run.getSplits().get(1).segment);
 		assertEquals(Duration.ofSeconds(700), run.clearedElapsed());
 	}
+
+	/** Delves 1-9 a minute each, the boss there 3 seconds into each of them. */
+	private static DelveRun runIgnoringAfk()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.setAfkAfter(Duration.ofMinutes(3));
+
+		for (int level = 1; level <= 9; level++)
+		{
+			run.bossAppeared(at((level - 1) * 60 + 3));
+			run.complete(level, at(level * 60), null);
+		}
+
+		return run;
+	}
+
+	/** The logged trip of 2026-10-02: 10:05 after clearing delve 9 before delve 10 was started. */
+	@Test
+	public void aLongWaitForTheBossCountsAsAMinute()
+	{
+		DelveRun run = runIgnoringAfk();
+
+		run.enterLevel(10, at(540 + 605));
+		assertEquals(Duration.ofSeconds(548), run.bossAppeared(at(540 + 608)));
+		run.complete(10, at(540 + 685), null);
+
+		// A minute of the wait and the 77 seconds from the boss to the clear.
+		assertEquals(Duration.ofSeconds(137), run.getSplits().get(9).segment);
+		assertEquals(Duration.ofSeconds(540 + 137), run.clearedElapsed());
+		assertEquals(Duration.ofSeconds(540 + 137), run.pbElapsed());
+		assertEquals(Duration.ofSeconds((60 + 137) / 2), run.meanDeepSegment().withNanos(0));
+
+		long summed = run.getSplits().stream().mapToLong(s -> s.segment.getSeconds()).sum();
+		assertEquals(run.clearedElapsed().getSeconds(), summed);
+	}
+
+	@Test
+	public void aWaitShortOfTheLimitCountsInFull()
+	{
+		DelveRun run = runIgnoringAfk();
+
+		assertNull(run.bossAppeared(at(540 + 179)));
+		run.complete(10, at(540 + 240), null);
+
+		assertEquals(Duration.ofSeconds(240), run.getSplits().get(9).segment);
+		assertEquals(Duration.ofSeconds(780), run.clearedElapsed());
+	}
+
+	@Test
+	public void everyWaitCountsInFullWhenAfkTimeIsNotIgnored()
+	{
+		DelveRun run = runIgnoringAfk();
+		run.setAfkAfter(null);
+
+		assertNull(run.bossAppeared(at(540 + 608)));
+		run.complete(10, at(540 + 685), null);
+
+		assertEquals(Duration.ofSeconds(685), run.getSplits().get(9).segment);
+	}
+
+	/** Left on the jump prompt, the boss stays away after the delve has been announced. */
+	@Test
+	public void theTimerHoldsWhileTheWaitIsStillGoing()
+	{
+		DelveRun run = runIgnoringAfk();
+		run.enterLevel(10, at(540 + 20));
+
+		assertEquals(Duration.ofSeconds(540 + 179), run.liveElapsed(at(540 + 179)));
+		assertEquals(Duration.ofSeconds(540 + 60), run.liveElapsed(at(540 + 180)));
+		assertEquals(Duration.ofSeconds(540 + 60), run.liveElapsed(at(540 + 1320)));
+
+		// Mean deep segment is a minute, so 91 delves less the minute of the wait that counts.
+		assertEquals(Duration.ofMinutes(90), run.untilTarget(100, at(540 + 1320)));
+
+		run.bossAppeared(at(540 + 1320));
+		assertEquals(Duration.ofSeconds(540 + 70), run.liveElapsed(at(540 + 1330)));
+	}
+
+	/** The fight is never a wait, however long it takes. */
+	@Test
+	public void aLongFightIsNotTimeAway()
+	{
+		DelveRun run = runIgnoringAfk();
+
+		run.bossAppeared(at(540 + 10));
+		assertEquals(Duration.ofSeconds(540 + 600), run.liveElapsed(at(540 + 600)));
+		// The boss coming back into view after a scene load is not the end of a wait.
+		assertNull(run.bossAppeared(at(540 + 600)));
+		run.complete(10, at(540 + 600), null);
+
+		assertEquals(Duration.ofSeconds(600), run.getSplits().get(9).segment);
+	}
+
+	/** A run picked up with the boss already there has no wait to measure. */
+	@Test
+	public void aBossAlreadyThereEndsTheWaitUnmeasured()
+	{
+		DelveRun run = new DelveRun(START, 12, true);
+		run.setAfkAfter(Duration.ofMinutes(3));
+		run.bossPresent();
+
+		assertEquals(Duration.ofSeconds(600), run.liveElapsed(at(600)));
+	}
+
+	/** The detail window charges a wait to the delve before it, and the prompt to the one after. */
+	@Test
+	public void theTimelineLeavesTheTimeAwayOut()
+	{
+		DelveRun run = runIgnoringAfk();
+
+		run.enterLevel(10, at(540 + 605));
+		run.bossAppeared(at(540 + 608));
+		run.complete(10, at(540 + 685), null);
+
+		// Delve 9 ran from 8:00 (no start seen, so the clear before) to delve 10's start.
+		assertEquals(Duration.ofSeconds(60 + 60), run.timeline().get(8).fullTime);
+		assertEquals(Duration.ofSeconds(77), run.timeline().get(9).fullTime);
+	}
 }

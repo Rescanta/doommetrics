@@ -12,7 +12,8 @@ import java.util.Set;
 
 /**
  * One trip into the Doom of Mokhaiotl, from entering the cave until the player leaves or dies.
- * A delve's segment runs from the previous clear, so segments sum to the run time. Wall clock.
+ * A delve's segment runs from the previous clear, so segments sum to the run time. Wall clock,
+ * less the time spent away - see {@link #setAfkAfter}.
  */
 class DelveRun
 {
@@ -21,15 +22,31 @@ class DelveRun
 	/** Delve 8 has different boss health, so the deep average starts at 9. */
 	static final int PACE_AVERAGE_FROM_LEVEL = 9;
 
+	/** What a wait long enough to be time away is counted as. */
+	static final Duration AFK_COUNTED_AS = Duration.ofMinutes(1);
+
 	/** Shared and read only. */
 	private static final CombatTotals EMPTY_COMBAT = new CombatTotals();
+
+	/** A stretch left out of the run's time. */
+	private static final class Afk
+	{
+		final Instant from;
+		final Instant to;
+
+		Afk(Instant from, Instant to)
+		{
+			this.from = from;
+			this.to = to;
+		}
+	}
 
 	static final class Split
 	{
 		final int level;
 		final Instant completedAt;
 
-		/** Wall clock from the previous clear, or the run start, up to this clear. */
+		/** From the previous clear, or the run start, up to this clear, less the time away. */
 		final Duration segment;
 
 		/** The fight length the game reported, or null if we never saw it. */
@@ -50,6 +67,13 @@ class DelveRun
 
 	private final List<Split> splits = new ArrayList<>();
 
+	private final List<Afk> afk = new ArrayList<>();
+
+	/** How long a wait for the boss has to be to count as time away, or null to count it all. */
+	private Duration afkAfter;
+
+	/** Since when there has been no boss to fight, or null while there is one. */
+	private Instant bossGoneAt;
 
 	/** From a clear until the game announces the next delve. */
 	private boolean betweenDelves;
@@ -99,10 +123,90 @@ class DelveRun
 		this.startedAt = startedAt;
 		this.lastClearedAt = startedAt;
 		this.segmentStart = startedAt;
+		this.bossGoneAt = startedAt;
 		this.currentLevel = currentLevel;
 		this.partial = partial;
 		this.pbAnchor = pbAnchor;
 		this.nextClearTimed = !partial;
+	}
+
+	/**
+	 * A wait for the boss at least this long is time away, and counts as {@link #AFK_COUNTED_AS}.
+	 * Waits already over keep what they were counted as.
+	 *
+	 * @param afkAfter the shortest wait that is time away, or null to count every wait in full
+	 */
+	void setAfkAfter(Duration afkAfter)
+	{
+		this.afkAfter = afkAfter;
+	}
+
+	/**
+	 * The boss is there to fight, ending the wait since the last clear or the run start.
+	 *
+	 * @return the time left out of the run, or null if the wait counts in full
+	 */
+	Duration bossAppeared(Instant at)
+	{
+		Instant from = afkFrom(at);
+		bossGoneAt = null;
+
+		if (from == null)
+		{
+			return null;
+		}
+
+		afk.add(new Afk(from, at));
+		return Duration.between(from, at);
+	}
+
+	/** The boss was already there when we looked, so nothing says how long the wait was. */
+	void bossPresent()
+	{
+		bossGoneAt = null;
+	}
+
+	/** Where the wait under way stops counting, or null if at {@code until} it counts in full. */
+	private Instant afkFrom(Instant until)
+	{
+		if (afkAfter == null || bossGoneAt == null
+			|| Duration.between(bossGoneAt, until).compareTo(afkAfter) < 0)
+		{
+			return null;
+		}
+
+		Instant from = bossGoneAt.plus(AFK_COUNTED_AS);
+		return from.isBefore(until) ? from : null;
+	}
+
+	/** The time between two moments of the run, less the time away in it. */
+	private Duration active(Instant from, Instant to)
+	{
+		Duration active = Duration.between(from, to);
+
+		for (Afk away : afk)
+		{
+			active = active.minus(overlap(away.from, away.to, from, to));
+		}
+
+		Instant awayFrom = afkFrom(to);
+		return awayFrom == null ? active : active.minus(overlap(awayFrom, to, from, to));
+	}
+
+	private static Duration overlap(Instant from, Instant to, Instant otherFrom, Instant otherTo)
+	{
+		Instant start = from.isAfter(otherFrom) ? from : otherFrom;
+		Instant end = to.isBefore(otherTo) ? to : otherTo;
+		return start.isBefore(end) ? Duration.between(start, end) : Duration.ZERO;
+	}
+
+	/** A wait is measured from where the segment it is in starts. */
+	private void restartWait(Instant at)
+	{
+		if (bossGoneAt != null)
+		{
+			bossGoneAt = at;
+		}
 	}
 
 	/** The game announced the delve we have just dropped into. */
@@ -138,6 +242,7 @@ class DelveRun
 
 		segmentStart = at;
 		nextClearTimed = true;
+		restartWait(at);
 	}
 
 	/**
@@ -175,6 +280,7 @@ class DelveRun
 		betweenDelves = false;
 		nextClearTimed = false;
 		segmentStart = at;
+		restartWait(at);
 		delveStarts.putIfAbsent(level, at);
 	}
 
@@ -212,15 +318,17 @@ class DelveRun
 		startedAt = at;
 		lastClearedAt = at;
 		segmentStart = at;
+		restartWait(at);
 		return true;
 	}
 
 	Split complete(int level, Instant at, Duration fight)
 	{
-		Split split = new Split(level, at, Duration.between(segmentStart, at), fight, nextClearTimed);
+		Split split = new Split(level, at, active(segmentStart, at), fight, nextClearTimed);
 		splits.add(split);
 		lastClearedAt = at;
 		segmentStart = at;
+		bossGoneAt = at;
 		nextClearTimed = true;
 		currentLevel = level + 1;
 		betweenDelves = true;
@@ -349,7 +457,7 @@ class DelveRun
 	/** From the run start to the last clear - what every total and pace is built on. */
 	Duration clearedElapsed()
 	{
-		return Duration.between(startedAt, lastClearedAt);
+		return active(startedAt, lastClearedAt);
 	}
 
 	/**
@@ -366,12 +474,12 @@ class DelveRun
 		}
 
 		Instant from = pbAnchor == null || startedAt.isBefore(pbAnchor) ? startedAt : pbAnchor;
-		return Duration.between(from, lastClearedAt);
+		return active(from, lastClearedAt);
 	}
 
 	Duration liveElapsed(Instant now)
 	{
-		return Duration.between(startedAt, now);
+		return active(startedAt, now);
 	}
 
 	/** Live while the run is going, frozen on {@link #clearedElapsed} once it is over. */
@@ -481,7 +589,7 @@ class DelveRun
 		}
 
 		long remaining = target - lastLevel();
-		long millis = remaining * mean.toMillis() - Duration.between(segmentStart, now).toMillis();
+		long millis = remaining * mean.toMillis() - active(segmentStart, now).toMillis();
 		return Duration.ofMillis(Math.max(millis, (remaining - 1) * mean.toMillis()));
 	}
 
@@ -494,7 +602,7 @@ class DelveRun
 			{
 				if (split.level == target)
 				{
-					return Duration.between(startedAt, split.completedAt);
+					return active(startedAt, split.completedAt);
 				}
 			}
 
@@ -561,7 +669,7 @@ class DelveRun
 
 			if (firstUnwatched >= split.level)
 			{
-				timeline.add(new DelveTime(split.level, Duration.between(startOf(i), endOf(i)),
+				timeline.add(new DelveTime(split.level, active(startOf(i), endOf(i)),
 					split, false));
 				continue;
 			}
@@ -570,7 +678,7 @@ class DelveRun
 			Instant from = splits.get(i - 1).completedAt;
 			Instant to = split.timed ? startOf(i) : endOf(i);
 			int shared = split.level - firstUnwatched + (split.timed ? 0 : 1);
-			Duration share = Duration.between(from, to).dividedBy(shared);
+			Duration share = active(from, to).dividedBy(shared);
 
 			for (int level = firstUnwatched; level < split.level; level++)
 			{
@@ -578,7 +686,7 @@ class DelveRun
 			}
 
 			timeline.add(split.timed
-				? new DelveTime(split.level, Duration.between(startOf(i), endOf(i)), split, false)
+				? new DelveTime(split.level, active(startOf(i), endOf(i)), split, false)
 				: new DelveTime(split.level, share, split, true));
 		}
 
