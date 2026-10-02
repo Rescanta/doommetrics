@@ -211,7 +211,8 @@ final class RunDetail
 
 	/**
 	 * Changes whenever a new snapshot would differ: the run itself, its deepest clear, anything
-	 * counted in a wait, and whether a wait is going. Cheap, since it runs every tick.
+	 * counted in a wait, whether a wait is going, and a wait cut as time away - which can shorten
+	 * the delve before a jump prompt left open. Cheap, since it runs every tick.
 	 */
 	static String keyFor(DelveRun run)
 	{
@@ -221,6 +222,7 @@ final class RunDetail
 		}
 
 		return System.identityHashCode(run) + "|" + run.lastLevel() + "|" + run.isBetweenDelves()
-			+ "|" + run.bankedCombatChanges() + "|" + run.isFinished() + "|" + run.getDiedOnLevel();
+			+ "|" + run.bankedCombatChanges() + "|" + run.isFinished() + "|" + run.getDiedOnLevel()
+			+ "|" + run.afkCount();
 	}
 }
