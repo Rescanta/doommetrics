@@ -504,8 +504,9 @@ down, and reading one never depends on landing the pointer on a two pixel dot.
 to take the line off altogether - which also gives the counters left on the plot the height they
 were sharing with it. A colour belongs to a counter for as long as the window is open, so switching
 one off never repaints the rest. With **Hide counters at 0** on, as it is by default, a counter the run has not
-counted anything on starts switched off, so the chart is not crowded with flat lines along the
-bottom; it comes on by itself once it counts, and a click puts it on sooner. The legend lists each counter by name with its icon beside it, as the side panel does; hovering
+counted anything on starts switched off and is left out of the legend, so the chart is not crowded
+with flat lines along the bottom; it comes on by itself once it counts. **Show all** under the
+legend puts every row back, and a click on one there puts its line on sooner. The legend lists each counter by name with its icon beside it, as the side panel does; hovering
 the row says what feeds it.
 
 ### Long runs
@@ -562,7 +563,7 @@ rather than the whole file.
 | Prayer | Off | The eldritch staff and Saradomin godsword specs: off, one total line, or a line each |
 | Damage | Off | The zaryte crossbow spec and your scythe and halberds punishing: off, one total line, or a line each |
 | Counter style | Names | Lead each counter's line with its name, its icon, or its icon two to a line; the infobox takes the icon too |
-| Hide counters at 0 | on | Leave a counter off the overlay and the side panel until it has counted something, and start it switched off on the run detail chart |
+| Hide counters at 0 | on | Leave a counter off the overlay and the side panel until it has counted something, and start it switched off on the run detail chart and out of its legend |
 
 ### Chat
 
