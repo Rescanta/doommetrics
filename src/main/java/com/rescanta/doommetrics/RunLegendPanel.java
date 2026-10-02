@@ -2,12 +2,14 @@ package com.rescanta.doommetrics;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -70,6 +72,12 @@ class RunLegendPanel extends JPanel
 	private final Set<CombatSeries> empty = new HashSet<>();
 
 	private final JLabel showAll = PanelStyle.link(() -> setShowingAll(!showingAll));
+
+	/** Whether the column has changed since the click in hand began - see {@link #stray}. */
+	private boolean shifted;
+
+	/** The counter whose line the chart was last told to bring forward, or null for none. */
+	private CombatSeries emphasised;
 
 	/** Whether the counters are folded into their headings - see {@link #setGrouped}. */
 	private boolean grouped;
@@ -155,6 +163,8 @@ class RunLegendPanel extends JPanel
 	 */
 	private void layOut()
 	{
+		Component[] before = getComponents();
+
 		removeAll();
 		add(top);
 
@@ -225,8 +235,37 @@ class RunLegendPanel extends JPanel
 			add(showAll);
 		}
 
+		shifted |= !Arrays.equals(before, getComponents());
+
+		// A row taken down under the pointer is sent no mouseExited, so its line would stay forward.
+		if (emphasised != null && rows.get(emphasised).getParent() != this)
+		{
+			emphasise(null);
+		}
+
 		revalidate();
 		repaint();
+	}
+
+	/**
+	 * Whether a press is the tail of a double-click whose first press moved the rows, and so has
+	 * landed on whichever row slid under the still pointer rather than on one the reader aimed at.
+	 */
+	private boolean stray(MouseEvent event)
+	{
+		if (event.getClickCount() <= 1)
+		{
+			shifted = false;
+		}
+
+		return shifted;
+	}
+
+	/** Tells the chart which counter's line to bring forward, or null for none. */
+	private void emphasise(CombatSeries series)
+	{
+		emphasised = series;
+		onEmphasis.accept(series);
 	}
 
 	void setIcons(Icons icons)
@@ -441,7 +480,7 @@ class RunLegendPanel extends JPanel
 		refresh();
 
 		// The clicked row is the hovered one, so its emphasis follows the toggle.
-		onEmphasis.accept(hidden.contains(line) ? null : line);
+		emphasise(hidden.contains(line) ? null : line);
 	}
 
 	/** One counter: swatch, name, figure in text ink, and a meter behind them. */
@@ -487,19 +526,22 @@ class RunLegendPanel extends JPanel
 				@Override
 				public void mousePressed(MouseEvent event)
 				{
-					toggle(Row.this.series);
+					if (!stray(event))
+					{
+						toggle(Row.this.series);
+					}
 				}
 
 				@Override
 				public void mouseEntered(MouseEvent event)
 				{
-					onEmphasis.accept(off ? null : Row.this.series);
+					emphasise(off ? null : Row.this.series);
 				}
 
 				@Override
 				public void mouseExited(MouseEvent event)
 				{
-					onEmphasis.accept(null);
+					emphasise(null);
 				}
 			});
 		}
