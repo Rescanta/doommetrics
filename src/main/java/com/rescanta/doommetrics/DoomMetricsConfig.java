@@ -289,9 +289,10 @@ public interface DoomMetricsConfig extends Config
 		name = "Hide counters at 0",
 		description = "Hide a counter until it counts something, so Each only shows"
 			+ "<br>the gear you're actually using."
-			+ "<br>The side panel has a Show all link under its counters for the rest."
-			+ "<br>The run detail window starts them hidden from the chart;"
-			+ "<br>click one in its list to show it."
+			+ "<br>The side panel and the run detail window have a Show all link"
+			+ "<br>under their counters for the rest."
+			+ "<br>The run detail window also starts them hidden from the chart;"
+			+ "<br>click one under Show all to show its line."
 			+ "<br>Turn off to show every counter from the start, greyed out at 0.",
 		position = 35,
 		section = countersSection
