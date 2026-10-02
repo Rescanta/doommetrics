@@ -510,6 +510,22 @@ public class DoomMetricsPlugin extends Plugin
 			// changes arrive on the thread that made them; the table is the client thread's.
 			clientThread.invoke(feed::refreshTable);
 		}
+		else if ("ignoreAfkTime".equals(event.getKey()) || "afkMinutes".equals(event.getKey()))
+		{
+			clientThread.invoke(() ->
+			{
+				if (run != null)
+				{
+					run.setAfkAfter(afkAfter());
+				}
+			});
+		}
+	}
+
+	/** How long a wait for the boss has to be to count as time away, or null when none does. */
+	private Duration afkAfter()
+	{
+		return config.ignoreAfkTime() ? Duration.ofMinutes(config.afkMinutes()) : null;
 	}
 
 	@Subscribe
@@ -775,6 +791,19 @@ public class DoomMetricsPlugin extends Plugin
 			bossCount++;
 			ticksWithoutBoss = 0;
 			combat.bossSpawned(event.getNpc());
+			bossAppeared();
+		}
+	}
+
+	/** Ends the run's wait for the boss, which is left out of its time if it was time away. */
+	private void bossAppeared()
+	{
+		Duration away = run == null ? null : run.bossAppeared(Instant.now());
+
+		if (away != null)
+		{
+			log.debug("Waited for the boss on delve {} long enough to be away, leaving {} out",
+				run.currentLevel(), DoomFormat.duration(away));
 		}
 	}
 
@@ -987,6 +1016,14 @@ public class DoomMetricsPlugin extends Plugin
 	private void watch(DelveRun started, String profile, Instant sessionFrom)
 	{
 		run = started;
+		started.setAfkAfter(afkAfter());
+
+		// Its spawn was not seen, so there is no wait to measure.
+		if (bossCount > 0)
+		{
+			started.bossPresent();
+		}
+
 		lastRun = null;
 		lastRunCleared = false;
 		resumeCheck = null;
