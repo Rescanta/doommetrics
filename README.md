@@ -65,8 +65,8 @@ boss appears, so it covers standing around after a kill and leaving the jump pro
 holds the boss back. A fight is never a wait, however long it takes.
 
 Clear delve 9, come back ten minutes later and kill delve 10 in 1:17, and delve 10 costs 2:17
-rather than 11:25. While you are away the run timer steps back to the minute and holds there. The
-side panel's session time keeps counting the whole wait.
+rather than 11:25. While you are away the run timer steps back to the minute and holds there, and
+the side panel's session time and rates leave the same time out.
 
 ## Overlay
 
@@ -566,7 +566,7 @@ rather than the whole file.
 | Show target delve | off | Adds the target and predicted rows |
 | Target delve | 50 | The delve being aimed for |
 | Prediction | Full run | Which predicted times the target rows show: to go, the full run, or both |
-| Ignore AFK time | on | Counts a long wait for the boss as 1 minute of run time, pace and prediction |
+| Ignore AFK time | on | Counts a long wait for the boss as 1 minute everywhere: run time, pace, prediction, session time and rates |
 | AFK after | 3 min | How long a wait has to be to count as AFK |
 
 ### Counters

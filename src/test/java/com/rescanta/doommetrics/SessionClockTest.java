@@ -122,6 +122,16 @@ public class SessionClockTest
 	}
 
 	@Test
+	public void timeAwayIsLeftOut()
+	{
+		SessionClock clock = new SessionClock();
+		clock.start(at(0));
+		clock.exclude(Duration.ofMinutes(9));
+
+		assertEquals(Duration.ofMinutes(31), clock.elapsed(at(40)));
+	}
+
+	@Test
 	public void resetForgetsEverything()
 	{
 		SessionClock clock = new SessionClock();
