@@ -222,7 +222,7 @@ public interface DoomMetricsConfig extends Config
 		keyName = "ignoreAfkTime",
 		name = "Ignore AFK time",
 		description = "Leave time away from the keyboard out of the run timer, pace and predictions."
-			+ "<br>A wait for the boss longer than AFK after, after a clear or with the"
+			+ "<br>A wait for the boss of AFK after or more, after a clear or with the"
 			+ "<br>jump prompt left open, is counted as 1 minute."
 			+ "<br>The side panel's session time and rates leave it out too.",
 		position = 25,
