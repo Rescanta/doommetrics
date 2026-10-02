@@ -17,6 +17,7 @@ class Totals
 
 	/** The character the run in progress was started on, or null. */
 	private final Supplier<String> runProfile;
+	private final Supplier<DelveRun> liveRun;
 
 	private DelveTotals lifetime = new DelveTotals();
 	private DelveTotals session = new DelveTotals();
@@ -31,11 +32,13 @@ class Totals
 	/** The character the session belongs to, so an alt's runs never join it. */
 	private String sessionProfile;
 
-	Totals(TotalsStore totalsStore, RunHistoryStore runHistoryStore, Supplier<String> runProfile)
+	Totals(TotalsStore totalsStore, RunHistoryStore runHistoryStore, Supplier<String> runProfile,
+		Supplier<DelveRun> liveRun)
 	{
 		this.totalsStore = totalsStore;
 		this.runHistoryStore = runHistoryStore;
 		this.runProfile = runProfile;
+		this.liveRun = liveRun;
 	}
 
 	/** Drops everything held in memory. The lifetime figures stay saved. */
@@ -103,6 +106,12 @@ class Totals
 	{
 		startSessionForCurrentCharacter();
 		sessionClock.start(startedAt);
+	}
+
+	/** A wait the run left out of its time is left out of the session's too. */
+	void timeAway(Instant from, Instant to)
+	{
+		sessionClock.exclude(from, to);
 	}
 
 	void loggedOut(Instant at)
@@ -240,12 +249,15 @@ class Totals
 	/** How long this session has been going, or null before its first run. */
 	Duration sessionElapsed(Instant now)
 	{
-		return sessionClock.elapsed(now);
+		DelveRun run = liveRun.get();
+
+		// The wait under way is only handed to the clock once it is over.
+		return sessionClock.elapsed(now, run == null ? null : run.afkFrom(now));
 	}
 
 	private String sessionLength(Instant now)
 	{
-		Duration elapsed = sessionClock.elapsed(now);
+		Duration elapsed = sessionElapsed(now);
 		return elapsed == null ? null : DoomFormat.duration(elapsed);
 	}
 

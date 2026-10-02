@@ -188,7 +188,7 @@ public class DoomMetricsPlugin extends Plugin
 		GameItems items = new GameItems(client, itemManager);
 		claims = new ClaimWatcher(clientThread, () -> run, () -> endRun(EndReason.FINISHED, -1));
 		combat = new CombatWatcher(client, clientThread, config, items, () -> run, this::recordCombat);
-		totals = new Totals(totalsStore, runHistoryStore, () -> runProfile);
+		totals = new Totals(totalsStore, runHistoryStore, () -> runProfile, () -> run);
 		milestones = new MilestoneTracker(client, milestoneStore, this::resetTarget,
 			totals::lifetimeBelongsToRun,
 			() -> feed.refreshTable());
@@ -510,6 +510,22 @@ public class DoomMetricsPlugin extends Plugin
 			// changes arrive on the thread that made them; the table is the client thread's.
 			clientThread.invoke(feed::refreshTable);
 		}
+		else if ("ignoreAfkTime".equals(event.getKey()) || "afkMinutes".equals(event.getKey()))
+		{
+			clientThread.invoke(() ->
+			{
+				if (run != null)
+				{
+					run.setAfkAfter(afkAfter());
+				}
+			});
+		}
+	}
+
+	/** How long a wait for the boss has to be to count as time away, or null when none does. */
+	private Duration afkAfter()
+	{
+		return config.ignoreAfkTime() ? Duration.ofMinutes(config.afkMinutes()) : null;
 	}
 
 	@Subscribe
@@ -775,6 +791,21 @@ public class DoomMetricsPlugin extends Plugin
 			bossCount++;
 			ticksWithoutBoss = 0;
 			combat.bossSpawned(event.getNpc());
+			bossAppeared();
+		}
+	}
+
+	/** Ends the run's wait for the boss, which is left out of its time if it was time away. */
+	private void bossAppeared()
+	{
+		Instant now = Instant.now();
+		Instant awayFrom = run == null ? null : run.bossAppeared(now);
+
+		if (awayFrom != null)
+		{
+			totals.timeAway(awayFrom, now);
+			log.debug("Waited for the boss on delve {} long enough to be away, leaving {} out",
+				run.currentLevel(), DoomFormat.duration(Duration.between(awayFrom, now)));
 		}
 	}
 
@@ -987,6 +1018,14 @@ public class DoomMetricsPlugin extends Plugin
 	private void watch(DelveRun started, String profile, Instant sessionFrom)
 	{
 		run = started;
+		started.setAfkAfter(afkAfter());
+
+		// Its spawn was not seen, so there is no wait to measure.
+		if (bossCount > 0)
+		{
+			started.bossPresent();
+		}
+
 		lastRun = null;
 		lastRunCleared = false;
 		resumeCheck = null;
@@ -1022,6 +1061,14 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		ended.end(reason, Instant.now(), diedOnLevel);
+		Instant awayFrom = ended.afkFrom(ended.getEndedAt());
+
+		// Left during a wait long enough to be time away.
+		if (awayFrom != null)
+		{
+			totals.timeAway(awayFrom, ended.getEndedAt());
+		}
+
 		log.debug("Doom run ended: {} after {} delves", reason, ended.lastLevel());
 
 		// Delves are already banked; this flushes the combat since the last one, abandoned or not.

@@ -407,6 +407,26 @@ public class RunDetailTest
 		assertNotEquals("a run ending changes how it is drawn", banked, RunDetail.keyFor(run));
 	}
 
+	/** A jump prompt left open past the limit cuts the wait before it, so the delve drawn shrinks. */
+	@Test
+	public void theKeyMovesWhenAWaitIsCut()
+	{
+		DelveRun run = new DelveRun(START, 1, false);
+		run.setAfkAfter(Duration.ofMinutes(3));
+		run.bossAppeared(at(3));
+		run.complete(1, at(60), null);
+		run.enterLevel(2, at(180));
+
+		String started = RunDetail.keyFor(run);
+		assertEquals(Duration.ofSeconds(180), RunDetail.of(run).at(1).fullTime);
+
+		run.bossAppeared(at(600));
+
+		assertNotEquals(started, RunDetail.keyFor(run));
+		// The fight and the minute of the wait that counts.
+		assertEquals(Duration.ofSeconds(120), RunDetail.of(run).at(1).fullTime);
+	}
+
 	/** Two runs that look alike so far are still two runs, and the window has to see the swap. */
 	@Test
 	public void aDifferentRunInTheSameStateHasADifferentKey()
