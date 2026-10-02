@@ -688,7 +688,8 @@ public class DelveRunTest
 		DelveRun run = runIgnoringAfk();
 
 		run.enterLevel(10, at(540 + 605));
-		assertEquals(Duration.ofSeconds(548), run.bossAppeared(at(540 + 608)));
+		// Left out from a minute into the wait.
+		assertEquals(at(540 + 60), run.bossAppeared(at(540 + 608)));
 		run.complete(10, at(540 + 685), null);
 
 		// A minute of the wait and the 77 seconds from the boss to the clear.
@@ -735,8 +736,8 @@ public class DelveRunTest
 		assertEquals(Duration.ofSeconds(540 + 179), run.liveElapsed(at(540 + 179)));
 		assertEquals(Duration.ofSeconds(540 + 60), run.liveElapsed(at(540 + 180)));
 		assertEquals(Duration.ofSeconds(540 + 60), run.liveElapsed(at(540 + 1320)));
-		assertEquals(Duration.ZERO, run.afkUnderWay(at(540 + 179)));
-		assertEquals(Duration.ofSeconds(1260), run.afkUnderWay(at(540 + 1320)));
+		assertNull(run.afkFrom(at(540 + 179)));
+		assertEquals(at(540 + 60), run.afkFrom(at(540 + 1320)));
 
 		// Mean deep segment is a minute, so 91 delves less the minute of the wait that counts.
 		assertEquals(Duration.ofMinutes(90), run.untilTarget(100, at(540 + 1320)));

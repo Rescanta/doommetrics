@@ -109,9 +109,9 @@ class Totals
 	}
 
 	/** A wait the run left out of its time is left out of the session's too. */
-	void timeAway(Duration away)
+	void timeAway(Instant from, Instant to)
 	{
-		sessionClock.exclude(away);
+		sessionClock.exclude(from, to);
 	}
 
 	void loggedOut(Instant at)
@@ -249,17 +249,10 @@ class Totals
 	/** How long this session has been going, or null before its first run. */
 	Duration sessionElapsed(Instant now)
 	{
-		Duration elapsed = sessionClock.elapsed(now);
 		DelveRun run = liveRun.get();
 
-		if (elapsed == null || run == null)
-		{
-			return elapsed;
-		}
-
 		// The wait under way is only handed to the clock once it is over.
-		Duration counted = elapsed.minus(run.afkUnderWay(now));
-		return counted.isNegative() ? Duration.ZERO : counted;
+		return sessionClock.elapsed(now, run == null ? null : run.afkFrom(now));
 	}
 
 	private String sessionLength(Instant now)

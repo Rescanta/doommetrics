@@ -798,13 +798,14 @@ public class DoomMetricsPlugin extends Plugin
 	/** Ends the run's wait for the boss, which is left out of its time if it was time away. */
 	private void bossAppeared()
 	{
-		Duration away = run == null ? null : run.bossAppeared(Instant.now());
+		Instant now = Instant.now();
+		Instant awayFrom = run == null ? null : run.bossAppeared(now);
 
-		if (away != null)
+		if (awayFrom != null)
 		{
-			totals.timeAway(away);
+			totals.timeAway(awayFrom, now);
 			log.debug("Waited for the boss on delve {} long enough to be away, leaving {} out",
-				run.currentLevel(), DoomFormat.duration(away));
+				run.currentLevel(), DoomFormat.duration(Duration.between(awayFrom, now)));
 		}
 	}
 
@@ -1060,8 +1061,14 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		ended.end(reason, Instant.now(), diedOnLevel);
+		Instant awayFrom = ended.afkFrom(ended.getEndedAt());
+
 		// Left during a wait long enough to be time away.
-		totals.timeAway(ended.afkUnderWay(ended.getEndedAt()));
+		if (awayFrom != null)
+		{
+			totals.timeAway(awayFrom, ended.getEndedAt());
+		}
+
 		log.debug("Doom run ended: {} after {} delves", reason, ended.lastLevel());
 
 		// Delves are already banked; this flushes the combat since the last one, abandoned or not.
