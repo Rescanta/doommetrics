@@ -1,5 +1,7 @@
 package com.rescanta.doommetrics;
 
+import java.awt.Component;
+import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -202,6 +204,7 @@ public class RunLegendPanelTest
 	@Test
 	public void aFoldOnlyAppliesReadingSeparately()
 	{
+		legend.setHideEmpty(false);
 		legend.setFolded(EnumSet.of(CombatMetric.Group.HEALING));
 		int folded = legend.getComponentCount();
 
@@ -211,6 +214,111 @@ public class RunLegendPanelTest
 
 		legend.setGrouped(false);
 		assertEquals(folded, legend.getComponentCount());
+	}
+
+	/** A counter the run counted nothing on has no row, until the link under the column is asked. */
+	@Test
+	public void countersTheRunCountedNothingOnAreLeftOut()
+	{
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+
+		assertEquals("the top row, three headings, the crossbow's row and the link",
+			1 + CombatMetric.Group.values().length + 1 + 1, legend.getComponentCount());
+
+		legend.setShowingAll(true);
+		assertEquals("every row, and the link to hide them again", everyRow() + 1,
+			legend.getComponentCount());
+
+		legend.setShowingAll(false);
+		legend.setHideEmpty(false);
+		assertEquals("nothing is left out, so there is no link", everyRow(),
+			legend.getComponentCount());
+	}
+
+	/** Clicked on, a counter at 0 is a line on the chart, so its row stays up to click off again. */
+	@Test
+	public void anEmptyCounterClickedOnKeepsItsRow()
+	{
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+		int compact = legend.getComponentCount();
+
+		legend.setShowingAll(true);
+		legend.toggle(CombatMetric.AGS_HEAL);
+		legend.setShowingAll(false);
+		assertEquals(compact + 1, legend.getComponentCount());
+
+		legend.toggle(CombatMetric.AGS_HEAL);
+		assertEquals(compact, legend.getComponentCount());
+	}
+
+	/** Grouped, a heading is left out only when nothing under it counted. */
+	@Test
+	public void groupedHeadingsThatCountedNothingAreLeftOut()
+	{
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+		legend.setGrouped(true);
+
+		assertEquals("the top row, the damage row and the link", 3, legend.getComponentCount());
+	}
+
+	/**
+	 * Show all moves a row to where the link was, and the second press of a double-click on the
+	 * link lands on that row without the reader having aimed at it.
+	 */
+	@Test
+	public void aDoubleClickOnTheLinkTogglesNoRow()
+	{
+		legend.setToggleListener(offChart::set);
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+		int slot = legend.getComponentCount() - 1;
+
+		press(legend.getComponent(slot), 1);
+		assertEquals("the link showed every row", everyRow() + 1, legend.getComponentCount());
+
+		Component under = legend.getComponent(slot);
+		press(under, 2);
+		assertEquals(allDrawnBut(CombatMetric.ZCB_DAMAGE), offChart.get());
+
+		press(under, 1);
+		assertEquals("a press of its own switches the row's line on",
+			CombatMetric.DISPLAYED.size() - 2, offChart.get().size());
+
+		press(under, 2);
+		assertEquals("and a second, the row not having moved, switches it off again",
+			allDrawnBut(CombatMetric.ZCB_DAMAGE), offChart.get());
+	}
+
+	/** A row taken down while pointed at is sent no mouseExited to put its line back. */
+	@Test
+	public void aRowTakenDownIsNoLongerBroughtForward()
+	{
+		AtomicReference<CombatSeries> forward = new AtomicReference<>();
+		legend.setEmphasisListener(forward::set);
+		legend.setDetail(RunDetail.of(crossbowOnly()));
+
+		// The only row up, so the last thing above the link.
+		Component crossbow = legend.getComponent(legend.getComponentCount() - 2);
+		crossbow.dispatchEvent(new MouseEvent(crossbow, MouseEvent.MOUSE_ENTERED, 0, 0, 1, 1, 0,
+			false));
+		assertEquals(CombatMetric.ZCB_DAMAGE, forward.get());
+
+		DelveRun run = new DelveRun(START, 1, false);
+		run.complete(1, START.plusSeconds(60), null);
+		legend.setDetail(RunDetail.of(run));
+
+		assertNull(forward.get());
+	}
+
+	private static void press(Component on, int clicks)
+	{
+		on.dispatchEvent(new MouseEvent(on, MouseEvent.MOUSE_PRESSED, 0, 0, 1, 1, clicks, false,
+			MouseEvent.BUTTON1));
+	}
+
+	/** The top row, a heading per group and a row per counter. */
+	private static int everyRow()
+	{
+		return 1 + CombatMetric.Group.values().length + CombatMetric.DISPLAYED.size();
 	}
 
 	/** Two delves, with the crossbow's spec on the first and nothing else counted. */
