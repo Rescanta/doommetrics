@@ -122,6 +122,53 @@ public class SessionClockTest
 	}
 
 	@Test
+	public void timeAwayIsLeftOut()
+	{
+		SessionClock clock = new SessionClock();
+		clock.start(at(0));
+		clock.exclude(at(10), at(19));
+
+		assertEquals(Duration.ofMinutes(31), clock.elapsed(at(40)));
+	}
+
+	/** Dropped to the login screen in a wait and back inside: the wait cut covers the logout. */
+	@Test
+	public void timeAwayThroughALogoutIsLeftOutOnce()
+	{
+		SessionClock clock = new SessionClock();
+		clock.start(at(0));
+		clock.pause(at(11));
+		clock.resume(at(41));
+		clock.exclude(at(11), at(42));
+
+		assertEquals(Duration.ofMinutes(11), clock.elapsed(at(42)));
+		assertEquals(Duration.ofMinutes(21), clock.elapsed(at(52)));
+	}
+
+	/** At the login screen in a wait already past the limit, the clock stands still once. */
+	@Test
+	public void aWaitStillGoingAndALogoutStopTheClockAtTheFirst()
+	{
+		SessionClock clock = new SessionClock();
+		clock.start(at(0));
+		clock.pause(at(11));
+
+		assertEquals(Duration.ofMinutes(11), clock.elapsed(at(30), at(11)));
+		assertEquals(Duration.ofMinutes(5), clock.elapsed(at(30), at(5)));
+	}
+
+	/** A run carried on after the plugin was off starts the session late; its wait reaches back. */
+	@Test
+	public void timeAwayBeforeTheStartIsNotTakenOff()
+	{
+		SessionClock clock = new SessionClock();
+		clock.start(at(20));
+		clock.exclude(at(10), at(25));
+
+		assertEquals(Duration.ofMinutes(5), clock.elapsed(at(30)));
+	}
+
+	@Test
 	public void resetForgetsEverything()
 	{
 		SessionClock clock = new SessionClock();

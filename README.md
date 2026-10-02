@@ -56,6 +56,18 @@ Both are built on the contiguous segments, so the time you spend restocking coun
 A delve fought in 1:28 after a two minute restock costs 3:28 of pace. The fight length on its own is
 what the game posts in chat, and what the run detail's time strip draws as the kill time.
 
+### Time away
+
+Walk away from the keyboard mid-run and the wait would wreck the run time, both paces and the
+prediction. With **Ignore AFK time** on, a wait for the boss of **AFK after** minutes or more (3 by
+default) is counted as 1 minute. The wait runs from a clear, or from walking in, until the next
+boss appears, so it covers standing around after a kill and leaving the jump prompt open, which
+holds the boss back. A fight is never a wait, however long it takes.
+
+Clear delve 9, come back ten minutes later and kill delve 10 in 1:17, and delve 10 costs 2:17
+rather than 11:25. While you are away the run timer steps back to the minute and holds there, and
+the side panel's session time and rates leave the same time out.
+
 ## Overlay
 
 While a run is going:
@@ -554,6 +566,8 @@ rather than the whole file.
 | Show target delve | off | Adds the target and predicted rows |
 | Target delve | 50 | The delve being aimed for |
 | Prediction | Full run | Which predicted times the target rows show: to go, the full run, or both |
+| Ignore AFK time | on | Counts a long wait for the boss as 1 minute everywhere: run time, pace, prediction, session time and rates |
+| AFK after | 3 min | How long a wait has to be to count as AFK |
 
 ### Counters
 

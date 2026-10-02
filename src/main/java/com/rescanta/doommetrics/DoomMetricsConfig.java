@@ -5,6 +5,7 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
+import net.runelite.client.config.Units;
 
 @ConfigGroup(DoomMetricsConfig.GROUP)
 public interface DoomMetricsConfig extends Config
@@ -215,6 +216,36 @@ public interface DoomMetricsConfig extends Config
 	default TargetPrediction targetPrediction()
 	{
 		return TargetPrediction.FULL_RUN;
+	}
+
+	@ConfigItem(
+		keyName = "ignoreAfkTime",
+		name = "Ignore AFK time",
+		description = "Leave time away from the keyboard out of the run timer, pace and predictions."
+			+ "<br>A wait for the boss of AFK after or more, after a clear or with the"
+			+ "<br>jump prompt left open, is counted as 1 minute."
+			+ "<br>The side panel's session time and rates leave it out too.",
+		position = 25,
+		section = paceSection
+	)
+	default boolean ignoreAfkTime()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "afkMinutes",
+		name = "AFK after",
+		description = "Minutes without a boss to fight before the wait counts as AFK."
+			+ "<br>Only used when Ignore AFK time is on.",
+		position = 26,
+		section = paceSection
+	)
+	@Units(Units.MINUTES)
+	@Range(min = 1, max = 60)
+	default int afkMinutes()
+	{
+		return 3;
 	}
 
 	@ConfigItem(
