@@ -188,7 +188,7 @@ public class DoomMetricsPlugin extends Plugin
 		GameItems items = new GameItems(client, itemManager);
 		claims = new ClaimWatcher(clientThread, () -> run, () -> endRun(EndReason.FINISHED, -1));
 		combat = new CombatWatcher(client, clientThread, config, items, () -> run, this::recordCombat);
-		totals = new Totals(totalsStore, runHistoryStore, () -> runProfile);
+		totals = new Totals(totalsStore, runHistoryStore, () -> runProfile, () -> run);
 		milestones = new MilestoneTracker(client, milestoneStore, this::resetTarget,
 			totals::lifetimeBelongsToRun,
 			() -> feed.refreshTable());
@@ -802,6 +802,7 @@ public class DoomMetricsPlugin extends Plugin
 
 		if (away != null)
 		{
+			totals.timeAway(away);
 			log.debug("Waited for the boss on delve {} long enough to be away, leaving {} out",
 				run.currentLevel(), DoomFormat.duration(away));
 		}
@@ -1059,6 +1060,8 @@ public class DoomMetricsPlugin extends Plugin
 		}
 
 		ended.end(reason, Instant.now(), diedOnLevel);
+		// Left during a wait long enough to be time away.
+		totals.timeAway(ended.afkUnderWay(ended.getEndedAt()));
 		log.debug("Doom run ended: {} after {} delves", reason, ended.lastLevel());
 
 		// Delves are already banked; this flushes the combat since the last one, abandoned or not.

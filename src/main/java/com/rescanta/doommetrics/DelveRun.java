@@ -179,6 +179,13 @@ class DelveRun
 		return from.isBefore(until) ? from : null;
 	}
 
+	/** How much of the wait under way is left out of the run so far. */
+	Duration afkUnderWay(Instant now)
+	{
+		Instant from = afkFrom(now);
+		return from == null ? Duration.ZERO : Duration.between(from, now);
+	}
+
 	/** The time between two moments of the run, less the time away in it. */
 	private Duration active(Instant from, Instant to)
 	{

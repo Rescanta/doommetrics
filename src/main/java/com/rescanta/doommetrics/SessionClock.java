@@ -3,7 +3,7 @@ package com.rescanta.doommetrics;
 import java.time.Duration;
 import java.time.Instant;
 
-/** How long a session has been going, counting only the time spent logged in. */
+/** How long a session has been going, counting only the time spent logged in and not away. */
 final class SessionClock
 {
 	/** When the session's first run started, or null before it has one. */
@@ -15,7 +15,7 @@ final class SessionClock
 	/** When the connection dropped, while the client is still trying to get it back, or null. */
 	private Instant droppedAt;
 
-	/** The logged out stretches already over, summed. */
+	/** The logged out stretches already over and the time away, summed. */
 	private Duration paused = Duration.ZERO;
 
 	boolean isStarted()
@@ -72,6 +72,15 @@ final class SessionClock
 		}
 
 		pausedAt = null;
+	}
+
+	/** Leaves time away during a run out of the session. */
+	void exclude(Duration away)
+	{
+		if (startedAt != null)
+		{
+			paused = paused.plus(away);
+		}
 	}
 
 	/** The logged in time since the start, or null before the session has a run in it. */

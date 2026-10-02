@@ -224,7 +224,7 @@ public interface DoomMetricsConfig extends Config
 		description = "Leave time away from the keyboard out of the run timer, pace and predictions."
 			+ "<br>A wait for the boss longer than AFK after, after a clear or with the"
 			+ "<br>jump prompt left open, is counted as 1 minute."
-			+ "<br>The session time still counts all of it.",
+			+ "<br>The side panel's session time and rates leave it out too.",
 		position = 25,
 		section = paceSection
 	)
