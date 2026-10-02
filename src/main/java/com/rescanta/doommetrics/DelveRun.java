@@ -144,20 +144,20 @@ class DelveRun
 	/**
 	 * The boss is there to fight, ending the wait since the last clear or the run start.
 	 *
-	 * @return the time left out of the run, or null if the wait counts in full
+	 * @return where the time left out of the run starts - it ends {@code at} - or null if the wait
+	 * counts in full
 	 */
-	Duration bossAppeared(Instant at)
+	Instant bossAppeared(Instant at)
 	{
 		Instant from = afkFrom(at);
 		bossGoneAt = null;
 
-		if (from == null)
+		if (from != null)
 		{
-			return null;
+			afk.add(new Afk(from, at));
 		}
 
-		afk.add(new Afk(from, at));
-		return Duration.between(from, at);
+		return from;
 	}
 
 	/** The boss was already there when we looked, so nothing says how long the wait was. */
@@ -166,8 +166,11 @@ class DelveRun
 		bossGoneAt = null;
 	}
 
-	/** Where the wait under way stops counting, or null if at {@code until} it counts in full. */
-	private Instant afkFrom(Instant until)
+	/**
+	 * Where the wait under way stops counting, or null if at {@code until} it counts in full. From
+	 * there to {@code until} is left out of the run so far.
+	 */
+	Instant afkFrom(Instant until)
 	{
 		if (afkAfter == null || bossGoneAt == null
 			|| Duration.between(bossGoneAt, until).compareTo(afkAfter) < 0)
@@ -177,13 +180,6 @@ class DelveRun
 
 		Instant from = bossGoneAt.plus(AFK_COUNTED_AS);
 		return from.isBefore(until) ? from : null;
-	}
-
-	/** How much of the wait under way is left out of the run so far. */
-	Duration afkUnderWay(Instant now)
-	{
-		Instant from = afkFrom(now);
-		return from == null ? Duration.ZERO : Duration.between(from, now);
 	}
 
 	/** The time between two moments of the run, less the time away in it. */
