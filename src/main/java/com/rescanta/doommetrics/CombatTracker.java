@@ -172,13 +172,11 @@ class CombatTracker
 	}
 
 	/**
-	 * @param experience the hitpoints experience gained on the spec's tick, 0 if none. An attack
-	 *                   earns it as it is made, in proportion to what it will hit for, so the
-	 *                   spec's own hits come to no more than it says and a hit too big for it is
-	 *                   another attack's. A one-hit spec that took something too small first - a
-	 *                   miss of another attack's, usually - still takes the hit that fits. None
-	 *                   earned says nothing: a miss earns none, but neither does anything at the
-	 *                   experience cap.
+	 * An attack earns its hitpoints experience as it is made, in proportion to what it will hit
+	 * for, so the spec's own hits come to no more than its tick's says. A one-hit spec that took
+	 * something too small first still takes the hit that fits.
+	 *
+	 * @param experience what the spec's tick earned; 0 says nothing, as a miss earns none
 	 */
 	void specFired(SpecWeapon weapon, int tick, int leastHit, int experience)
 	{

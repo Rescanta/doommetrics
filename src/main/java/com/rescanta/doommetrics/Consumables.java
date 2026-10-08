@@ -66,9 +66,7 @@ final class Consumables
 	 * What is left of a rise once what was eaten or drunk on its tick is taken out.
 	 *
 	 * @param spare  whether nothing else can explain the rise, which makes it what the item gives
-	 * @param capped whether the rise stopped at the trained level or over it, where food stops
-	 *               short: it says the least an item gives, not what it gives
-	 * @return the points something else gave
+	 * @param capped whether the rise reached the trained level, where food stops short of its all
 	 */
 	long without(SpecEffect.Kind kind, long rise, int tick, boolean spare, boolean capped)
 	{
