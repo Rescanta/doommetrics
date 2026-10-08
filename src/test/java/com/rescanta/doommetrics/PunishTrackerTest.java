@@ -489,6 +489,98 @@ public class PunishTrackerTest
 	}
 
 	/**
+	 * Being hit plays a block, and with a godsword in hand it was read as the swing: the spec
+	 * three ticks later was passed over and its hit landed outside the window. The block's tick
+	 * earned no experience and the spec's did, so the spec is the swing.
+	 */
+	@Test
+	public void aBlockBeforeTheSwingDoesNotCostItsPunish()
+	{
+		tickEnded(1410, true, null);
+
+		tracker.swung(1414);
+		tickEnded(1414, true, PunishWeapon.OTHER);
+		tickEnded(1415, true, PunishWeapon.OTHER);
+		tickEnded(1416, true, PunishWeapon.OTHER);
+
+		tracker.swung(1417);
+		tracker.experienceGained(80, 1417);
+		tickEnded(1417, true, PunishWeapon.OTHER);
+
+		mine(36, 1418);
+		tracker.beamCancelled(1418);
+		tickEnded(1418, false, PunishWeapon.OTHER);
+
+		bonus(27, 1419);
+		tickEnded(1419, false, PunishWeapon.OTHER);
+
+		assertEquals(list("otherMeleePunish=36", "otherMeleePunish=27"), recorded);
+	}
+
+	/**
+	 * The same with the halberd, the swing a tick behind the block and an arrow landing on the
+	 * swing's tick. The arrow came ahead of the swing; the halberd's hit is the one a tick later,
+	 * which used to be turned away as one hit too many.
+	 */
+	@Test
+	public void whatLandsOnTheLaterSwingsTickIsNotItsHit()
+	{
+		tickEnded(99, true, null);
+
+		tracker.swung(100);
+		tracker.experienceGained(51, 100);
+		tickEnded(100, true, null);
+
+		tracker.swung(101);
+		tickEnded(101, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		tracker.swung(102);
+		mine(23, 102);
+		tracker.experienceGained(80, 102);
+		tickEnded(102, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(36, 103);
+		tracker.beamCancelled(103);
+		tickEnded(103, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(29, 104);
+		tickEnded(104, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=36", "noxiousHalberdPunish=29"), recorded);
+		assertEquals(list("23@102", "0@103"), handedBack);
+	}
+
+	/**
+	 * A swing that earned experience is the swing. A block a tick later, with a point or two from
+	 * a larva on the same tick, does not move it.
+	 */
+	@Test
+	public void aSwingThatEarnedExperienceIsNotMovedByALaterAnimation()
+	{
+		tickEnded(199, true, null);
+
+		tracker.swung(200);
+		tracker.experienceGained(60, 200);
+		tickEnded(200, true, PunishWeapon.SCYTHE);
+
+		tracker.swung(201);
+		mine(20, 201);
+		mine(5, 201);
+		mine(2, 201);
+		tracker.experienceGained(2, 201);
+		tracker.beamCancelled(201);
+		tickEnded(201, false, PunishWeapon.SCYTHE);
+
+		bonus(16, 202);
+		bonus(16, 202);
+		bonus(16, 202);
+		tickEnded(202, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=20", "scythePunish=5", "scythePunish=2", "scythePunish=16",
+			"scythePunish=16", "scythePunish=16"), recorded);
+	}
+
+	/**
 	 * A thrall's window took the scythe's own 2, so the thrall's 3 a tick later stands in for it:
 	 * the swap {@link ThrallTracker} allows for, which keeps the scythe at three hits.
 	 */

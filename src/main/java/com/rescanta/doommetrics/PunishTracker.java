@@ -110,6 +110,12 @@ class PunishTracker
 	private PunishWeapon weapon;
 
 	/**
+	 * The tick of an animation that came inside the window and was passed over, or {@link #NONE}.
+	 * It is the swing after all if the one the window is open for turns out to be none.
+	 */
+	private int laterSwing = NONE;
+
+	/**
 	 * Our hits on the boss since the swing, its own tick included, and the bonus splats credited.
 	 * The game draws a bonus splat per hit, so one past them is something else - a larva
 	 * exploding by the boss.
@@ -146,6 +152,7 @@ class PunishTracker
 		cancelledAt = NONE;
 		swungAt = NONE;
 		weapon = null;
+		laterSwing = NONE;
 		ownHits = 0;
 		bonusesCounted = 0;
 		landed = 0;
@@ -168,11 +175,17 @@ class PunishTracker
 		// on.
 		if (swungAt != NONE && (weapon == null || (tick - swungAt <= HIT_WINDOW && isPunish())))
 		{
+			if (weapon != null && laterSwing == NONE)
+			{
+				laterSwing = tick;
+			}
+
 			return;
 		}
 
 		swungAt = tick;
 		weapon = null;
+		laterSwing = NONE;
 		ownHits = 0;
 		bonusesCounted = 0;
 		landed = 0;
@@ -276,6 +289,13 @@ class PunishTracker
 
 		praying = prayerUp;
 
+		if (laterSwing == tick)
+		{
+			swingLater(tick, equipped);
+		}
+
+		laterSwing = NONE;
+
 		if (swungAt != NONE && weapon == null)
 		{
 			weapon = equipped.get();
@@ -305,6 +325,47 @@ class PunishTracker
 			{
 				landed++;
 				landedAt = hit.tick;
+			}
+		}
+
+		held.clear();
+	}
+
+	/**
+	 * The animation the window opened for can be a block: being hit plays one, with the weapon
+	 * already in hand, and the swing a tick or three later was then passed over as a switch or a
+	 * potion would be. An attack earns its experience as it is made, so if the first animation's
+	 * tick earned none and this one's did, with a melee weapon in hand, this is the swing. What
+	 * landed on its tick came ahead of it.
+	 */
+	private void swingLater(int tick, Supplier<PunishWeapon> equipped)
+	{
+		if (swungAt == NONE || experienceBetween(swungAt, swungAt) > 0
+			|| experienceBetween(tick, tick) <= 0)
+		{
+			return;
+		}
+
+		PunishWeapon inHand = equipped.get();
+
+		if (inHand == null)
+		{
+			return;
+		}
+
+		swungAt = tick;
+		weapon = inHand;
+		ownHits = 0;
+		bonusesCounted = 0;
+		landed = 0;
+
+		for (Held hit : held)
+		{
+			if (hit.mine)
+			{
+				ownHits++;
+				landedAt = hit.tick;
+				handback.damaged(hit.amount, hit.tick);
 			}
 		}
 
