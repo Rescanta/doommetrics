@@ -219,8 +219,10 @@ arrow still in the air when you switched - is not counted either.
 
 A larva exploding by the boss hurts it too, drawn like a strength-bonus hitsplat. The game draws
 one strength-bonus hitsplat per hit of yours, from two ticks after the swing, so one more than
-that, or one sooner, is taken for an explosion and left out. An explosion landing in place of a
-bonus hitsplat the game didn't draw can't be told apart, and is counted.
+that, or one sooner, is taken for an explosion and left out. An arrow that lands at the punish
+brings a hitsplat of its own a tick behind the swing's, so a second one landing with the swing's
+is taken for an explosion as well. An explosion landing in place of a bonus hitsplat the game
+didn't draw can't be told apart, and is counted.
 
 Each figure is drawn in the colour of what it is counted in - hitpoints red, prayer blue, damage
 yellow - so which lines are which is legible without reading the labels.
@@ -281,11 +283,17 @@ Brews, food, regeneration and prayer potions are therefore missing from these fi
 the point rather than a shortcoming: a counter that swallowed them would report sustain your gear
 never earned. Every number here is a floor - what could be proven - and never an over-count.
 
+A brew or a restore dose taken on the very tick a spec or spell pays out arrives as one rise with
+it. The plugin watches the inventory for what is eaten or drunk, learns what each item gives the
+first time it is taken on its own, and takes that out of a rise it shares a tick with. Until an
+item has been seen on its own, a rise it shares a tick with is left uncounted.
+
 Spec and punish damage are only counted on the boss itself, standing or burrowed. Larvae, volatile earth and
 the boss behind its demonic shield are all worth a spec, but not for the damage, so a spec fired at
 one of them is spent and adds nothing. Nor is the auto-attack either side of a spec: a hit only
 counts if it lands when that weapon's spec could have - a tick after the spec for a melee weapon,
-two or more for anything that has to fly. Only the specs that heal (the ancient and Saradomin
+two or more for anything that has to fly - and a spec is never credited more than the hitpoints
+experience it earned says it hit for. Only the specs that heal (the ancient and Saradomin
 godswords, the toxic blowpipe) are credited with a heal; a heal after any other spec is left out,
 since it can only have been food, a brew or another spec's.
 
@@ -424,8 +432,8 @@ Last 10           1:49:05 (-3:05)
 
 - **Reached** - runs that cleared the target, out of every run started. Walking into delve 1 and
   straight back out is not counted as a run. A run the plugin joined part way through counts like
-  any other, except a trip it had already counted, picked up again after a session reset or the
-  plugin being turned off and on.
+  any other, except a trip it had already counted, picked up again after a session reset, the
+  plugin being turned off and on, or the client being restarted.
 - **Average time** - from the start of a run to clearing the target, the same span as a
   milestone's PB, which is shown under it. Only runs watched from delve 1 count here: a joined
   run's time is only an upper bound, though it can still set a PB.

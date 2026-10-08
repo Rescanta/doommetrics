@@ -1,6 +1,9 @@
 package com.rescanta.doommetrics;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
@@ -14,8 +17,10 @@ import net.runelite.api.Skill;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.gameval.AnimationID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
@@ -46,6 +51,25 @@ class CombatWatcher
 	private static final int PRAYER_REGEN_PERIOD = 12;
 	private static final int HITPOINTS_REGEN_PERIOD = 100;
 
+	/** A rise in hitpoints or prayer, waiting on the end of its tick. */
+	private static final class Rise
+	{
+		private final SpecEffect.Kind kind;
+		private final int from;
+		private final int to;
+		private final int natural;
+		private final int period;
+
+		private Rise(SpecEffect.Kind kind, int from, int to, int natural, int period)
+		{
+			this.kind = kind;
+			this.from = from;
+			this.to = to;
+			this.natural = natural;
+			this.period = period;
+		}
+	}
+
 	private final Client client;
 	private final ClientThread clientThread;
 	private final DoomMetricsConfig config;
@@ -66,6 +90,10 @@ class CombatWatcher
 	private int hitpoints;
 	private int hitpointsXp;
 
+	/** The hitpoints experience gained so far on a tick: what the attack made on it earned. */
+	private int experience;
+	private int experienceTick;
+
 	/**
 	 * Damage splatted on us this tick and not yet taken out of the hitpoints level. The splat comes
 	 * just ahead of the drop it causes, on the same tick, so a heal on that tick is the change
@@ -76,6 +104,19 @@ class CombatWatcher
 
 	private final Regeneration prayerRegeneration = new Regeneration();
 	private final Regeneration hitpointsRegeneration = new Regeneration();
+	private final Consumables consumables = new Consumables();
+
+	/** How many of each item the inventory held when it was last sent; null until it is read. */
+	private Map<Integer, Integer> carried;
+
+	/**
+	 * The tick's rises, settled at its end: what was eaten or drunk on the tick is only known
+	 * once the whole tick is in, whichever of the two the game sent first.
+	 */
+	private final List<Rise> rises = new ArrayList<>();
+
+	/** The tick of the last spec, whose windows only open once its tick has ended. */
+	private int specTick = -1;
 
 	private final CombatTracker.Sink sink;
 
@@ -105,6 +146,7 @@ class CombatWatcher
 		hitpoints = 0;
 		hitpointsXp = 0;
 		taken = 0;
+		carried = null;
 		prayerRegeneration.reset();
 		hitpointsRegeneration.reset();
 	}
@@ -124,6 +166,8 @@ class CombatWatcher
 		combatTracker.reset();
 		punishTracker.reset();
 		thrallTracker.reset();
+		consumables.reset();
+		rises.clear();
 	}
 
 	/**
@@ -139,6 +183,52 @@ class CombatWatcher
 		prayerPoints = client.getBoostedSkillLevel(Skill.PRAYER);
 		hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
 		hitpointsXp = client.getSkillExperience(Skill.HITPOINTS);
+		carried = items.carried();
+	}
+
+	/**
+	 * Food and potions leaving the inventory: a heal or a restore on the same tick is theirs, or
+	 * partly theirs. A dropped one reads the same, which costs nothing unless a heal lands with it.
+	 */
+	void itemContainerChanged(ItemContainerChanged event)
+	{
+		if (event.getContainerId() != InventoryID.INV)
+		{
+			return;
+		}
+
+		Map<Integer, Integer> before = carried;
+		carried = GameItems.count(event.getItemContainer());
+
+		if (before == null || carried == null || run.get() == null)
+		{
+			return;
+		}
+
+		int tick = client.getTickCount();
+
+		for (Map.Entry<Integer, Integer> held : before.entrySet())
+		{
+			int gone = held.getValue() - carried.getOrDefault(held.getKey(), 0);
+			Boolean drunk = gone > 0 ? items.isDrunk(held.getKey()) : null;
+
+			if (drunk == null)
+			{
+				continue;
+			}
+
+			String name = withoutDose(items.name(held.getKey()));
+
+			for (int i = 0; i < gone; i++)
+			{
+				consumables.consumed(name, drunk, tick);
+			}
+
+			if (config.debugLogging())
+			{
+				log.debug("{} {} at tick {}", drunk ? "Drank" : "Ate", name, tick);
+			}
+		}
 	}
 
 	void bossSpawned(NPC npc)
@@ -429,6 +519,12 @@ class CombatWatcher
 		}
 	}
 
+	/** A potion's doses are one thing to learn, not four: "Saradomin brew(3)" is a Saradomin brew. */
+	static String withoutDose(String name)
+	{
+		return name == null ? "" : name.replaceFirst("\\(\\d\\)$", "");
+	}
+
 	/** Healing and prayer restores are read here, as rises in the boosted level. */
 	void statChanged(StatChanged event)
 	{
@@ -442,8 +538,8 @@ class CombatWatcher
 			// No floor on the start: an Eldritch spec on an empty prayer book is the main case.
 			if (running && prayerPoints > was)
 			{
-				rose(SpecEffect.Kind.PRAYER, prayerRegeneration, prayerRegenerationPeriod(),
-					was, prayerPoints, event.getLevel());
+				rises.add(new Rise(SpecEffect.Kind.PRAYER, was, prayerPoints, event.getLevel(),
+					prayerRegenerationPeriod()));
 			}
 		}
 		else if (event.getSkill() == Skill.HITPOINTS)
@@ -468,8 +564,8 @@ class CombatWatcher
 						tick, hit);
 				}
 
-				rose(SpecEffect.Kind.HEAL, hitpointsRegeneration, hitpointsRegenerationPeriod(),
-					unhealed, hitpoints, event.getLevel());
+				rises.add(new Rise(SpecEffect.Kind.HEAL, unhealed, hitpoints, event.getLevel(),
+					hitpointsRegenerationPeriod()));
 			}
 			else if (running && hitpoints < was && config.debugLogging())
 			{
@@ -490,6 +586,8 @@ class CombatWatcher
 			return;
 		}
 
+		experience = (experienceTick == tick ? experience : 0) + gained;
+		experienceTick = tick;
 		punishTracker.experienceGained(gained, tick);
 
 		if (config.debugLogging())
@@ -498,19 +596,56 @@ class CombatWatcher
 		}
 	}
 
-	/** Offers a rise to the tracker with natural regeneration taken out. */
-	private void rose(SpecEffect.Kind kind, Regeneration regeneration, int period, int from, int to,
-		int natural)
+	/**
+	 * Offers the tick's rises to the tracker, with natural regeneration and what was eaten or drunk
+	 * on the tick taken out. A level with room to rise that didn't says what was taken gives none.
+	 */
+	private void settleRises(int tick)
 	{
-		int rise = to - from;
-		int tick = client.getTickCount();
-		boolean spare = combatTracker.wouldCredit(kind, rise, tick) == null;
-		int gain = regeneration.without(from, to, natural, tick, period, spare);
+		boolean healed = false;
+		boolean restored = false;
 
-		if (gain < rise && config.debugLogging())
+		for (Rise rise : rises)
 		{
-			log.debug("{} of {} at tick {} has {} that came back on its own in it", kind, rise, tick,
-				rise - gain);
+			healed |= rise.kind == SpecEffect.Kind.HEAL;
+			restored |= rise.kind == SpecEffect.Kind.PRAYER;
+			settle(rise, tick);
+		}
+
+		rises.clear();
+
+		if (!consumables.anyAt(tick))
+		{
+			return;
+		}
+
+		if (!healed && hitpoints < client.getRealSkillLevel(Skill.HITPOINTS))
+		{
+			consumables.didNotRise(SpecEffect.Kind.HEAL, tick);
+			log.debug("Hitpoints had room and did not rise with what was taken at tick {}", tick);
+		}
+
+		if (!restored && prayerPoints < client.getRealSkillLevel(Skill.PRAYER))
+		{
+			consumables.didNotRise(SpecEffect.Kind.PRAYER, tick);
+			log.debug("Prayer had room and did not rise with what was taken at tick {}", tick);
+		}
+	}
+
+	private void settle(Rise rise, int tick)
+	{
+		SpecEffect.Kind kind = rise.kind;
+		Regeneration regeneration = kind == SpecEffect.Kind.PRAYER
+			? prayerRegeneration
+			: hitpointsRegeneration;
+		int size = rise.to - rise.from;
+		boolean spare = combatTracker.wouldCredit(kind, size, tick) == null;
+		int gain = regeneration.without(rise.from, rise.to, rise.natural, tick, rise.period, spare);
+
+		if (gain < size && config.debugLogging())
+		{
+			log.debug("{} of {} at tick {} has {} that came back on its own in it", kind, size, tick,
+				size - gain);
 		}
 
 		if (gain <= 0)
@@ -518,15 +653,32 @@ class CombatWatcher
 			return;
 		}
 
-		logAttribution(kind, gain, tick);
+		// A spec made this tick opens its windows after this, and its heal is among these.
+		boolean unexplained = specTick != tick
+			&& combatTracker.wouldCredit(kind, gain, tick) == null;
+		int left = (int) consumables.without(kind, gain, tick, unexplained,
+			rise.to >= rise.natural);
+
+		if (left < gain && config.debugLogging())
+		{
+			log.debug("{} of {} at tick {} has {} from what was eaten or drunk in it", kind, gain,
+				tick, gain - left);
+		}
+
+		if (left <= 0)
+		{
+			return;
+		}
+
+		logAttribution(kind, left, tick);
 
 		if (kind == SpecEffect.Kind.PRAYER)
 		{
-			combatTracker.prayerGained(gain, tick);
+			combatTracker.prayerGained(left, tick);
 		}
 		else
 		{
-			combatTracker.healed(gain, tick);
+			combatTracker.healed(left, tick);
 		}
 	}
 
@@ -630,6 +782,7 @@ class CombatWatcher
 
 		// Equipment isn't updated yet for this tick, so the weapon is read later.
 		int tick = client.getTickCount();
+		specTick = tick;
 
 		clientThread.invokeLater(() ->
 		{
@@ -651,9 +804,11 @@ class CombatWatcher
 
 			weapon = weapon.fired(items.isMeleeWeapon(itemId));
 
-			combatTracker.specFired(weapon, tick, leastHit(weapon));
+			// The experience comes ahead of this, with the rest of the tick the spec was made on.
+			combatTracker.specFired(weapon, tick, leastHit(weapon),
+				experienceTick == tick ? experience : 0);
 			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
-				current.currentLevel(), weapon, itemId, items.name(itemId), tick);
+				current.creditLevel(), weapon, itemId, items.name(itemId), tick);
 		});
 	}
 
@@ -691,6 +846,8 @@ class CombatWatcher
 		}
 
 		int tick = client.getTickCount();
+		settleRises(tick);
+
 		boolean praying = isBossPraying();
 
 		if (praying != punishTracker.isPraying() && config.debugLogging())

@@ -25,10 +25,13 @@ enum SpecWeapon
 	 */
 	ROSEWOOD_BLOWPIPE("Rosewood blowpipe", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 2)),
 
-	/** Toxic blowpipe. One dart, healing half of what it hits for, both landing together. */
+	/**
+	 * Toxic blowpipe. One dart, healing half of what it hits for on the spec's own tick, before
+	 * the dart has landed.
+	 */
 	BLOWPIPE("Toxic blowpipe",
 		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		projectileHeal(CombatMetric.BLOWPIPE_HEAL, 1)),
+		atOnce(SpecEffect.Kind.HEAL, CombatMetric.BLOWPIPE_HEAL)),
 
 	/** Ancient godsword: the swing, then Blood Sacrifice's damage and heal eight ticks later. */
 	ANCIENT_GODSWORD("Ancient godsword",
@@ -42,13 +45,20 @@ enum SpecWeapon
 	 */
 	SARADOMIN_GODSWORD("Saradomin godsword",
 		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		healingBlade(SpecEffect.Kind.HEAL, CombatMetric.SGS_HEAL),
-		healingBlade(SpecEffect.Kind.PRAYER, CombatMetric.SGS_PRAYER)),
+		atOnce(SpecEffect.Kind.HEAL, CombatMetric.SGS_HEAL),
+		atOnce(SpecEffect.Kind.PRAYER, CombatMetric.SGS_PRAYER)),
 
 	/** Eldritch nightmare staff. Restores prayer rather than hitpoints, both when the spell lands. */
 	ELDRITCH_STAFF("Eldritch staff",
 		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
 		prayer(CombatMetric.ELDRITCH_PRAYER, 2)),
+
+	/**
+	 * Scorching bow. One arrow, as often fired at a larva as at the boss, so the bow shot made
+	 * behind it and landing in its window is not a second hit of its. Its burns are counted from
+	 * their own hitsplats.
+	 */
+	SCORCHING_BOW("Scorching bow", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1)),
 
 	/** Every other melee spec. Four hits covers dragon claws. None of them heals. */
 	OTHER(null, swing(CombatMetric.OTHER_SPEC_DAMAGE, 4)),
@@ -70,9 +80,6 @@ enum SpecWeapon
 
 	/** The latest a thrown or fired spec lands: a bow at range, and the scorching bow's spec. */
 	private static final int LANDED = 4;
-
-	/** The last tick after an SGS spec its heal and prayer may arrive; seen only on the first. */
-	private static final int HEALING_BLADE = 1;
 
 	/** How long after an Eldritch spec its restore may arrive: it lands when the spell does. */
 	private static final int RESTORE = 7;
@@ -111,25 +118,23 @@ enum SpecWeapon
 
 	private static SpecEffect swing(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, SWING, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, SWING, PROMPT, budget).ofTheAttack();
 	}
 
 	/** A spec's hit that has to fly to its target - see {@link #FLIGHT}. */
 	private static SpecEffect projectile(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, LANDED, budget);
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, LANDED, budget).ofTheAttack();
 	}
 
-	/** The SGS's heal or prayer restore, from the spec's own tick. */
-	private static SpecEffect healingBlade(SpecEffect.Kind kind, CombatMetric metric)
+	/**
+	 * A heal or restore worked out as the spec is made: on its own tick, ahead of its hitsplat. All
+	 * 4 Saradomin godsword and 10 toxic blowpipe specs logged came on that tick, so the tick after
+	 * is left to the food eaten behind the spec.
+	 */
+	private static SpecEffect atOnce(SpecEffect.Kind kind, CombatMetric metric)
 	{
-		return new SpecEffect(kind, metric, 0, HEALING_BLADE, 1);
-	}
-
-	/** A heal that lands with a projectile's hit. */
-	private static SpecEffect projectileHeal(CombatMetric metric, int budget)
-	{
-		return new SpecEffect(SpecEffect.Kind.HEAL, metric, FLIGHT, LANDED, budget);
+		return new SpecEffect(kind, metric, 0, 0, 1);
 	}
 
 	private static SpecEffect prayer(CombatMetric metric, int budget)
@@ -260,6 +265,9 @@ enum SpecWeapon
 			case ItemID.NIGHTMARE_STAFF_ELDRITCH:
 				return ELDRITCH_STAFF;
 
+			case ItemID.SCORCHING_BOW:
+				return SCORCHING_BOW;
+
 			default:
 				return itemId <= 0 ? null : OTHER;
 		}
@@ -315,6 +323,11 @@ enum SpecWeapon
 		if (lower.contains("zaryte crossbow"))
 		{
 			return ZARYTE_CROSSBOW;
+		}
+
+		if (lower.contains("scorching bow"))
+		{
+			return SCORCHING_BOW;
 		}
 
 		return lower.contains("eldritch") ? ELDRITCH_STAFF : OTHER;

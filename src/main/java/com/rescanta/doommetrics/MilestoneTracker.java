@@ -47,7 +47,8 @@ class MilestoneTracker
 
 	/**
 	 * The trip counted last, while it may still be going: TOTAL_DOM_LEVELS less the delves before
-	 * it, or -1. Kept across a toggle or session reset, which drop a run without ending it.
+	 * it, or -1. Kept across a toggle or session reset, which drop a run without ending it, and
+	 * stored with the table so a client restarted mid-trip has it too.
 	 */
 	private int countedTrip = -1;
 
@@ -86,6 +87,7 @@ class MilestoneTracker
 		}
 
 		milestones.replaceAll(milestoneStore.load());
+		countedTrip = milestoneStore.loadCountedTrip();
 		// Another character's session: its resets are not this one's.
 		improvedThisSession.clear();
 		sessionClears.clear();
@@ -147,6 +149,7 @@ class MilestoneTracker
 		}
 
 		countedTrip = trip;
+		milestoneStore.saveCountedTrip(trip);
 		milestones.runStarted();
 		milestoneStore.save(milestones);
 	}
@@ -177,7 +180,7 @@ class MilestoneTracker
 	{
 		boolean takeBack = takeBackIfAbandoned;
 		takeBackIfAbandoned = false;
-		countedTrip = -1;
+		forgetTrip();
 
 		if (!takeBack || !belongsToRun.getAsBoolean())
 		{
@@ -193,6 +196,17 @@ class MilestoneTracker
 	void runEnded()
 	{
 		takeBackIfAbandoned = false;
+		forgetTrip();
+	}
+
+	/** Not written on another character's profile - see {@link #belongsToRun}. */
+	private void forgetTrip()
+	{
+		if (countedTrip >= 0 && belongsToRun.getAsBoolean())
+		{
+			milestoneStore.saveCountedTrip(-1);
+		}
+
 		countedTrip = -1;
 	}
 

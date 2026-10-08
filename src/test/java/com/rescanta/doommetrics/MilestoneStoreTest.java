@@ -56,6 +56,17 @@ public class MilestoneStoreTest
 		assertEquals(17_200, restored.getRows().get(170).pbTicks);
 	}
 
+	/** The trip counted last is stored as its number; nothing, or anything else, is no trip. */
+	@Test
+	public void theCountedTripReadsBackOrReadsAsNone()
+	{
+		assertEquals(12_798, MilestoneStore.decodeTrip("12798"));
+		assertEquals(-1, MilestoneStore.decodeTrip(null));
+		assertEquals(-1, MilestoneStore.decodeTrip(""));
+		assertEquals(-1, MilestoneStore.decodeTrip("soon"));
+		assertEquals(-1, MilestoneStore.decodeTrip("-7"));
+	}
+
 	@Test
 	public void nothingStoredReadsAsNothing()
 	{

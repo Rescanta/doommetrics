@@ -177,6 +177,30 @@ public class PunishTrackerTest
 	}
 
 	/**
+	 * Log 2026-09-29 20:56:52-53: a twisted bow shot that missed landed with the halberd's 19, then
+	 * the halberd's 29 and a 21 on the same tick. An arrow's extra bonus splat comes a tick behind
+	 * the swing's own - all three times it was seen - so one landing with it is a larva exploding.
+	 */
+	@Test
+	public void aSecondBonusSplatLandingWithTheFirstIsALarvaExploding()
+	{
+		tickEnded(1750, true, null);
+
+		tracker.swung(1752);
+		tickEnded(1752, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(0, 1753);
+		mine(19, 1753);
+		tickEnded(1753, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(29, 1754);
+		bonus(21, 1754);
+		tickEnded(1754, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=19", "noxiousHalberdPunish=29"), recorded);
+	}
+
+	/**
 	 * 2026-09-30 tick 640, on video: a twisted bow shot at 638 landed with the scythe's three hits.
 	 * The XP drops read 44 ranged and 250 strength (5 and 28 damage), a third of that as hitpoints.
 	 */
@@ -251,6 +275,58 @@ public class PunishTrackerTest
 
 		assertEquals(list("scythePunish=12", "scythePunish=4", "scythePunish=1"), recorded);
 		assertEquals("16@443", handedBack.get(0));
+	}
+
+	/**
+	 * 2026-10-06 tick 5995, the hit that cleared the delve: bow 51, scythe 60, hits 23 8 2 0. The
+	 * scythe was worth 27 and the boss had 10 left after the arrow, so its hits were cut to 10 and
+	 * the arrow's share of what landed came to 15, nearer the 8 than the 23. The arrow lands first
+	 * and is never the one cut.
+	 */
+	@Test
+	public void aKillCutsTheScythesHitsShortAndNotTheArrow()
+	{
+		tickEnded(5991, false, null);
+		tracker.experienceGained(51, 5992);
+		tickEnded(5992, false, null);
+
+		tracker.swung(5994);
+		tracker.experienceGained(60, 5994);
+		tickEnded(5994, true, PunishWeapon.SCYTHE);
+
+		mine(23, 5995);
+		mine(8, 5995);
+		mine(2, 5995);
+		mine(0, 5995);
+		tickEnded(5995, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=8", "scythePunish=2"), recorded);
+		assertEquals(list("23@5995", "0@5995", "0@5995", "0@5995"), handedBack);
+	}
+
+	/**
+	 * 2026-10-08 tick 18326: a twisted bow shot that missed landed as a 0 with the halberd's 19,
+	 * and a larva hit two ticks before it had earned 3 experience. The 0 is under that share of
+	 * 1.3, and still the nearest to it.
+	 */
+	@Test
+	public void aFirstHitTooSmallForItsShareIsStillTheArrowWhenNothingIsNearer()
+	{
+		tracker.experienceGained(3, 18322);
+		tickEnded(18322, false, null);
+		tickEnded(18323, true, null);
+
+		tracker.swung(18325);
+		tracker.experienceGained(42, 18325);
+		tickEnded(18325, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(0, 18326);
+		mine(19, 18326);
+		tickEnded(18326, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=19"), recorded);
+		assertEquals(list("0@18326", "0@18326"), handedBack);
+		assertEquals(list("before 18325", "from 18325"), against);
 	}
 
 	/**
@@ -410,6 +486,130 @@ public class PunishTrackerTest
 
 		assertEquals(list("scythePunish=30", "scythePunish=15", "scythePunish=7"), recorded);
 		assertEquals(list("0@102", "0@102", "0@102"), handedBack);
+	}
+
+	/**
+	 * Being hit plays a block, and with a godsword in hand it was read as the swing: the spec
+	 * three ticks later was passed over and its hit landed outside the window. The block's tick
+	 * earned no experience and the spec's did, so the spec is the swing.
+	 */
+	@Test
+	public void aBlockBeforeTheSwingDoesNotCostItsPunish()
+	{
+		tickEnded(1410, true, null);
+
+		tracker.swung(1414);
+		tickEnded(1414, true, PunishWeapon.OTHER);
+		tickEnded(1415, true, PunishWeapon.OTHER);
+		tickEnded(1416, true, PunishWeapon.OTHER);
+
+		tracker.swung(1417);
+		tracker.experienceGained(80, 1417);
+		tickEnded(1417, true, PunishWeapon.OTHER);
+
+		mine(36, 1418);
+		tracker.beamCancelled(1418);
+		tickEnded(1418, false, PunishWeapon.OTHER);
+
+		bonus(27, 1419);
+		tickEnded(1419, false, PunishWeapon.OTHER);
+
+		assertEquals(list("otherMeleePunish=36", "otherMeleePunish=27"), recorded);
+	}
+
+	/**
+	 * The same with the halberd, the swing a tick behind the block and an arrow landing on the
+	 * swing's tick. The arrow came ahead of the swing; the halberd's hit is the one a tick later,
+	 * which used to be turned away as one hit too many.
+	 */
+	@Test
+	public void whatLandsOnTheLaterSwingsTickIsNotItsHit()
+	{
+		tickEnded(99, true, null);
+
+		tracker.swung(100);
+		tracker.experienceGained(51, 100);
+		tickEnded(100, true, null);
+
+		tracker.swung(101);
+		tickEnded(101, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		tracker.swung(102);
+		mine(23, 102);
+		tracker.experienceGained(80, 102);
+		tickEnded(102, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(36, 103);
+		tracker.beamCancelled(103);
+		tickEnded(103, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(29, 104);
+		tickEnded(104, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=36", "noxiousHalberdPunish=29"), recorded);
+		assertEquals(list("23@102", "0@103"), handedBack);
+	}
+
+	/**
+	 * A swing that earned experience is the swing. A block a tick later, with a point or two from
+	 * a larva on the same tick, does not move it.
+	 */
+	@Test
+	public void aSwingThatEarnedExperienceIsNotMovedByALaterAnimation()
+	{
+		tickEnded(199, true, null);
+
+		tracker.swung(200);
+		tracker.experienceGained(60, 200);
+		tickEnded(200, true, PunishWeapon.SCYTHE);
+
+		tracker.swung(201);
+		mine(20, 201);
+		mine(5, 201);
+		mine(2, 201);
+		tracker.experienceGained(2, 201);
+		tracker.beamCancelled(201);
+		tickEnded(201, false, PunishWeapon.SCYTHE);
+
+		bonus(16, 202);
+		bonus(16, 202);
+		bonus(16, 202);
+		tickEnded(202, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=20", "scythePunish=5", "scythePunish=2", "scythePunish=16",
+			"scythePunish=16", "scythePunish=16"), recorded);
+	}
+
+	/**
+	 * An arrow lands with the scythe's 20 5 2 and a thrall's window takes the 2, so three hits are
+	 * left and the count says nothing is wrong. They come to 48 where the swing's 60 experience is
+	 * 27: the arrow is among them. The thrall's own 3 a tick later is one too many.
+	 */
+	@Test
+	public void anArrowIsStillFoundWhenAThrallTookOneOfTheSwingsHits()
+	{
+		tickEnded(97, true, null);
+		tracker.experienceGained(51, 98);
+		tickEnded(98, true, null);
+
+		tracker.swung(100);
+		tracker.experienceGained(60, 100);
+		tickEnded(100, true, PunishWeapon.SCYTHE);
+
+		mine(23, 101);
+		mine(20, 101);
+		mine(5, 101);
+		tickEnded(101, false, PunishWeapon.SCYTHE);
+
+		mine(3, 102);
+		bonus(16, 102);
+		bonus(16, 102);
+		bonus(16, 102);
+		tickEnded(102, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=20", "scythePunish=5", "scythePunish=16", "scythePunish=16",
+			"scythePunish=16"), recorded);
+		assertEquals(list("23@101", "0@101", "0@101", "3@102"), handedBack);
 	}
 
 	/**

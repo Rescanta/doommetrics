@@ -42,12 +42,18 @@ class PunishTracker
 
 	/**
 	 * How far, in damage, a hit may be from the earlier attack's share and still be taken for it,
-	 * with a weapon whose hits can't be counted.
+	 * with a weapon whose hits can't be counted; and how far under it the first hit may be.
 	 */
 	private static final int SHARE_SLACK = 1;
 
 	/** A strength-bonus splat lands two ticks after the swing at the soonest, a tick after its hit. */
 	static final int BONUS_FROM = 2;
+
+	/**
+	 * The extra bonus splat an arrow landing at a punish brings comes a tick behind the swing's
+	 * own. One sooner, past those the weapon draws, is a larva exploding by the boss.
+	 */
+	static final int EXTRA_BONUS_FROM = 3;
 
 	private static final int NONE = Integer.MIN_VALUE;
 
@@ -104,6 +110,12 @@ class PunishTracker
 	private PunishWeapon weapon;
 
 	/**
+	 * The tick of an animation that came inside the window and was passed over, or {@link #NONE}.
+	 * It is the swing after all if the one the window is open for turns out to be none.
+	 */
+	private int laterSwing = NONE;
+
+	/**
 	 * Our hits on the boss since the swing, its own tick included, and the bonus splats credited.
 	 * The game draws a bonus splat per hit, so one past them is something else - a larva
 	 * exploding by the boss.
@@ -140,6 +152,7 @@ class PunishTracker
 		cancelledAt = NONE;
 		swungAt = NONE;
 		weapon = null;
+		laterSwing = NONE;
 		ownHits = 0;
 		bonusesCounted = 0;
 		landed = 0;
@@ -162,11 +175,17 @@ class PunishTracker
 		// on.
 		if (swungAt != NONE && (weapon == null || (tick - swungAt <= HIT_WINDOW && isPunish())))
 		{
+			if (weapon != null && laterSwing == NONE)
+			{
+				laterSwing = tick;
+			}
+
 			return;
 		}
 
 		swungAt = tick;
 		weapon = null;
+		laterSwing = NONE;
 		ownHits = 0;
 		bonusesCounted = 0;
 		landed = 0;
@@ -270,6 +289,13 @@ class PunishTracker
 
 		praying = prayerUp;
 
+		if (laterSwing == tick)
+		{
+			swingLater(tick, equipped);
+		}
+
+		laterSwing = NONE;
+
 		if (swungAt != NONE && weapon == null)
 		{
 			weapon = equipped.get();
@@ -306,10 +332,51 @@ class PunishTracker
 	}
 
 	/**
+	 * The animation the window opened for can be a block, played on being hit with the weapon
+	 * already in hand. An attack earns its experience as it is made: if that tick earned none and
+	 * this one did, with a melee weapon in hand, this is the swing. What landed on its tick came
+	 * ahead of it.
+	 */
+	private void swingLater(int tick, Supplier<PunishWeapon> equipped)
+	{
+		if (swungAt == NONE || experienceBetween(swungAt, swungAt) > 0
+			|| experienceBetween(tick, tick) <= 0)
+		{
+			return;
+		}
+
+		PunishWeapon inHand = equipped.get();
+
+		if (inHand == null)
+		{
+			return;
+		}
+
+		swungAt = tick;
+		weapon = inHand;
+		ownHits = 0;
+		bonusesCounted = 0;
+		landed = 0;
+
+		for (Held hit : held)
+		{
+			if (hit.mine)
+			{
+				ownHits++;
+				landedAt = hit.tick;
+				handback.damaged(hit.amount, hit.tick);
+			}
+		}
+
+		held.clear();
+	}
+
+	/**
 	 * One hit of ours too many with the swing's own: an arrow fired just before the switch landed
-	 * with them. The share of experience its attack earned says which hit it was. A weapon whose
-	 * hits can't be counted has one too many only if a hit comes to that share. A swing that earned
-	 * no experience has none of its own to tell apart.
+	 * with them. The share of experience its attack earned says which hit it was; it lands ahead
+	 * of the swing's, so the first hit is it unless too small - a kill cuts the swing's short and
+	 * the share with them. A weapon whose hits can't be counted has one too many only if a hit
+	 * comes to that share. A swing that earned no experience has none of its own to tell apart.
 	 */
 	private void findStray(int tick)
 	{
@@ -349,7 +416,8 @@ class PunishTracker
 			return;
 		}
 
-		if (counted ? own.size() != weapon.hits() + 1 : own.size() < 2)
+		if (counted ? own.size() != weapon.hits() + 1 && !hasOneTooBig(own, total, swingXp)
+			: own.size() < 2)
 		{
 			return;
 		}
@@ -357,11 +425,14 @@ class PunishTracker
 		double share = (double) total * earlierXp / (earlierXp + swingXp);
 		Held stray = own.get(0);
 
-		for (Held hit : own)
+		if (stray.amount < share - SHARE_SLACK)
 		{
-			if (Math.abs(hit.amount - share) < Math.abs(stray.amount - share))
+			for (Held hit : own)
 			{
-				stray = hit;
+				if (Math.abs(hit.amount - share) < Math.abs(stray.amount - share))
+				{
+					stray = hit;
+				}
 			}
 		}
 
@@ -371,6 +442,17 @@ class PunishTracker
 		}
 
 		stray.stray = true;
+	}
+
+	/**
+	 * The weapon's own number of hits, coming to more than the swing's experience can account for:
+	 * a thrall's window took a small one of the swing's on this tick, leaving the arrow among the
+	 * rest. The thrall's own splat lands on another tick and is turned away there.
+	 */
+	private boolean hasOneTooBig(List<Held> own, int total, int swingXp)
+	{
+		return own.size() == weapon.hits()
+			&& total > swingXp / CombatTracker.LEAST_EXPERIENCE + CombatTracker.EXPERIENCE_SLACK;
 	}
 
 	/**
@@ -436,6 +518,12 @@ class PunishTracker
 	private boolean isBonus(Held hit)
 	{
 		if (hit.tick - swungAt < BONUS_FROM || bonusesCounted >= ownHits)
+		{
+			return false;
+		}
+
+		if (weapon.hits() > 0 && bonusesCounted >= weapon.hits()
+			&& hit.tick - swungAt < EXTRA_BONUS_FROM)
 		{
 			return false;
 		}

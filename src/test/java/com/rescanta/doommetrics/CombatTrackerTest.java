@@ -115,13 +115,144 @@ public class CombatTrackerTest
 	@Test
 	public void aFiredSpecMayLandFourTicksLater()
 	{
-		tracker.specFired(SpecWeapon.OTHER.fired(false), 5094);
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 5094);
 		tracker.damaged(12, 5098);
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 6000);
 		tracker.damaged(80, 6004);
 		tracker.damaged(30, 6005);
 
 		assertEquals(list("otherSpecDamage=12", "zcbDamage=80"), recorded);
+	}
+
+	/**
+	 * The scorching bow fires one arrow. Two specs went off three ticks apart, the second at a
+	 * larva, and a twisted bow shot made a tick after it landed four ticks behind that spec: the
+	 * larva's hit is the spec's one, and the 49 is the twisted bow's.
+	 */
+	@Test
+	public void aBowShotBehindAScorchingBowSpecIsNotTheSpecs()
+	{
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 1205);
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 1208);
+		tracker.damaged(12, 1209);
+
+		// On the larva, so it comes as a 0.
+		tracker.damaged(0, 1211);
+		tracker.damaged(49, 1212);
+
+		assertEquals(list("otherSpecDamage=12", "otherSpecDamage=0"), recorded);
+	}
+
+	/**
+	 * An attack earns its hitpoints experience as it is made, so what the spec's tick earned says
+	 * what the spec will hit for: 111 is a 49, give or take the boss's modifier. The twisted bow's
+	 * 72, fired the tick before and landing inside the window, is too big to be it.
+	 */
+	@Test
+	public void aHitTooBigForTheSpecsExperienceIsAnotherAttacks()
+	{
+		tracker.specFired(SpecWeapon.ELDRITCH_STAFF, 100, 0, 111);
+		tracker.damaged(72, 102);
+		tracker.damaged(49, 103);
+
+		assertEquals(list("otherSpecDamage=49"), recorded);
+	}
+
+	/**
+	 * The shot before the spec missed, and its 0 lands first and takes the spec's one hit. The
+	 * spec earned experience, so it did not miss: the hit that fits is still its own, and the one
+	 * after that is not.
+	 */
+	@Test
+	public void aMissLandingFirstDoesNotCostAOneHitSpecItsHit()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 111);
+		tracker.damaged(0, 102);
+		tracker.damaged(49, 103);
+		tracker.damaged(47, 104);
+
+		assertEquals(list("zcbDamage=0", "zcbDamage=49"), recorded);
+	}
+
+	/** A small hit landing first is made up to the spec's own when that lands. */
+	@Test
+	public void aSmallHitLandingFirstIsMadeUpToTheSpecsOwn()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 111);
+		tracker.damaged(7, 102);
+		tracker.damaged(49, 103);
+
+		assertEquals(list("zcbDamage=7", "zcbDamage=42"), recorded);
+	}
+
+	/** The blow that kills is cut to what the boss had left, and is still the spec's. */
+	@Test
+	public void aSpecsHitCutShortByTheKillIsStillCounted()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100, 0, 111);
+		tracker.damaged(20, 101);
+
+		assertEquals(list("otherSpecDamage=20"), recorded);
+	}
+
+	/** Up to four hits, and never more between them than the experience says: 89 is a 40. */
+	@Test
+	public void anUnnamedSpecsHitsComeToNoMoreThanItsExperienceSays()
+	{
+		tracker.specFired(SpecWeapon.OTHER.fired(false), 100, 0, 89);
+		tracker.damaged(40, 103);
+		tracker.damaged(49, 104);
+
+		assertEquals(list("otherSpecDamage=40"), recorded);
+	}
+
+	/** Dragon claws hit four times for the one spec, and the experience is for all four: 60. */
+	@Test
+	public void aSpecOfSeveralHitsIsHeldToItsExperienceAsAWhole()
+	{
+		tracker.specFired(SpecWeapon.OTHER, 100, 0, 133);
+		tracker.damaged(30, 101);
+		tracker.damaged(15, 101);
+		tracker.damaged(7, 102);
+		tracker.damaged(8, 102);
+
+		assertEquals(list("otherSpecDamage=30", "otherSpecDamage=15", "otherSpecDamage=7",
+			"otherSpecDamage=8"), recorded);
+	}
+
+	/**
+	 * No experience on the spec's tick says nothing about it: a miss earns none, and at 200
+	 * million hitpoints experience nothing does.
+	 */
+	@Test
+	public void aSpecThatEarnedNoExperienceIsCountedAsItWas()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 0);
+		tracker.damaged(44, 102);
+
+		assertEquals(list("zcbDamage=44"), recorded);
+	}
+
+	/** Blood Sacrifice's 25 earns no experience, so the swing's says nothing about it. */
+	@Test
+	public void theSacrificeIsNotHeldToTheSwingsExperience()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100, 0, 22);
+		tracker.damaged(10, 101);
+		tracker.damaged(25, 109);
+
+		assertEquals(list("otherSpecDamage=10", "otherSpecDamage=25"), recorded);
+	}
+
+	/** A spec swung as the punish has its hit counted there, and none is still to come. */
+	@Test
+	public void aSpecSpentOnAPunishIsNotShortOfItsHit()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100, 0, 111);
+		tracker.spent(101, 100);
+		tracker.damaged(49, 102);
+
+		assertEquals(list("otherSpecDamage=0"), recorded);
 	}
 
 	/**
@@ -237,14 +368,43 @@ public class CombatTrackerTest
 		assertTrue(recorded.isEmpty());
 	}
 
+	/**
+	 * The heal is worked out as the dart is blown: the hitpoints rise on the tick the energy drops,
+	 * read ahead of the spec itself, and the dart lands two or three ticks later. A window that
+	 * waited for the dart counted none of a session's ten specs.
+	 */
 	@Test
-	public void aBlowpipeSpecHealsAndTheDamageGoesToTheGroupedTotal()
+	public void aBlowpipeSpecHealsOnItsOwnTickAndTheDamageGoesToTheGroupedTotal()
+	{
+		tracker.healed(16, 14812);
+		tracker.specFired(SpecWeapon.BLOWPIPE, 14812);
+		tracker.damaged(33, 14814);
+
+		assertEquals(list("bpHeal=16", "otherSpecDamage=33"), recorded);
+	}
+
+	/** What heals behind the spec is something else: a shark eaten a tick after it. */
+	@Test
+	public void aHealATickBehindTheBlowpipeSpecIsNotTheSpecs()
 	{
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
+		tracker.healed(20, 101);
 		tracker.damaged(31, 102);
-		tracker.healed(15, 102);
 
-		assertEquals(list("otherSpecDamage=31", "bpHeal=15"), recorded);
+		assertEquals(list("otherSpecDamage=31"), recorded);
+	}
+
+	/** The same for the Saradomin godsword, whose heal and prayer come on the spec's tick too. */
+	@Test
+	public void aRiseATickBehindTheSaradominGodswordSpecIsNotTheSpecs()
+	{
+		tracker.healed(24, 100);
+		tracker.prayerGained(12, 100);
+		tracker.specFired(SpecWeapon.SARADOMIN_GODSWORD, 100);
+		tracker.healed(20, 101);
+		tracker.prayerGained(33, 101);
+
+		assertEquals(list("sgsHeal=24", "sgsPrayer=12"), recorded);
 	}
 
 	@Test
@@ -666,7 +826,7 @@ public class CombatTrackerTest
 	{
 		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 100);
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
-		tracker.healed(15, 102);
+		tracker.healed(15, 100);
 
 		assertEquals(list("bpHeal=15"), recorded);
 	}
@@ -676,8 +836,8 @@ public class CombatTrackerTest
 	{
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
 		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 100);
-		tracker.healed(15, 102);
-		tracker.healed(12, 102);
+		tracker.healed(15, 100);
+		tracker.healed(12, 100);
 
 		// Both opened on the same tick, so the later-registered barrage takes the first; its budget
 		// of one is then spent and the blowpipe takes the second rather than it being dropped.
@@ -714,6 +874,7 @@ public class CombatTrackerTest
 		assertEquals(SpecWeapon.ZARYTE_CROSSBOW, SpecWeapon.forItem(999_999, "Zaryte crossbow"));
 		assertEquals(SpecWeapon.ELDRITCH_STAFF,
 			SpecWeapon.forItem(999_999, "Eldritch nightmare staff"));
+		assertEquals(SpecWeapon.SCORCHING_BOW, SpecWeapon.forItem(999_999, "Scorching bow"));
 
 		assertEquals(SpecWeapon.OTHER, SpecWeapon.forItem(999_999, "Dragon claws"));
 		assertEquals(SpecWeapon.OTHER, SpecWeapon.forItem(999_999, null));
@@ -785,6 +946,8 @@ public class CombatTrackerTest
 			SpecWeapon.forItem(ItemID.TOXIC_BLOWPIPE_LOADED_ORNAMENT));
 		assertEquals(SpecWeapon.ELDRITCH_STAFF,
 			SpecWeapon.forItem(ItemID.NIGHTMARE_STAFF_ELDRITCH));
+		assertEquals(SpecWeapon.SCORCHING_BOW,
+			SpecWeapon.forItem(ItemID.SCORCHING_BOW));
 		assertEquals(SpecWeapon.DRAGON_KNIFE,
 			SpecWeapon.forItem(ItemID.DRAGON_KNIFE));
 		assertEquals(SpecWeapon.DRAGON_KNIFE,
@@ -803,7 +966,8 @@ public class CombatTrackerTest
 	public void theCatchAllListsTheSpecsItCounts()
 	{
 		assertEquals(list("Dragon knife", "Dragon thrownaxe", "Rosewood blowpipe", "Toxic blowpipe",
-			"Ancient godsword", "Saradomin godsword", "Eldritch staff", "Any other spec",
+			"Ancient godsword", "Saradomin godsword", "Eldritch staff", "Scorching bow",
+			"Any other spec",
 			"Burns (scorching bow, burning claws)"),
 			CombatMetric.OTHER_SPEC_DAMAGE.sources());
 
