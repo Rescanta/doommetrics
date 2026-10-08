@@ -42,7 +42,7 @@ class PunishTracker
 
 	/**
 	 * How far, in damage, a hit may be from the earlier attack's share and still be taken for it,
-	 * with a weapon whose hits can't be counted.
+	 * with a weapon whose hits can't be counted; and how far under it the first hit may be.
 	 */
 	private static final int SHARE_SLACK = 1;
 
@@ -310,6 +310,10 @@ class PunishTracker
 	 * with them. The share of experience its attack earned says which hit it was. A weapon whose
 	 * hits can't be counted has one too many only if a hit comes to that share. A swing that earned
 	 * no experience has none of its own to tell apart.
+	 *
+	 * <p>The arrow lands ahead of the swing's hits, so a kill cuts those short and never the arrow:
+	 * the splats then come to less than the experience says, and the share with them. The first
+	 * hit is the arrow unless it is too small to be.
 	 */
 	private void findStray(int tick)
 	{
@@ -357,11 +361,14 @@ class PunishTracker
 		double share = (double) total * earlierXp / (earlierXp + swingXp);
 		Held stray = own.get(0);
 
-		for (Held hit : own)
+		if (stray.amount < share - SHARE_SLACK)
 		{
-			if (Math.abs(hit.amount - share) < Math.abs(stray.amount - share))
+			for (Held hit : own)
 			{
-				stray = hit;
+				if (Math.abs(hit.amount - share) < Math.abs(stray.amount - share))
+				{
+					stray = hit;
+				}
 			}
 		}
 

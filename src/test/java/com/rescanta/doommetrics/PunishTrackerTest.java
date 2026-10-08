@@ -254,6 +254,58 @@ public class PunishTrackerTest
 	}
 
 	/**
+	 * 2026-10-06 tick 5995, the hit that cleared the delve: bow 51, scythe 60, hits 23 8 2 0. The
+	 * scythe was worth 27 and the boss had 10 left after the arrow, so its hits were cut to 10 and
+	 * the arrow's share of what landed came to 15, nearer the 8 than the 23. The arrow lands first
+	 * and is never the one cut.
+	 */
+	@Test
+	public void aKillCutsTheScythesHitsShortAndNotTheArrow()
+	{
+		tickEnded(5991, false, null);
+		tracker.experienceGained(51, 5992);
+		tickEnded(5992, false, null);
+
+		tracker.swung(5994);
+		tracker.experienceGained(60, 5994);
+		tickEnded(5994, true, PunishWeapon.SCYTHE);
+
+		mine(23, 5995);
+		mine(8, 5995);
+		mine(2, 5995);
+		mine(0, 5995);
+		tickEnded(5995, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=8", "scythePunish=2"), recorded);
+		assertEquals(list("23@5995", "0@5995", "0@5995", "0@5995"), handedBack);
+	}
+
+	/**
+	 * 2026-10-08 tick 18326: a twisted bow shot that missed landed as a 0 with the halberd's 19,
+	 * and a larva hit two ticks before it had earned 3 experience. The 0 is under that share of
+	 * 1.3, and still the nearest to it.
+	 */
+	@Test
+	public void aFirstHitTooSmallForItsShareIsStillTheArrowWhenNothingIsNearer()
+	{
+		tracker.experienceGained(3, 18322);
+		tickEnded(18322, false, null);
+		tickEnded(18323, true, null);
+
+		tracker.swung(18325);
+		tracker.experienceGained(42, 18325);
+		tickEnded(18325, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(0, 18326);
+		mine(19, 18326);
+		tickEnded(18326, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=19"), recorded);
+		assertEquals(list("0@18326", "0@18326"), handedBack);
+		assertEquals(list("before 18325", "from 18325"), against);
+	}
+
+	/**
 	 * A swing that earns no experience hit for nothing, so the one hit landing with it is the
 	 * arrow's. All 31 scythe and halberd swings that hit in the two runs with experience logged
 	 * earned it on the swing's tick, and the 7 that missed earned none.
