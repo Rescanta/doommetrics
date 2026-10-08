@@ -581,6 +581,38 @@ public class PunishTrackerTest
 	}
 
 	/**
+	 * An arrow lands with the scythe's 20 5 2 and a thrall's window takes the 2, so three hits are
+	 * left and the count says nothing is wrong. They come to 48 where the swing's 60 experience is
+	 * 27: the arrow is among them. The thrall's own 3 a tick later is one too many.
+	 */
+	@Test
+	public void anArrowIsStillFoundWhenAThrallTookOneOfTheSwingsHits()
+	{
+		tickEnded(97, true, null);
+		tracker.experienceGained(51, 98);
+		tickEnded(98, true, null);
+
+		tracker.swung(100);
+		tracker.experienceGained(60, 100);
+		tickEnded(100, true, PunishWeapon.SCYTHE);
+
+		mine(23, 101);
+		mine(20, 101);
+		mine(5, 101);
+		tickEnded(101, false, PunishWeapon.SCYTHE);
+
+		mine(3, 102);
+		bonus(16, 102);
+		bonus(16, 102);
+		bonus(16, 102);
+		tickEnded(102, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=20", "scythePunish=5", "scythePunish=16", "scythePunish=16",
+			"scythePunish=16"), recorded);
+		assertEquals(list("23@101", "0@101", "0@101", "3@102"), handedBack);
+	}
+
+	/**
 	 * A thrall's window took the scythe's own 2, so the thrall's 3 a tick later stands in for it:
 	 * the swap {@link ThrallTracker} allows for, which keeps the scythe at three hits.
 	 */

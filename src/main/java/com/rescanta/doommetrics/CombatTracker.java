@@ -31,11 +31,11 @@ class CombatTracker
 	 * The least and most hitpoints experience a point of damage on the boss earns: 4/3 times the
 	 * boss's modifier, 2.11 to 2.40 over 2811 attacks on delves 1 to 43, with room either side.
 	 */
-	private static final double LEAST_EXPERIENCE = 2.0;
-	private static final double MOST_EXPERIENCE = 2.5;
+	static final double LEAST_EXPERIENCE = 2.0;
+	static final double MOST_EXPERIENCE = 2.5;
 
 	/** Damage either way for the rounding, and for a larva's point of experience on the same tick. */
-	private static final int EXPERIENCE_SLACK = 1;
+	static final int EXPERIENCE_SLACK = 1;
 
 	/** A cause with a window still open, and how much of its effect is still unaccounted for. */
 	private static final class Pending

@@ -420,7 +420,8 @@ class PunishTracker
 			return;
 		}
 
-		if (counted ? own.size() != weapon.hits() + 1 : own.size() < 2)
+		if (counted ? own.size() != weapon.hits() + 1 && !hasOneTooBig(own, total, swingXp)
+			: own.size() < 2)
 		{
 			return;
 		}
@@ -445,6 +446,17 @@ class PunishTracker
 		}
 
 		stray.stray = true;
+	}
+
+	/**
+	 * The weapon's own number of hits, coming to more than the swing's experience can account for:
+	 * a thrall's window took a small one of the swing's on this tick, leaving the arrow among the
+	 * rest. The thrall's own splat lands on another tick and is turned away there.
+	 */
+	private boolean hasOneTooBig(List<Held> own, int total, int swingXp)
+	{
+		return own.size() == weapon.hits()
+			&& total > swingXp / CombatTracker.LEAST_EXPERIENCE + CombatTracker.EXPERIENCE_SLACK;
 	}
 
 	/**
