@@ -49,6 +49,12 @@ class PunishTracker
 	/** A strength-bonus splat lands two ticks after the swing at the soonest, a tick after its hit. */
 	static final int BONUS_FROM = 2;
 
+	/**
+	 * The extra bonus splat an arrow landing at a punish brings comes a tick behind the swing's
+	 * own. One sooner, past those the weapon draws, is a larva exploding by the boss.
+	 */
+	static final int EXTRA_BONUS_FROM = 3;
+
 	private static final int NONE = Integer.MIN_VALUE;
 
 	/** A hitsplat on the boss waiting on the end of its tick. */
@@ -443,6 +449,12 @@ class PunishTracker
 	private boolean isBonus(Held hit)
 	{
 		if (hit.tick - swungAt < BONUS_FROM || bonusesCounted >= ownHits)
+		{
+			return false;
+		}
+
+		if (weapon.hits() > 0 && bonusesCounted >= weapon.hits()
+			&& hit.tick - swungAt < EXTRA_BONUS_FROM)
 		{
 			return false;
 		}

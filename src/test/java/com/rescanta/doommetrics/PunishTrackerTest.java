@@ -177,6 +177,30 @@ public class PunishTrackerTest
 	}
 
 	/**
+	 * Log 2026-09-29 20:56:52-53: a twisted bow shot that missed landed with the halberd's 19, then
+	 * the halberd's 29 and a 21 on the same tick. An arrow's extra bonus splat comes a tick behind
+	 * the swing's own - all three times it was seen - so one landing with it is a larva exploding.
+	 */
+	@Test
+	public void aSecondBonusSplatLandingWithTheFirstIsALarvaExploding()
+	{
+		tickEnded(1750, true, null);
+
+		tracker.swung(1752);
+		tickEnded(1752, true, PunishWeapon.NOXIOUS_HALBERD);
+
+		mine(0, 1753);
+		mine(19, 1753);
+		tickEnded(1753, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		bonus(29, 1754);
+		bonus(21, 1754);
+		tickEnded(1754, false, PunishWeapon.NOXIOUS_HALBERD);
+
+		assertEquals(list("noxiousHalberdPunish=19", "noxiousHalberdPunish=29"), recorded);
+	}
+
+	/**
 	 * 2026-09-30 tick 640, on video: a twisted bow shot at 638 landed with the scythe's three hits.
 	 * The XP drops read 44 ranged and 250 strength (5 and 28 damage), a third of that as hitpoints.
 	 */
