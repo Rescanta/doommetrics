@@ -17,6 +17,7 @@ class MilestoneStore
 {
 	private static final String KEY_ROWS = "milestones";
 	private static final String KEY_SEEDED = "milestonesSeeded";
+	private static final String KEY_TRIP = "milestonesCountedTrip";
 
 	private final ConfigManager configManager;
 	private final Gson gson;
@@ -58,6 +59,43 @@ class MilestoneStore
 	void setSeeded()
 	{
 		configManager.setRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_SEEDED, true);
+	}
+
+	/**
+	 * The trip counted last while it may still be going, or -1 - see
+	 * {@link MilestoneTracker#runStarted}. Stored so a client restarted mid-trip finds it again.
+	 */
+	int loadCountedTrip()
+	{
+		return decodeTrip(configManager.getRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_TRIP));
+	}
+
+	void saveCountedTrip(int trip)
+	{
+		if (trip < 0)
+		{
+			configManager.unsetRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_TRIP);
+			return;
+		}
+
+		configManager.setRSProfileConfiguration(DoomMetricsConfig.GROUP, KEY_TRIP, trip);
+	}
+
+	static int decodeTrip(String saved)
+	{
+		if (saved == null || saved.isEmpty())
+		{
+			return -1;
+		}
+
+		try
+		{
+			return Math.max(-1, Integer.parseInt(saved));
+		}
+		catch (NumberFormatException e)
+		{
+			return -1;
+		}
 	}
 
 	String encode(MilestoneTable table)
