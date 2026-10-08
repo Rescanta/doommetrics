@@ -611,6 +611,7 @@ public class DoomMetricsPlugin extends Plugin
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
 		claims.itemContainerChanged(event);
+		combat.itemContainerChanged(event);
 	}
 
 	@Subscribe
