@@ -124,13 +124,13 @@ enum SpecWeapon
 
 	private static SpecEffect swing(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, SWING, PROMPT, budget);
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, SWING, PROMPT, budget).ofTheAttack();
 	}
 
 	/** A spec's hit that has to fly to its target - see {@link #FLIGHT}. */
 	private static SpecEffect projectile(CombatMetric metric, int budget)
 	{
-		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, LANDED, budget);
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, LANDED, budget).ofTheAttack();
 	}
 
 	/** A heal or restore worked out as the spec is made: from its own tick, ahead of its hitsplat. */

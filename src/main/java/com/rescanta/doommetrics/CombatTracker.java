@@ -27,6 +27,16 @@ class CombatTracker
 	/** How many effects arriving ahead of their cause may be held; the oldest is dropped first. */
 	private static final int MAX_HELD = 8;
 
+	/**
+	 * The least and most hitpoints experience a point of damage on the boss earns: 4/3 times the
+	 * boss's modifier, 2.11 to 2.40 over 2811 attacks on delves 1 to 43, with room either side.
+	 */
+	private static final double LEAST_EXPERIENCE = 2.0;
+	private static final double MOST_EXPERIENCE = 2.5;
+
+	/** Damage either way for the rounding, and for a larva's point of experience on the same tick. */
+	private static final int EXPERIENCE_SLACK = 1;
+
 	/** A cause with a window still open, and how much of its effect is still unaccounted for. */
 	private static final class Pending
 	{
@@ -36,25 +46,74 @@ class CombatTracker
 		/** The least a hit of this cause's can be, short of a 0; 0 when anything can be. */
 		private final int leastHit;
 
+		/**
+		 * The least and the most the cause's own hits come to, by the experience it earned; 0 and
+		 * no limit when that says nothing.
+		 */
+		private final long least;
+		private final long most;
+
 		private int left;
 
-		private Pending(int openedAt, SpecEffect effect, int leastHit)
+		/** What has been credited so far. */
+		private long taken;
+
+		/** Its hit was counted somewhere else, so there is none still to come. */
+		private boolean settled;
+
+		private Pending(int openedAt, SpecEffect effect, int leastHit, int experience)
 		{
+			boolean known = experience > 0 && effect.isOfTheAttack();
+
 			this.openedAt = openedAt;
 			this.effect = effect;
 			this.leastHit = effect.kind() == SpecEffect.Kind.DAMAGE ? leastHit : 0;
+			this.least = known
+				? Math.max(0, (long) Math.floor(experience / MOST_EXPERIENCE) - EXPERIENCE_SLACK)
+				: 0;
+			this.most = known
+				? (long) Math.ceil(experience / LEAST_EXPERIENCE) + EXPERIENCE_SLACK
+				: Long.MAX_VALUE;
 			this.left = effect.budget();
 		}
 
 		private boolean accepts(SpecEffect.Kind kind, long amount, int tick)
 		{
-			return left > 0 && effect.kind() == kind && effect.covers(tick - openedAt)
-				&& effect.isSized(amount) && (amount == 0 || amount >= leastHit);
+			if (effect.kind() != kind || !effect.covers(tick - openedAt) || !effect.isSized(amount))
+			{
+				return false;
+			}
+
+			if (left > 0)
+			{
+				return amount == 0 || (amount >= leastHit && amount <= most - taken);
+			}
+
+			// The hit it is still short of: one that is what the experience says, by itself.
+			return isShort() && amount >= least && amount <= most;
+		}
+
+		/**
+		 * A one-hit cause that took something too small to be what its experience says it did: a
+		 * miss or a small hit of another attack's landed first, and its own is still to come.
+		 */
+		private boolean isShort()
+		{
+			return left <= 0 && effect.budget() == 1 && !settled && taken < least;
+		}
+
+		/** Takes an effect; returns how much of it is new, over what a short cause took before. */
+		private long take(long amount)
+		{
+			long share = left > 0 ? amount : amount - taken;
+			left--;
+			taken += share;
+			return share;
 		}
 
 		private boolean isExpired(int tick)
 		{
-			return left <= 0 || tick - openedAt > effect.to();
+			return tick - openedAt > effect.to() || (left <= 0 && !isShort());
 		}
 	}
 
@@ -109,12 +168,26 @@ class CombatTracker
 	 */
 	void specFired(SpecWeapon weapon, int tick, int leastHit)
 	{
+		specFired(weapon, tick, leastHit, 0);
+	}
+
+	/**
+	 * @param experience the hitpoints experience gained on the spec's tick, 0 if none. An attack
+	 *                   earns it as it is made, in proportion to what it will hit for, so the
+	 *                   spec's own hits come to no more than it says and a hit too big for it is
+	 *                   another attack's. A one-hit spec that took something too small first - a
+	 *                   miss of another attack's, usually - still takes the hit that fits. None
+	 *                   earned says nothing: a miss earns none, but neither does anything at the
+	 *                   experience cap.
+	 */
+	void specFired(SpecWeapon weapon, int tick, int leastHit, int experience)
+	{
 		if (weapon == null)
 		{
 			return;
 		}
 
-		open(weapon.effects(), tick, leastHit);
+		open(weapon.effects(), tick, leastHit, experience);
 	}
 
 	/** @param metric which spell's heal to credit - blood barrage, or the grouped rest */
@@ -130,7 +203,7 @@ class CombatTracker
 		lastSpellTick = tick;
 
 		open(Collections.singletonList(new SpecEffect(
-			SpecEffect.Kind.HEAL, metric, 0, SPELL_WINDOW, 1)), tick, 0);
+			SpecEffect.Kind.HEAL, metric, 0, SPELL_WINDOW, 1)), tick, 0, 0);
 	}
 
 	/** A heal hitsplat landed on the player. */
@@ -173,7 +246,18 @@ class CombatTracker
 	 */
 	CombatMetric spent(int tick, int swing)
 	{
-		return credit(SpecEffect.Kind.DAMAGE, 0, tick, swing, Integer.MAX_VALUE);
+		prune(tick);
+
+		Pending source = best(SpecEffect.Kind.DAMAGE, 0, tick, swing, Integer.MAX_VALUE);
+
+		if (source == null)
+		{
+			return null;
+		}
+
+		source.settled = true;
+		sink.record(source.effect.metric(), source.take(0));
+		return source.effect.metric();
 	}
 
 	/** The player's prayer points went up by {@code amount}. */
@@ -195,7 +279,7 @@ class CombatTracker
 		return source == null ? null : source.effect.metric();
 	}
 
-	private void open(List<SpecEffect> effects, int tick, int leastHit)
+	private void open(List<SpecEffect> effects, int tick, int leastHit, int experience)
 	{
 		prune(tick);
 
@@ -206,7 +290,7 @@ class CombatTracker
 				pending.remove(0);
 			}
 
-			Pending opened = new Pending(tick, effect, leastHit);
+			Pending opened = new Pending(tick, effect, leastHit, experience);
 			pending.add(opened);
 			claimHeld(opened);
 		}
@@ -224,7 +308,7 @@ class CombatTracker
 			part = limited(kind, rest, tick))
 		{
 			long share = Math.min(rest, part.effect.most());
-			part.left--;
+			part.take(share);
 			sink.record(part.effect.metric(), share);
 			rest -= share;
 		}
@@ -269,8 +353,7 @@ class CombatTracker
 			return null;
 		}
 
-		source.left--;
-		sink.record(source.effect.metric(), amount);
+		sink.record(source.effect.metric(), source.take(amount));
 		return source.effect.metric();
 	}
 
@@ -297,8 +380,7 @@ class CombatTracker
 			if (opened.accepts(effect.kind, effect.amount, effect.tick))
 			{
 				effects.remove();
-				opened.left--;
-				sink.record(opened.effect.metric(), effect.amount);
+				sink.record(opened.effect.metric(), opened.take(effect.amount));
 			}
 		}
 	}

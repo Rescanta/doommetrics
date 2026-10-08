@@ -144,6 +144,118 @@ public class CombatTrackerTest
 	}
 
 	/**
+	 * An attack earns its hitpoints experience as it is made, so what the spec's tick earned says
+	 * what the spec will hit for: 111 is a 49, give or take the boss's modifier. The twisted bow's
+	 * 72, fired the tick before and landing inside the window, is too big to be it.
+	 */
+	@Test
+	public void aHitTooBigForTheSpecsExperienceIsAnotherAttacks()
+	{
+		tracker.specFired(SpecWeapon.ELDRITCH_STAFF, 100, 0, 111);
+		tracker.damaged(72, 102);
+		tracker.damaged(49, 103);
+
+		assertEquals(list("otherSpecDamage=49"), recorded);
+	}
+
+	/**
+	 * The shot before the spec missed, and its 0 lands first and takes the spec's one hit. The
+	 * spec earned experience, so it did not miss: the hit that fits is still its own, and the one
+	 * after that is not.
+	 */
+	@Test
+	public void aMissLandingFirstDoesNotCostAOneHitSpecItsHit()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 111);
+		tracker.damaged(0, 102);
+		tracker.damaged(49, 103);
+		tracker.damaged(47, 104);
+
+		assertEquals(list("zcbDamage=0", "zcbDamage=49"), recorded);
+	}
+
+	/** A small hit landing first is made up to the spec's own when that lands. */
+	@Test
+	public void aSmallHitLandingFirstIsMadeUpToTheSpecsOwn()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 111);
+		tracker.damaged(7, 102);
+		tracker.damaged(49, 103);
+
+		assertEquals(list("zcbDamage=7", "zcbDamage=42"), recorded);
+	}
+
+	/** The blow that kills is cut to what the boss had left, and is still the spec's. */
+	@Test
+	public void aSpecsHitCutShortByTheKillIsStillCounted()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100, 0, 111);
+		tracker.damaged(20, 101);
+
+		assertEquals(list("otherSpecDamage=20"), recorded);
+	}
+
+	/** Up to four hits, and never more between them than the experience says: 89 is a 40. */
+	@Test
+	public void anUnnamedSpecsHitsComeToNoMoreThanItsExperienceSays()
+	{
+		tracker.specFired(SpecWeapon.OTHER.fired(false), 100, 0, 89);
+		tracker.damaged(40, 103);
+		tracker.damaged(49, 104);
+
+		assertEquals(list("otherSpecDamage=40"), recorded);
+	}
+
+	/** Dragon claws hit four times for the one spec, and the experience is for all four: 60. */
+	@Test
+	public void aSpecOfSeveralHitsIsHeldToItsExperienceAsAWhole()
+	{
+		tracker.specFired(SpecWeapon.OTHER, 100, 0, 133);
+		tracker.damaged(30, 101);
+		tracker.damaged(15, 101);
+		tracker.damaged(7, 102);
+		tracker.damaged(8, 102);
+
+		assertEquals(list("otherSpecDamage=30", "otherSpecDamage=15", "otherSpecDamage=7",
+			"otherSpecDamage=8"), recorded);
+	}
+
+	/**
+	 * No experience on the spec's tick says nothing about it: a miss earns none, and at 200
+	 * million hitpoints experience nothing does.
+	 */
+	@Test
+	public void aSpecThatEarnedNoExperienceIsCountedAsItWas()
+	{
+		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 0);
+		tracker.damaged(44, 102);
+
+		assertEquals(list("zcbDamage=44"), recorded);
+	}
+
+	/** Blood Sacrifice's 25 earns no experience, so the swing's says nothing about it. */
+	@Test
+	public void theSacrificeIsNotHeldToTheSwingsExperience()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100, 0, 22);
+		tracker.damaged(10, 101);
+		tracker.damaged(25, 109);
+
+		assertEquals(list("otherSpecDamage=10", "otherSpecDamage=25"), recorded);
+	}
+
+	/** A spec swung as the punish has its hit counted there, and none is still to come. */
+	@Test
+	public void aSpecSpentOnAPunishIsNotShortOfItsHit()
+	{
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 100, 0, 111);
+		tracker.spent(101, 100);
+		tracker.damaged(49, 102);
+
+		assertEquals(list("otherSpecDamage=0"), recorded);
+	}
+
+	/**
 	 * An unnamed spec heals nothing. The one that took a Blood Sacrifice heal in a trip's logs was a
 	 * Scorching bow fired seven ticks after the godsword.
 	 */
