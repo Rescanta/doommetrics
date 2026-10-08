@@ -115,13 +115,32 @@ public class CombatTrackerTest
 	@Test
 	public void aFiredSpecMayLandFourTicksLater()
 	{
-		tracker.specFired(SpecWeapon.OTHER.fired(false), 5094);
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 5094);
 		tracker.damaged(12, 5098);
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 6000);
 		tracker.damaged(80, 6004);
 		tracker.damaged(30, 6005);
 
 		assertEquals(list("otherSpecDamage=12", "zcbDamage=80"), recorded);
+	}
+
+	/**
+	 * The scorching bow fires one arrow. Two specs went off three ticks apart, the second at a
+	 * larva, and a twisted bow shot made a tick after it landed four ticks behind that spec: the
+	 * larva's hit is the spec's one, and the 49 is the twisted bow's.
+	 */
+	@Test
+	public void aBowShotBehindAScorchingBowSpecIsNotTheSpecs()
+	{
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 1205);
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 1208);
+		tracker.damaged(12, 1209);
+
+		// On the larva, so it comes as a 0.
+		tracker.damaged(0, 1211);
+		tracker.damaged(49, 1212);
+
+		assertEquals(list("otherSpecDamage=12", "otherSpecDamage=0"), recorded);
 	}
 
 	/**
@@ -730,6 +749,7 @@ public class CombatTrackerTest
 		assertEquals(SpecWeapon.ZARYTE_CROSSBOW, SpecWeapon.forItem(999_999, "Zaryte crossbow"));
 		assertEquals(SpecWeapon.ELDRITCH_STAFF,
 			SpecWeapon.forItem(999_999, "Eldritch nightmare staff"));
+		assertEquals(SpecWeapon.SCORCHING_BOW, SpecWeapon.forItem(999_999, "Scorching bow"));
 
 		assertEquals(SpecWeapon.OTHER, SpecWeapon.forItem(999_999, "Dragon claws"));
 		assertEquals(SpecWeapon.OTHER, SpecWeapon.forItem(999_999, null));
@@ -801,6 +821,8 @@ public class CombatTrackerTest
 			SpecWeapon.forItem(ItemID.TOXIC_BLOWPIPE_LOADED_ORNAMENT));
 		assertEquals(SpecWeapon.ELDRITCH_STAFF,
 			SpecWeapon.forItem(ItemID.NIGHTMARE_STAFF_ELDRITCH));
+		assertEquals(SpecWeapon.SCORCHING_BOW,
+			SpecWeapon.forItem(ItemID.SCORCHING_BOW));
 		assertEquals(SpecWeapon.DRAGON_KNIFE,
 			SpecWeapon.forItem(ItemID.DRAGON_KNIFE));
 		assertEquals(SpecWeapon.DRAGON_KNIFE,
@@ -819,7 +841,8 @@ public class CombatTrackerTest
 	public void theCatchAllListsTheSpecsItCounts()
 	{
 		assertEquals(list("Dragon knife", "Dragon thrownaxe", "Rosewood blowpipe", "Toxic blowpipe",
-			"Ancient godsword", "Saradomin godsword", "Eldritch staff", "Any other spec",
+			"Ancient godsword", "Saradomin godsword", "Eldritch staff", "Scorching bow",
+			"Any other spec",
 			"Burns (scorching bow, burning claws)"),
 			CombatMetric.OTHER_SPEC_DAMAGE.sources());
 

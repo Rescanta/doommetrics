@@ -53,6 +53,13 @@ enum SpecWeapon
 		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
 		prayer(CombatMetric.ELDRITCH_PRAYER, 2)),
 
+	/**
+	 * Scorching bow. One arrow, as often fired at a larva as at the boss, so the bow shot made
+	 * behind it and landing in its window is not a second hit of its. Its burns are counted from
+	 * their own hitsplats.
+	 */
+	SCORCHING_BOW("Scorching bow", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1)),
+
 	/** Every other melee spec. Four hits covers dragon claws. None of them heals. */
 	OTHER(null, swing(CombatMetric.OTHER_SPEC_DAMAGE, 4)),
 
@@ -260,6 +267,9 @@ enum SpecWeapon
 			case ItemID.NIGHTMARE_STAFF_ELDRITCH:
 				return ELDRITCH_STAFF;
 
+			case ItemID.SCORCHING_BOW:
+				return SCORCHING_BOW;
+
 			default:
 				return itemId <= 0 ? null : OTHER;
 		}
@@ -315,6 +325,11 @@ enum SpecWeapon
 		if (lower.contains("zaryte crossbow"))
 		{
 			return ZARYTE_CROSSBOW;
+		}
+
+		if (lower.contains("scorching bow"))
+		{
+			return SCORCHING_BOW;
 		}
 
 		return lower.contains("eldritch") ? ELDRITCH_STAFF : OTHER;
