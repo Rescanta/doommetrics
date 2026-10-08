@@ -281,6 +281,11 @@ Brews, food, regeneration and prayer potions are therefore missing from these fi
 the point rather than a shortcoming: a counter that swallowed them would report sustain your gear
 never earned. Every number here is a floor - what could be proven - and never an over-count.
 
+A brew or a restore dose taken on the very tick a spec or spell pays out arrives as one rise with
+it. The plugin watches the inventory for what is eaten or drunk, learns what each item gives the
+first time it is taken on its own, and takes that out of a rise it shares a tick with. Until an
+item has been seen on its own, a rise it shares a tick with is left uncounted.
+
 Spec and punish damage are only counted on the boss itself, standing or burrowed. Larvae, volatile earth and
 the boss behind its demonic shield are all worth a spec, but not for the damage, so a spec fired at
 one of them is spent and adds nothing. Nor is the auto-attack either side of a spec: a hit only
