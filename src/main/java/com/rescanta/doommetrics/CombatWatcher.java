@@ -122,12 +122,13 @@ class CombatWatcher
 	private int specTick = -1;
 
 	private final CombatTracker.Sink sink;
+	private final CombatDiagnostics diagnostics;
 
 	/**
 	 * @param sink where an attributed amount is credited
 	 */
 	CombatWatcher(Client client, ClientThread clientThread, DoomMetricsConfig config, GameItems items,
-		Supplier<DelveRun> run, CombatTracker.Sink sink)
+		Supplier<DelveRun> run, CombatTracker.Sink sink, CombatDiagnostics diagnostics)
 	{
 		this.client = client;
 		this.clientThread = clientThread;
@@ -135,6 +136,7 @@ class CombatWatcher
 		this.items = items;
 		this.run = run;
 		this.sink = sink;
+		this.diagnostics = diagnostics;
 		this.combatTracker = new CombatTracker(sink);
 		this.punishTracker = new PunishTracker(sink, new HandedBack());
 	}
@@ -172,6 +174,7 @@ class CombatWatcher
 		thrallTracker.reset();
 		consumables.reset();
 		rises.clear();
+		diagnostics.reset();
 		dead = false;
 	}
 
@@ -244,6 +247,8 @@ class CombatWatcher
 
 	void npcDespawned(NPC npc)
 	{
+		diagnostics.npcDespawned(npc, boss);
+
 		if (npc == boss)
 		{
 			boss = null;
@@ -270,6 +275,7 @@ class CombatWatcher
 
 		combatTracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, client.getTickCount());
 		log.debug("Blood spell drained at tick {}", client.getTickCount());
+		diagnostics.bloodSpell(client.getTickCount());
 		return true;
 	}
 
@@ -283,6 +289,7 @@ class CombatWatcher
 		Hitsplat hitsplat = event.getHitsplat();
 		Actor target = event.getActor();
 		int tick = client.getTickCount();
+		diagnostics.hitsplatApplied(event);
 
 		// Healing is read off the hitpoints level instead, with the hits taken on the tick added
 		// back - see taken.
@@ -539,6 +546,7 @@ class CombatWatcher
 		}
 
 		punishTracker.swung(tick);
+		diagnostics.swung(tick);
 
 		if (config.debugLogging())
 		{
@@ -836,6 +844,7 @@ class CombatWatcher
 				experienceTick == tick ? experience : 0);
 			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
 				current.creditLevel(), weapon, itemId, items.name(itemId), tick);
+			diagnostics.specFired(tick);
 		});
 	}
 
@@ -886,6 +895,7 @@ class CombatWatcher
 
 		punishTracker.tickEnded(tick, praying, this::equippedPunishWeapon,
 			this::experiencePerDamage);
+		diagnostics.tickEnded(tick);
 	}
 
 	/**

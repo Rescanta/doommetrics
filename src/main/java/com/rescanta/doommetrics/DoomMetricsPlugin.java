@@ -14,14 +14,18 @@ import net.runelite.api.GameState;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.FakeXpDrop;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.InteractingChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.NpcChanged;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
+import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.VarbitChanged;
@@ -120,6 +124,7 @@ public class DoomMetricsPlugin extends Plugin
 	// Built on start up.
 	private ClaimWatcher claims;
 	private CombatWatcher combat;
+	private CombatDiagnostics diagnostics;
 	private Totals totals;
 	private MilestoneTracker milestones;
 	private PanelFeed feed;
@@ -187,7 +192,9 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		GameItems items = new GameItems(client, itemManager);
 		claims = new ClaimWatcher(clientThread, () -> run, () -> endRun(EndReason.FINISHED, -1));
-		combat = new CombatWatcher(client, clientThread, config, items, () -> run, this::recordCombat);
+		diagnostics = new CombatDiagnostics(client, config, () -> run);
+		combat = new CombatWatcher(client, clientThread, config, items, () -> run, this::recordCombat,
+			diagnostics);
 		totals = new Totals(totalsStore, runHistoryStore, () -> runProfile, () -> run);
 		milestones = new MilestoneTracker(client, milestoneStore, this::resetTarget,
 			totals::lifetimeBelongsToRun,
@@ -618,6 +625,7 @@ public class DoomMetricsPlugin extends Plugin
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
 		claims.menuOptionClicked(event);
+		diagnostics.menuOptionClicked(event);
 	}
 
 	@Subscribe
@@ -674,6 +682,30 @@ public class DoomMetricsPlugin extends Plugin
 		combat.graphicChanged(event);
 	}
 
+	@Subscribe
+	public void onProjectileMoved(ProjectileMoved event)
+	{
+		diagnostics.projectileMoved(event);
+	}
+
+	@Subscribe
+	public void onInteractingChanged(InteractingChanged event)
+	{
+		diagnostics.interactingChanged(event);
+	}
+
+	@Subscribe
+	public void onFakeXpDrop(FakeXpDrop event)
+	{
+		diagnostics.fakeXpDrop(event);
+	}
+
+	@Subscribe
+	public void onNpcChanged(NpcChanged event)
+	{
+		diagnostics.npcChanged(event);
+	}
+
 	/** The trackers' only way out: credits the run, the session and the lifetime buffer. */
 	private void recordCombat(CombatMetric metric, long amount)
 	{
@@ -694,6 +726,7 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
+		diagnostics.varbitChanged(event);
 		int varpId = event.getVarpId();
 
 		if (varpId == VarPlayerID.SA_ENERGY)
