@@ -43,6 +43,9 @@ final class SpecEffect
 	/** The most this effect can arrive as, or {@link #NO_LIMIT}. */
 	private final int most;
 
+	/** Whether this is the hit of the attack itself, which earns hitpoints experience as it's made. */
+	private final boolean ofTheAttack;
+
 	SpecEffect(Kind kind, CombatMetric metric, int from, int to, int budget)
 	{
 		this(kind, metric, from, to, budget, ANY_AMOUNT);
@@ -50,11 +53,11 @@ final class SpecEffect
 
 	SpecEffect(Kind kind, CombatMetric metric, int from, int to, int budget, int exactly)
 	{
-		this(kind, metric, from, to, budget, exactly, NO_LIMIT);
+		this(kind, metric, from, to, budget, exactly, NO_LIMIT, false);
 	}
 
 	private SpecEffect(Kind kind, CombatMetric metric, int from, int to, int budget, int exactly,
-		int most)
+		int most, boolean ofTheAttack)
 	{
 		this.kind = kind;
 		this.metric = metric;
@@ -63,6 +66,7 @@ final class SpecEffect
 		this.budget = budget;
 		this.exactly = exactly;
 		this.most = most;
+		this.ofTheAttack = ofTheAttack;
 	}
 
 	/**
@@ -71,7 +75,21 @@ final class SpecEffect
 	 */
 	SpecEffect cappedAt(int most)
 	{
-		return new SpecEffect(kind, metric, from, to, budget, exactly, most);
+		return new SpecEffect(kind, metric, from, to, budget, exactly, most, ofTheAttack);
+	}
+
+	/**
+	 * The same effect, as the hit of the attack itself. The experience the attack earned says what
+	 * its hits come to - see {@link CombatTracker#specFired(SpecWeapon, int, int, int)}.
+	 */
+	SpecEffect ofTheAttack()
+	{
+		return new SpecEffect(kind, metric, from, to, budget, exactly, most, true);
+	}
+
+	boolean isOfTheAttack()
+	{
+		return ofTheAttack;
 	}
 
 	Kind kind()

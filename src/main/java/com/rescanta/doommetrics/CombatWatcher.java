@@ -66,6 +66,10 @@ class CombatWatcher
 	private int hitpoints;
 	private int hitpointsXp;
 
+	/** The hitpoints experience gained so far on a tick: what the attack made on it earned. */
+	private int experience;
+	private int experienceTick;
+
 	/**
 	 * Damage splatted on us this tick and not yet taken out of the hitpoints level. The splat comes
 	 * just ahead of the drop it causes, on the same tick, so a heal on that tick is the change
@@ -490,6 +494,8 @@ class CombatWatcher
 			return;
 		}
 
+		experience = (experienceTick == tick ? experience : 0) + gained;
+		experienceTick = tick;
 		punishTracker.experienceGained(gained, tick);
 
 		if (config.debugLogging())
@@ -651,7 +657,9 @@ class CombatWatcher
 
 			weapon = weapon.fired(items.isMeleeWeapon(itemId));
 
-			combatTracker.specFired(weapon, tick, leastHit(weapon));
+			// The experience comes ahead of this, with the rest of the tick the spec was made on.
+			combatTracker.specFired(weapon, tick, leastHit(weapon),
+				experienceTick == tick ? experience : 0);
 			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
 				current.currentLevel(), weapon, itemId, items.name(itemId), tick);
 		});
