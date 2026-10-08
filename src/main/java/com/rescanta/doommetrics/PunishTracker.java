@@ -332,11 +332,10 @@ class PunishTracker
 	}
 
 	/**
-	 * The animation the window opened for can be a block: being hit plays one, with the weapon
-	 * already in hand, and the swing a tick or three later was then passed over as a switch or a
-	 * potion would be. An attack earns its experience as it is made, so if the first animation's
-	 * tick earned none and this one's did, with a melee weapon in hand, this is the swing. What
-	 * landed on its tick came ahead of it.
+	 * The animation the window opened for can be a block, played on being hit with the weapon
+	 * already in hand. An attack earns its experience as it is made: if that tick earned none and
+	 * this one did, with a melee weapon in hand, this is the swing. What landed on its tick came
+	 * ahead of it.
 	 */
 	private void swingLater(int tick, Supplier<PunishWeapon> equipped)
 	{
@@ -374,13 +373,10 @@ class PunishTracker
 
 	/**
 	 * One hit of ours too many with the swing's own: an arrow fired just before the switch landed
-	 * with them. The share of experience its attack earned says which hit it was. A weapon whose
-	 * hits can't be counted has one too many only if a hit comes to that share. A swing that earned
-	 * no experience has none of its own to tell apart.
-	 *
-	 * <p>The arrow lands ahead of the swing's hits, so a kill cuts those short and never the arrow:
-	 * the splats then come to less than the experience says, and the share with them. The first
-	 * hit is the arrow unless it is too small to be.
+	 * with them. The share of experience its attack earned says which hit it was; it lands ahead
+	 * of the swing's, so the first hit is it unless too small - a kill cuts the swing's short and
+	 * the share with them. A weapon whose hits can't be counted has one too many only if a hit
+	 * comes to that share. A swing that earned no experience has none of its own to tell apart.
 	 */
 	private void findStray(int tick)
 	{
