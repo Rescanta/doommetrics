@@ -285,7 +285,8 @@ Spec and punish damage are only counted on the boss itself, standing or burrowed
 the boss behind its demonic shield are all worth a spec, but not for the damage, so a spec fired at
 one of them is spent and adds nothing. Nor is the auto-attack either side of a spec: a hit only
 counts if it lands when that weapon's spec could have - a tick after the spec for a melee weapon,
-two or more for anything that has to fly. Only the specs that heal (the ancient and Saradomin
+two or more for anything that has to fly - and a spec is never credited more than the hitpoints
+experience it earned says it hit for. Only the specs that heal (the ancient and Saradomin
 godswords, the toxic blowpipe) are credited with a heal; a heal after any other spec is left out,
 since it can only have been food, a brew or another spec's.
 
