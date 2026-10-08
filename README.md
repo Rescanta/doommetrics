@@ -219,8 +219,10 @@ arrow still in the air when you switched - is not counted either.
 
 A larva exploding by the boss hurts it too, drawn like a strength-bonus hitsplat. The game draws
 one strength-bonus hitsplat per hit of yours, from two ticks after the swing, so one more than
-that, or one sooner, is taken for an explosion and left out. An explosion landing in place of a
-bonus hitsplat the game didn't draw can't be told apart, and is counted.
+that, or one sooner, is taken for an explosion and left out. An arrow that lands at the punish
+brings a hitsplat of its own a tick behind the swing's, so a second one landing with the swing's
+is taken for an explosion as well. An explosion landing in place of a bonus hitsplat the game
+didn't draw can't be told apart, and is counted.
 
 Each figure is drawn in the colour of what it is counted in - hitpoints red, prayer blue, damage
 yellow - so which lines are which is legible without reading the labels.
@@ -430,8 +432,8 @@ Last 10           1:49:05 (-3:05)
 
 - **Reached** - runs that cleared the target, out of every run started. Walking into delve 1 and
   straight back out is not counted as a run. A run the plugin joined part way through counts like
-  any other, except a trip it had already counted, picked up again after a session reset or the
-  plugin being turned off and on.
+  any other, except a trip it had already counted, picked up again after a session reset, the
+  plugin being turned off and on, or the client being restarted.
 - **Average time** - from the start of a run to clearing the target, the same span as a
   milestone's PB, which is shown under it. Only runs watched from delve 1 count here: a joined
   run's time is only an upper bound, though it can still set a PB.
