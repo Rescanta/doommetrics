@@ -25,10 +25,13 @@ enum SpecWeapon
 	 */
 	ROSEWOOD_BLOWPIPE("Rosewood blowpipe", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 2)),
 
-	/** Toxic blowpipe. One dart, healing half of what it hits for, both landing together. */
+	/**
+	 * Toxic blowpipe. One dart, healing half of what it hits for on the spec's own tick, before
+	 * the dart has landed.
+	 */
 	BLOWPIPE("Toxic blowpipe",
 		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		projectileHeal(CombatMetric.BLOWPIPE_HEAL, 1)),
+		atOnce(SpecEffect.Kind.HEAL, CombatMetric.BLOWPIPE_HEAL)),
 
 	/** Ancient godsword: the swing, then Blood Sacrifice's damage and heal eight ticks later. */
 	ANCIENT_GODSWORD("Ancient godsword",
@@ -42,8 +45,8 @@ enum SpecWeapon
 	 */
 	SARADOMIN_GODSWORD("Saradomin godsword",
 		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
-		healingBlade(SpecEffect.Kind.HEAL, CombatMetric.SGS_HEAL),
-		healingBlade(SpecEffect.Kind.PRAYER, CombatMetric.SGS_PRAYER)),
+		atOnce(SpecEffect.Kind.HEAL, CombatMetric.SGS_HEAL),
+		atOnce(SpecEffect.Kind.PRAYER, CombatMetric.SGS_PRAYER)),
 
 	/** Eldritch nightmare staff. Restores prayer rather than hitpoints, both when the spell lands. */
 	ELDRITCH_STAFF("Eldritch staff",
@@ -71,8 +74,11 @@ enum SpecWeapon
 	/** The latest a thrown or fired spec lands: a bow at range, and the scorching bow's spec. */
 	private static final int LANDED = 4;
 
-	/** The last tick after an SGS spec its heal and prayer may arrive; seen only on the first. */
-	private static final int HEALING_BLADE = 1;
+	/**
+	 * The last tick after a spec that a heal or restore worked out as it is made may arrive: the
+	 * SGS's and the toxic blowpipe's. Seen only on the spec's own.
+	 */
+	private static final int AT_ONCE = 1;
 
 	/** How long after an Eldritch spec its restore may arrive: it lands when the spell does. */
 	private static final int RESTORE = 7;
@@ -120,16 +126,10 @@ enum SpecWeapon
 		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, LANDED, budget);
 	}
 
-	/** The SGS's heal or prayer restore, from the spec's own tick. */
-	private static SpecEffect healingBlade(SpecEffect.Kind kind, CombatMetric metric)
+	/** A heal or restore worked out as the spec is made: from its own tick, ahead of its hitsplat. */
+	private static SpecEffect atOnce(SpecEffect.Kind kind, CombatMetric metric)
 	{
-		return new SpecEffect(kind, metric, 0, HEALING_BLADE, 1);
-	}
-
-	/** A heal that lands with a projectile's hit. */
-	private static SpecEffect projectileHeal(CombatMetric metric, int budget)
-	{
-		return new SpecEffect(SpecEffect.Kind.HEAL, metric, FLIGHT, LANDED, budget);
+		return new SpecEffect(kind, metric, 0, AT_ONCE, 1);
 	}
 
 	private static SpecEffect prayer(CombatMetric metric, int budget)
