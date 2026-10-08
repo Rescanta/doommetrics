@@ -81,12 +81,6 @@ enum SpecWeapon
 	/** The latest a thrown or fired spec lands: a bow at range, and the scorching bow's spec. */
 	private static final int LANDED = 4;
 
-	/**
-	 * The last tick after a spec that a heal or restore worked out as it is made may arrive: the
-	 * SGS's and the toxic blowpipe's. Seen only on the spec's own.
-	 */
-	private static final int AT_ONCE = 1;
-
 	/** How long after an Eldritch spec its restore may arrive: it lands when the spell does. */
 	private static final int RESTORE = 7;
 
@@ -133,10 +127,14 @@ enum SpecWeapon
 		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, FLIGHT, LANDED, budget).ofTheAttack();
 	}
 
-	/** A heal or restore worked out as the spec is made: from its own tick, ahead of its hitsplat. */
+	/**
+	 * A heal or restore worked out as the spec is made: on its own tick, ahead of its hitsplat. All
+	 * 4 Saradomin godsword and 10 toxic blowpipe specs logged came on that tick, so the tick after
+	 * is left to the food eaten behind the spec.
+	 */
 	private static SpecEffect atOnce(SpecEffect.Kind kind, CombatMetric metric)
 	{
-		return new SpecEffect(kind, metric, 0, AT_ONCE, 1);
+		return new SpecEffect(kind, metric, 0, 0, 1);
 	}
 
 	private static SpecEffect prayer(CombatMetric metric, int budget)

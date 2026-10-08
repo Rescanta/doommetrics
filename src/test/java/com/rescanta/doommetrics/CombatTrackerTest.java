@@ -383,15 +383,28 @@ public class CombatTrackerTest
 		assertEquals(list("bpHeal=16", "otherSpecDamage=33"), recorded);
 	}
 
-	/** What heals as the dart lands is something else: a shark eaten behind the spec. */
+	/** What heals behind the spec is something else: a shark eaten a tick after it. */
 	@Test
-	public void aHealAsTheBlowpipesDartLandsIsNotTheSpecs()
+	public void aHealATickBehindTheBlowpipeSpecIsNotTheSpecs()
 	{
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
+		tracker.healed(20, 101);
 		tracker.damaged(31, 102);
-		tracker.healed(20, 102);
 
 		assertEquals(list("otherSpecDamage=31"), recorded);
+	}
+
+	/** The same for the Saradomin godsword, whose heal and prayer come on the spec's tick too. */
+	@Test
+	public void aRiseATickBehindTheSaradominGodswordSpecIsNotTheSpecs()
+	{
+		tracker.healed(24, 100);
+		tracker.prayerGained(12, 100);
+		tracker.specFired(SpecWeapon.SARADOMIN_GODSWORD, 100);
+		tracker.healed(20, 101);
+		tracker.prayerGained(33, 101);
+
+		assertEquals(list("sgsHeal=24", "sgsPrayer=12"), recorded);
 	}
 
 	@Test
@@ -813,7 +826,7 @@ public class CombatTrackerTest
 	{
 		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 100);
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
-		tracker.healed(15, 101);
+		tracker.healed(15, 100);
 
 		assertEquals(list("bpHeal=15"), recorded);
 	}
@@ -823,8 +836,8 @@ public class CombatTrackerTest
 	{
 		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
 		tracker.spellHit(CombatMetric.BLOOD_BARRAGE_HEAL, 100);
-		tracker.healed(15, 101);
-		tracker.healed(12, 101);
+		tracker.healed(15, 100);
+		tracker.healed(12, 100);
 
 		// Both opened on the same tick, so the later-registered barrage takes the first; its budget
 		// of one is then spent and the blowpipe takes the second rather than it being dropped.
