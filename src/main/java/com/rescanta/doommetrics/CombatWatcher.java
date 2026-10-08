@@ -661,7 +661,7 @@ class CombatWatcher
 			combatTracker.specFired(weapon, tick, leastHit(weapon),
 				experienceTick == tick ? experience : 0);
 			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
-				current.currentLevel(), weapon, itemId, items.name(itemId), tick);
+				current.creditLevel(), weapon, itemId, items.name(itemId), tick);
 		});
 	}
 
