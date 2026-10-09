@@ -439,6 +439,112 @@ public class AttackLedgerTest
 	}
 
 	@Test
+	public void aShotIsTheSwingMadeTwoTicksBeforeItStartedToMove()
+	{
+		ledger.swung(100, BOSS);
+		ledger.experience(100, 69, RATE);
+		endTicks(100, 101);
+		ledger.shotStarted(ARROW, 102, 103, BOSS);
+		ledger.splat(103, BOSS, 31, "boss");
+		endTicks(102, 106);
+
+		assertEquals(AttackLedger.Kind.SHOT, kindOf(0));
+		assertEquals(100, verdicts.get(0).attack.made);
+		assertTrue(verdicts.get(0).sized);
+		assertTrue("the swing is the shot, so nothing lapses", lapsed.isEmpty());
+	}
+
+	@Test
+	public void aShotWithNoSwingTwoTicksBeforeIsTheOneMadeTheTickBefore()
+	{
+		ledger.swung(101, BOSS);
+		endTicks(101, 101);
+		ledger.shotStarted(ARROW, 102, 102, BOSS);
+		ledger.splat(102, BOSS, 31, "boss");
+		endTicks(102, 106);
+
+		assertEquals(101, verdicts.get(0).attack.made);
+		assertTrue(lapsed.isEmpty());
+	}
+
+	@Test
+	public void aShotIsNotASwingMadeAtSomethingElse()
+	{
+		ledger.swung(100, LARVA);
+		ledger.swung(101, BOSS);
+		endTicks(100, 101);
+		ledger.shotStarted(ARROW, 102, 102, BOSS);
+		ledger.splat(102, BOSS, 31, "boss");
+		ledger.splat(102, LARVA, 2, "larva");
+		endTicks(102, 106);
+
+		assertEquals(101, verdicts.get(0).attack.made);
+		assertEquals(AttackLedger.Kind.SWING, kindOf(1));
+	}
+
+	@Test
+	public void aShotNoAnimationSpokeForWasMadeTwoTicksBefore()
+	{
+		ledger.shotStarted(ARROW, 102, 103, BOSS);
+		ledger.splat(103, BOSS, 31, "boss");
+		endTicks(102, 104);
+
+		assertEquals(100, verdicts.get(0).attack.made);
+	}
+
+	/** A block is an animation too, and so is a cast. */
+	@Test
+	public void anAnimationThatEarnedNothingOnlyTakesAZero()
+	{
+		ledger.swung(100, AttackLedger.UNKNOWN);
+		ledger.experience(100, 0, 0);
+		ledger.splat(101, BOSS, 26, "boss");
+		ledger.splat(101, BOSS, 0, "boss");
+		endTicks(100, 105);
+
+		assertNull(verdicts.get(0).attack);
+		assertEquals(AttackLedger.Kind.SWING, kindOf(1));
+	}
+
+	@Test
+	public void anAnimationThatEarnedNothingAndTookNothingIsNotReported()
+	{
+		ledger.swung(100, AttackLedger.UNKNOWN);
+		ledger.experience(100, 0, 0);
+		endTicks(100, 105);
+
+		assertTrue(lapsed.isEmpty());
+	}
+
+	@Test
+	public void aSpecThatEarnedNothingAndTookNothingIsReported()
+	{
+		ledger.swung(100, BOSS);
+		ledger.specFired(100);
+		ledger.experience(100, 0, RATE);
+		endTicks(100, 105);
+
+		assertEquals(1, lapsed.size());
+	}
+
+	/** Seen in game: a spec that hit 0 two ticks late, with a cast animated in between. */
+	@Test
+	public void aKnownAttackTakesAZeroAheadOfAnAnimationDueNearer()
+	{
+		ledger.swung(100, BOSS);
+		ledger.specFired(100);
+		ledger.experience(100, 0, RATE);
+		ledger.swung(102, BOSS);
+		ledger.experience(102, 0, RATE);
+		ledger.splat(103, BOSS, 0, "boss");
+		endTicks(100, 107);
+
+		assertEquals(100, verdicts.get(0).attack.made);
+		assertTrue(verdicts.get(0).spec);
+		assertTrue(lapsed.isEmpty());
+	}
+
+	@Test
 	public void resetForgetsWhatWasInFlight()
 	{
 		ledger.shot(ARROW, 100, 102, BOSS);

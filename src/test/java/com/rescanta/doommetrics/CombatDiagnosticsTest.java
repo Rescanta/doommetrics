@@ -2,7 +2,6 @@ package com.rescanta.doommetrics;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Level;
@@ -44,7 +43,6 @@ public class CombatDiagnosticsTest
 	private final Player player = mock(Player.class);
 	private final NPC boss = npc(NpcID.DOM_BOSS, 7, "Doom of Mokhaiotl");
 	private final NPC larva = npc(NpcID.DOM_DEMONIC_ENERGY_RANGE, 9, "Demonic larva");
-	private final NPC ghost = npc(NpcID.ARCEUUS_THRALL_GHOST_GREATER, 3, "Greater ghostly thrall");
 
 	private final ListAppender<ILoggingEvent> written = new ListAppender<>();
 	private final Logger logger = (Logger) LoggerFactory.getLogger(CombatDiagnostics.class);
@@ -107,20 +105,28 @@ public class CombatDiagnosticsTest
 		}
 	}
 
-	/** A projectile as it is first reported: after its tick has ended, flying for some ticks. */
-	private Projectile fire(int id, Actor from, Actor to, int flightTicks)
+	/** A projectile as it is first reported: starting to move now, with no source named. */
+	private Projectile fire(int id, Actor to, int length)
 	{
 		Projectile projectile = mock(Projectile.class);
 		int cycle = tick * CYCLES_PER_TICK + 2;
 
 		when(projectile.getId()).thenReturn(id);
-		when(projectile.getSourceActor()).thenReturn(from);
 		when(projectile.getTargetActor()).thenReturn(to);
-		when(projectile.getStartCycle()).thenReturn(cycle + 10);
-		when(projectile.getEndCycle()).thenReturn(cycle + flightTicks * CYCLES_PER_TICK);
+		when(projectile.getStartCycle()).thenReturn(cycle);
+		when(projectile.getEndCycle()).thenReturn(cycle + length);
 
 		moved(projectile);
 		return projectile;
+	}
+
+	/** A bow shot at the boss made now: its arrow is first reported two ticks on, as it starts. */
+	private Projectile shoot(int length)
+	{
+		diagnostics.swung(tick);
+		endTicksTo(tick + 1);
+		at(tick + 1);
+		return fire(ARROW, boss, length);
 	}
 
 	private void moved(Projectile projectile)
@@ -182,34 +188,51 @@ public class CombatDiagnosticsTest
 	@Test
 	public void ourShotTakesTheHitOnTheTickItLands()
 	{
-		diagnostics.swung(100);
 		diagnostics.experienceGained(69, 100);
-		diagnostics.tickEnded(100);
-		fire(ARROW, player, boss, 2);
+		shoot(20);
+		endTicksTo(102);
 
-		at(102);
+		at(103);
 		hit(boss, 31);
-		endTicksTo(103);
+		endTicksTo(104);
 
-		assertEquals("Projectile 1120 from us at Doom of Mokhaiotl (" + NpcID.DOM_BOSS + ") #7,"
-			+ " cycles 10 to 60 from now: fired tick 100, lands tick 102", only("Projectile"));
-		assertEquals("Ledger: 31 on Doom of Mokhaiotl (" + NpcID.DOM_BOSS + ") #7 at tick 102 ="
-			+ " shot 1120 made 100 due 102 (+0), experience 69 says 31 to 31", only("Ledger"));
+		assertEquals("Projectile 1120 at Doom of Mokhaiotl (" + NpcID.DOM_BOSS + ") #7,"
+			+ " cycles 0 to 20 from now: started tick 102, lands tick 103", only("Projectile"));
+		assertEquals("Ledger: 31 on Doom of Mokhaiotl (" + NpcID.DOM_BOSS + ") #7 at tick 103 ="
+			+ " shot 1120 made 100 due 103 (+0), experience 69 says 31 to 31", only("Ledger"));
+	}
+
+	/** Seen in game: the block of a hit taken while the arrow flew took the arrow's hit. */
+	@Test
+	public void aBlockWhileTheArrowFliesDoesNotTakeItsHit()
+	{
+		diagnostics.experienceGained(59, 100);
+		shoot(35);
+		when(player.getInteracting()).thenReturn(null);
+		diagnostics.swung(102);
+		endTicksTo(102);
+
+		at(103);
+		hit(boss, 26);
+		endTicksTo(106);
+
+		assertTrue(only("Ledger"), only("Ledger").endsWith(
+			"= shot 1120 made 100 due 103 (+0), experience 59 says 26 to 26"));
 	}
 
 	/** The game reports a projectile on every frame it moves. */
 	@Test
 	public void aProjectileIsWrittenAndCountedOnce()
 	{
-		diagnostics.tickEnded(100);
-		Projectile arrow = fire(ARROW, player, boss, 2);
+		Projectile arrow = shoot(20);
 		moved(arrow);
 		moved(arrow);
+		endTicksTo(102);
 
-		at(102);
+		at(103);
 		hit(boss, 31);
 		hit(boss, 12);
-		endTicksTo(103);
+		endTicksTo(104);
 
 		assertEquals(1, lines("Projectile").size());
 		assertEquals(2, lines("Ledger").size());
@@ -219,22 +242,18 @@ public class CombatDiagnosticsTest
 	@Test
 	public void aThrallsBoltTakesItsSmallHitAndOursIsLeftToOurShot()
 	{
-		diagnostics.swung(100);
-		diagnostics.tickEnded(100);
-		fire(ARROW, player, boss, 2);
+		shoot(20);
+		endTicksTo(102);
 
-		at(101);
-		diagnostics.tickEnded(101);
-		fire(SpotanimID.THRALL_MAGIC_TRAVEL, ghost, boss, 1);
-
-		at(102);
+		at(103);
+		fire(SpotanimID.THRALL_MAGIC_TRAVEL, boss, 25);
 		hit(boss, 31);
 		hit(boss, 2);
-		endTicksTo(103);
+		endTicksTo(104);
 
 		List<String> verdicts = lines("Ledger");
-		assertTrue(verdicts.get(0), verdicts.get(0).contains("= shot 1120 made 100 due 102 (+0)"));
-		assertTrue(verdicts.get(1), verdicts.get(1).contains("= thrall shot 1907 made 101 due 102 (+0)"));
+		assertTrue(verdicts.get(0), verdicts.get(0).contains("= shot 1120 made 100 due 103 (+0)"));
+		assertTrue(verdicts.get(1), verdicts.get(1).contains("= thrall shot 1907 made 103 due 103 (+0)"));
 	}
 
 	@Test
@@ -291,19 +310,12 @@ public class CombatDiagnosticsTest
 	}
 
 	@Test
-	public void aHitOnUsIsOnlyWrittenWithSomethingOnThatHitsBack()
+	public void aProjectileAimedAtUsIsNotWritten()
 	{
-		hit(player, 34);
-		diagnostics.tickEnded(100);
-		assertTrue(lines("Taken").isEmpty());
+		fire(SpotanimID.VFX_STANDARD_PROJECTILE_MAGIC, player, 60);
+		endTicksTo(103);
 
-		when(items.name(anyInt())).thenReturn("Ring of suffering (i)");
-		at(101);
-		hit(player, 34);
-		diagnostics.tickEnded(101);
-
-		assertEquals("Taken 34 at tick 101 with \"Ring of suffering (i)\" on and vengeance 0",
-			only("Taken"));
+		assertTrue(written.list.toString(), lines("Projectile").isEmpty());
 	}
 
 	@Test
@@ -314,7 +326,7 @@ public class CombatDiagnosticsTest
 		diagnostics.swung(100);
 		diagnostics.experienceGained(69, 100);
 		diagnostics.tickEnded(100);
-		fire(ARROW, player, boss, 2);
+		fire(ARROW, boss, 20);
 		at(102);
 		hit(boss, 31);
 		endTicksTo(104);
@@ -329,7 +341,7 @@ public class CombatDiagnosticsTest
 
 		diagnostics.swung(100);
 		diagnostics.tickEnded(100);
-		fire(ARROW, player, boss, 2);
+		fire(ARROW, boss, 20);
 		at(102);
 		hit(boss, 31);
 		endTicksTo(104);

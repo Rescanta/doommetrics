@@ -11,8 +11,9 @@ import java.util.TreeMap;
  * A second reading of whose hit each hitsplat of ours is, kept beside the trackers and only ever
  * written to the debug log. Every attack is a record of when it was made, what at and the tick it
  * should land on, and a splat goes to the record due nearest its tick on what it hit, of those
- * whose experience allows a hit of its size. Splats are settled a tick late: a projectile is first
- * seen after the tick it was fired on has ended. No RuneLite types.
+ * whose experience allows a hit of its size. Splats are settled a tick late, when every attack
+ * that could have landed one has been heard of: a projectile is first reported as it starts to
+ * move, a tick or two after its attack. No RuneLite types.
  */
 final class AttackLedger
 {
@@ -248,6 +249,12 @@ final class AttackLedger
 	/** How long what a tick said is kept for attacks made on it. */
 	private static final int KEPT_TICKS = 16;
 
+	/**
+	 * How many ticks before its projectile starts to move an attack was made, likeliest first:
+	 * most start 32 to 51 cycles on, which is in the second tick after.
+	 */
+	private static final int[] TICKS_TO_START = {2, 1};
+
 	private final Listener listener;
 	private final List<Attack> attacks = new ArrayList<>();
 	private final List<Splat> splats = new ArrayList<>();
@@ -268,8 +275,8 @@ final class AttackLedger
 	}
 
 	/**
-	 * We made an attack animation. Taken for a swing unless a projectile of ours fired on the same
-	 * tick shows it was a shot, whichever of the two is seen first.
+	 * An animation of ours that may be an attack: a block and a cast are animations too. Taken for
+	 * a swing unless a projectile of ours made on the same tick shows it was a shot.
 	 */
 	void swung(int tick, int target)
 	{
@@ -292,6 +299,32 @@ final class AttackLedger
 		add(new Attack(Kind.SHOT, made, due, target, projectile, 1));
 	}
 
+	/**
+	 * A projectile of ours, heard of as it starts to move. Its attack is the swing made a tick or
+	 * two before at what it flies at, or was made two before when no animation said so.
+	 */
+	void shotStarted(int projectile, int started, int due, int target)
+	{
+		shot(projectile, madeBefore(started, target), due, target);
+	}
+
+	private int madeBefore(int started, int target)
+	{
+		for (int ticks : TICKS_TO_START)
+		{
+			for (Attack attack : attacks)
+			{
+				if (attack.kind == Kind.SWING && attack.made == started - ticks && attack.hits == 0
+					&& (attack.target == UNKNOWN || attack.target == target))
+				{
+					return attack.made;
+				}
+			}
+		}
+
+		return started - TICKS_TO_START[0];
+	}
+
 	void thrallShot(int projectile, int made, int due, int target)
 	{
 		add(new Attack(Kind.THRALL_SHOT, made, due, target, projectile, 1));
@@ -309,8 +342,8 @@ final class AttackLedger
 	}
 
 	/**
-	 * Hitpoints experience earned on a tick, which is the attack made on it. None at a known rate
-	 * says the attack missed.
+	 * Hitpoints experience earned on a tick, which is the attack made on it. None says the attack
+	 * missed, or that its animation was no attack.
 	 *
 	 * @param perDamage what a point of damage on its target earns, or 0 when that is not known
 	 */
@@ -357,7 +390,7 @@ final class AttackLedger
 			{
 				open.remove();
 
-				if (attack.hits == 0)
+				if (attack.hits == 0 && isKnownAttack(attack))
 				{
 					listener.lapsed(attack);
 				}
@@ -407,15 +440,37 @@ final class AttackLedger
 	}
 
 	/**
-	 * Whether a splat can be the attack's by the experience its tick earned. A shot's one hit is
-	 * what the experience says; a swing's hits may not come to more than it. True when the
-	 * experience says nothing.
+	 * Whether more than an animation says this was an attack: a swing that earned nothing is a
+	 * miss, a block or a cast, and only a miss leaves a splat to take.
+	 */
+	private boolean isKnownAttack(Attack attack)
+	{
+		Earned made = earned.get(attack.made);
+
+		return attack.kind != Kind.SWING || made == null || made.experience > 0
+			|| specs.contains(attack.made);
+	}
+
+	/**
+	 * Whether a splat can be the attack's by the experience its tick earned. Nothing earned leaves
+	 * it only a 0, whatever it was made at. A shot's one hit is what the experience says; a
+	 * swing's hits may not come to more than it. True when the experience says nothing.
 	 */
 	private boolean fits(Attack attack, Splat splat)
 	{
 		Earned made = earned.get(attack.made);
 
-		if (!isSized(attack, made))
+		if (attack.kind.thrall || made == null)
+		{
+			return true;
+		}
+
+		if (made.experience == 0)
+		{
+			return splat.amount == 0;
+		}
+
+		if (made.perDamage <= 0)
 		{
 			return true;
 		}
@@ -428,12 +483,20 @@ final class AttackLedger
 	}
 
 	/**
-	 * The attack due nearest the tick takes the hit. Of two as near, hits land in the order their
-	 * attacks were made; of two made on one tick the thrall's comes first, and something seen to
-	 * fly comes ahead of a swing.
+	 * A known attack comes before a swing only its animation speaks for. Then the attack due
+	 * nearest the tick takes the hit. Of two as near, hits land in the order their attacks were
+	 * made; of two made on one tick the thrall's comes first, and something seen to fly comes
+	 * ahead of a swing.
 	 */
-	private static boolean isAhead(Attack attack, Attack other, int tick)
+	private boolean isAhead(Attack attack, Attack other, int tick)
 	{
+		boolean known = isKnownAttack(attack);
+
+		if (known != isKnownAttack(other))
+		{
+			return known;
+		}
+
 		int near = Math.abs(tick - attack.due);
 		int otherNear = Math.abs(tick - other.due);
 

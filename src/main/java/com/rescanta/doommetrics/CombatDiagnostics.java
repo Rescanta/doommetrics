@@ -1,10 +1,7 @@
 package com.rescanta.doommetrics;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -68,9 +65,6 @@ class CombatDiagnostics
 	/** Projectiles already written: the game reports one on every frame it moves. */
 	private final Set<Projectile> seen = Collections.newSetFromMap(new IdentityHashMap<>());
 
-	/** Ids of projectiles aimed at us, by the tick each should come down on. */
-	private final TreeMap<Integer, List<Integer>> landingOnUs = new TreeMap<>();
-
 	private int swingTick = -1;
 	private String aimAtSwing;
 	private int armedAtSwing;
@@ -91,9 +85,6 @@ class CombatDiagnostics
 	/** What our hits on NPCs came to on each of the last few ticks. */
 	private final TreeMap<Integer, Integer> dealt = new TreeMap<>();
 
-	private int taken;
-	private int takenTick = -1;
-
 	private long lastTickAt;
 
 	CombatDiagnostics(Client client, DoomMetricsConfig config, GameItems items,
@@ -108,14 +99,12 @@ class CombatDiagnostics
 	void reset()
 	{
 		seen.clear();
-		landingOnUs.clear();
 		ledger.reset();
 		dealt.clear();
 		swingTick = -1;
 		experienceTick = -1;
 		specTick = -1;
 		bloodSpellTick = -1;
-		takenTick = -1;
 		lastCast = null;
 		lastTickAt = 0;
 	}
@@ -156,7 +145,10 @@ class CombatDiagnostics
 		return run.get() != null && config.debugLogging();
 	}
 
-	/** Who fired what at whom, and the tick it should land on, once per projectile. */
+	/**
+	 * What flies at an NPC and the tick it should land on, once per projectile. Doom is fought
+	 * alone and a projectile names no source, so one that is not the thrall's is ours.
+	 */
 	void projectileMoved(ProjectileMoved event)
 	{
 		if (!on())
@@ -171,47 +163,40 @@ class CombatDiagnostics
 			return;
 		}
 
-		int tick = client.getTickCount();
-		int cycle = client.getGameCycle();
-		int lands = Flight.landingTick(tick, cycle, projectile.getEndCycle());
 		Actor target = projectile.getTargetActor();
-
-		log.debug("Projectile {} from {} at {}, cycles {} to {} from now: fired tick {}, lands"
-				+ " tick {}", projectile.getId(), describe(projectile.getSourceActor()),
-			target == null ? "the ground at " + projectile.getTargetPoint() : describe(target),
-			projectile.getStartCycle() - cycle, projectile.getEndCycle() - cycle,
-			Flight.firedTick(tick, cycle, projectile.getStartCycle()), lands);
-
-		if (target != null && target == client.getLocalPlayer())
-		{
-			landingOnUs.computeIfAbsent(lands, at -> new ArrayList<>()).add(projectile.getId());
-		}
 
 		if (!(target instanceof NPC))
 		{
 			return;
 		}
 
-		int fired = Flight.firedTick(tick, cycle, projectile.getStartCycle());
+		int cycle = client.getGameCycle();
+		int started = Flight.startedTick(client.getTickCount(), cycle, projectile.getStartCycle());
+		int length = projectile.getEndCycle() - projectile.getStartCycle();
+		boolean thrall = isThrallShot(projectile);
+		int lands = thrall
+			? Flight.thrallLandingTick(started, length)
+			: Flight.landingTick(started, length);
 		int index = ((NPC) target).getIndex();
 
-		if (isThrallShot(projectile))
+		log.debug("Projectile {} at {}, cycles {} to {} from now: started tick {}, lands tick {}",
+			projectile.getId(), describe(target), projectile.getStartCycle() - cycle,
+			projectile.getEndCycle() - cycle, started, lands);
+
+		if (thrall)
 		{
-			ledger.thrallShot(projectile.getId(), fired, lands, index);
+			ledger.thrallShot(projectile.getId(), started, lands, index);
 		}
-		else if (projectile.getSourceActor() == client.getLocalPlayer())
+		else
 		{
-			ledger.shot(projectile.getId(), fired, lands, index);
+			ledger.shotStarted(projectile.getId(), started, lands, index);
 		}
 	}
 
 	private static boolean isThrallShot(Projectile projectile)
 	{
-		Actor source = projectile.getSourceActor();
-
 		return projectile.getId() == SpotanimID.THRALL_RANGED_TRAVEL
-			|| projectile.getId() == SpotanimID.THRALL_MAGIC_TRAVEL
-			|| (source instanceof NPC && ThrallTracker.isThrall(((NPC) source).getId()));
+			|| projectile.getId() == SpotanimID.THRALL_MAGIC_TRAVEL;
 	}
 
 	/** Only a zombie's attack is taken from its animation: the other two have a projectile. */
@@ -324,17 +309,6 @@ class CombatDiagnostics
 		Actor target = event.getActor();
 		Hitsplat hitsplat = event.getHitsplat();
 		int tick = client.getTickCount();
-
-		if (target == client.getLocalPlayer())
-		{
-			if (hitsplat.getHitsplatType() != HitsplatID.HEAL)
-			{
-				taken = (takenTick == tick ? taken : 0) + hitsplat.getAmount();
-				takenTick = tick;
-			}
-
-			return;
-		}
 
 		if (!(target instanceof NPC))
 		{
@@ -466,8 +440,6 @@ class CombatDiagnostics
 
 		ledger.tickEnded(tick);
 		bloodSpellLanded(tick);
-		struck(tick);
-		landed(tick);
 		dealt.headMap(tick - KEPT_TICKS).clear();
 
 		int cycle = client.getGameCycle();
@@ -509,46 +481,6 @@ class CombatDiagnostics
 		log.debug("Blood spell at tick {}: our hits came to {} this tick and {} the tick before,"
 				+ " which would heal {} and {}", tick, now, before, HealBound.bloodSpellHeal(now),
 			HealBound.bloodSpellHeal(before));
-	}
-
-	/** A hit on us with something worn or cast that hits back, which splats as a hit of ours. */
-	private void struck(int tick)
-	{
-		if (takenTick != tick || taken <= 0)
-		{
-			return;
-		}
-
-		String ring = items.name(items.equipped(EquipmentInventorySlot.RING));
-		String lower = ring == null ? "" : ring.toLowerCase();
-		int vengeance = client.getVarbitValue(VarbitID.VENGEANCE_REBOUND);
-
-		if (vengeance > 0 || lower.contains("recoil") || lower.contains("suffering"))
-		{
-			log.debug("Taken {} at tick {} with \"{}\" on and vengeance {}", taken, tick, ring,
-				vengeance);
-		}
-	}
-
-	/** A projectile first seen after its tick's end is written a tick late, and says so. */
-	private void landed(int tick)
-	{
-		Iterator<Map.Entry<Integer, List<Integer>>> due = landingOnUs.headMap(tick, true)
-			.entrySet().iterator();
-
-		while (due.hasNext())
-		{
-			Map.Entry<Integer, List<Integer>> landing = due.next();
-			Player player = client.getLocalPlayer();
-
-			log.debug("Projectile {} due on us at tick {}: overhead {} at the end of tick {}",
-				landing.getValue(), landing.getKey(),
-				player == null || player.getOverheadIcon() == null
-					? "none"
-					: player.getOverheadIcon(),
-				tick);
-			due.remove();
-		}
 	}
 
 	private Actor aim()
