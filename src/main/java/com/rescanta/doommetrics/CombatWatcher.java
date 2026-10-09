@@ -109,6 +109,9 @@ class CombatWatcher
 	/** How many of each item the inventory held when it was last sent; null until it is read. */
 	private Map<Integer, Integer> carried;
 
+	/** Whether the player has died this run: what then leaves the inventory was not eaten. */
+	private boolean dead;
+
 	/**
 	 * The tick's rises, settled at its end: what was eaten or drunk on the tick is only known
 	 * once the whole tick is in, whichever of the two the game sent first.
@@ -158,6 +161,7 @@ class CombatWatcher
 	void playerDied()
 	{
 		combatTracker.reset();
+		dead = true;
 	}
 
 	/** Forgets every cause in flight. */
@@ -168,6 +172,7 @@ class CombatWatcher
 		thrallTracker.reset();
 		consumables.reset();
 		rises.clear();
+		dead = false;
 	}
 
 	/**
@@ -200,7 +205,8 @@ class CombatWatcher
 		Map<Integer, Integer> before = carried;
 		carried = GameItems.count(event.getItemContainer());
 
-		if (before == null || carried == null || run.get() == null)
+		// A death empties the inventory as the respawn restores every level.
+		if (before == null || carried == null || run.get() == null || dead)
 		{
 			return;
 		}
@@ -407,6 +413,27 @@ class CombatWatcher
 			{
 				log.debug("Punish hit at tick {} spent a hit of {}", tick, metric.key());
 			}
+		}
+
+		@Override
+		public int tookForThrall(int tick)
+		{
+			return thrallTracker.tookOnBoss(tick);
+		}
+
+		@Override
+		public void notThralls(int amount, int tick)
+		{
+			thrallTracker.handBack();
+			log.debug("Punish at tick {}: the {} the thrall's window took is the swing's by its"
+				+ " experience", tick, amount);
+		}
+
+		@Override
+		public void thralls(int amount, int tick)
+		{
+			log.debug("Punish at tick {}: a {} is the thrall's by the swing's experience, not"
+				+ " counted", tick, amount);
 		}
 	}
 
@@ -857,7 +884,17 @@ class CombatWatcher
 				boss == null ? "" : Arrays.toString(boss.getOverheadSpriteIds()), tick);
 		}
 
-		punishTracker.tickEnded(tick, praying, this::equippedPunishWeapon);
+		punishTracker.tickEnded(tick, praying, this::equippedPunishWeapon,
+			this::experiencePerDamage);
+	}
+
+	/**
+	 * What a point of damage on the boss earns, by the hitpoints its bar shows; 0 while the bar is
+	 * the shield's or not up.
+	 */
+	private double experiencePerDamage()
+	{
+		return ExperienceRate.perDamage(client.getVarbitValue(VarbitID.HPBAR_HUD_BASEHP));
 	}
 
 	/** The only overhead the boss uses is the one a punish answers, so any icon will do. */

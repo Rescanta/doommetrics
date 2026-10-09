@@ -2,7 +2,9 @@ package com.rescanta.doommetrics;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -24,6 +26,12 @@ public class PunishTrackerTest
 
 	/** Which swing each hit at a punish was handed back against, and as what. */
 	private final List<String> against = new ArrayList<>();
+
+	/** What a point of damage earns, where a test has it read; 0 as when it can't be. */
+	private double rate;
+
+	/** The splat a thrall's window took on the boss, by tick. */
+	private final Map<Integer, Integer> thrallTook = new HashMap<>();
 
 	private final PunishTracker tracker = new PunishTracker(
 		(metric, amount) -> recorded.add(metric.key() + "=" + amount),
@@ -47,6 +55,24 @@ public class PunishTrackerTest
 			{
 				handedBack.add("0@" + tick);
 				against.add("from " + swing);
+			}
+
+			@Override
+			public int tookForThrall(int tick)
+			{
+				return thrallTook.getOrDefault(tick, -1);
+			}
+
+			@Override
+			public void notThralls(int amount, int tick)
+			{
+				against.add("the swing's " + amount);
+			}
+
+			@Override
+			public void thralls(int amount, int tick)
+			{
+				against.add("the thrall's " + amount);
 			}
 		});
 
@@ -637,6 +663,121 @@ public class PunishTrackerTest
 		assertEquals(list("0@101", "0@101", "0@102", "40@103"), handedBack);
 	}
 
+	/**
+	 * Seen in game: the thrall's window went on an arrow's miss a tick before, so its 1 landed with
+	 * the scythe's 24 1 4 and all four were counted. The swing's 64 experience is 29.
+	 */
+	@Test
+	public void aHitTooManyThatTheExperienceHasNoRoomForIsTheThralls()
+	{
+		rate = ExperienceRate.perDamage(600);
+		tickEnded(485, true, null);
+		tracker.swung(486);
+		tracker.experienceGained(64, 486);
+		tickEnded(486, true, PunishWeapon.SCYTHE);
+
+		mine(1, 487);
+		mine(24, 487);
+		mine(1, 487);
+		mine(4, 487);
+		tickEnded(487, false, PunishWeapon.SCYTHE);
+
+		bonus(16, 488);
+		bonus(16, 488);
+		bonus(16, 488);
+		bonus(16, 488);
+		tickEnded(488, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=24", "scythePunish=1", "scythePunish=4", "scythePunish=16",
+			"scythePunish=16", "scythePunish=16"), recorded);
+		assertEquals("the thrall's hit is not the spec tracker's either",
+			list("0@487", "0@487", "0@487"), handedBack);
+		assertTrue(against.toString(), against.contains("the thrall's 1"));
+	}
+
+	/** Seen in game: 2 17 2 1 where the swing's 44 experience is 20, so a 2 is the thrall's. */
+	@Test
+	public void theThrallsHitIsToldFromTheSwingsBySize()
+	{
+		rate = ExperienceRate.perDamage(600);
+		tickEnded(872, true, null);
+		tracker.swung(873);
+		tracker.experienceGained(44, 873);
+		tickEnded(873, true, PunishWeapon.SCYTHE);
+
+		mine(2, 874);
+		mine(17, 874);
+		mine(2, 874);
+		mine(1, 874);
+		tickEnded(874, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=17", "scythePunish=2", "scythePunish=1"), recorded);
+	}
+
+	/**
+	 * Seen in game: an arrow's 20 landed with the scythe's 21 5 1 and the thrall's window took the
+	 * 1. The swing's 60 experience is 27, so the 1 is the scythe's and the thrall's is to come.
+	 */
+	@Test
+	public void aHitTheThrallsWindowTookThatTheExperienceAsksForIsTheSwings()
+	{
+		rate = ExperienceRate.perDamage(600);
+		tickEnded(1013, true, null);
+		tracker.experienceGained(45, 1014);
+		tickEnded(1014, true, null);
+
+		tracker.swung(1015);
+		tracker.experienceGained(60, 1015);
+		tickEnded(1015, true, PunishWeapon.SCYTHE);
+
+		mine(20, 1016);
+		mine(21, 1016);
+		mine(5, 1016);
+		thrallTook.put(1016, 1);
+		tickEnded(1016, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=1", "scythePunish=21", "scythePunish=5"), recorded);
+		assertTrue(against.toString(), against.contains("the swing's 1"));
+	}
+
+	/** A hit the window took is left with the thrall when the swing's hits already add up. */
+	@Test
+	public void aHitTheThrallsWindowTookIsLeftWhenTheSwingsAddUp()
+	{
+		rate = ExperienceRate.perDamage(600);
+		tickEnded(99, true, null);
+		tracker.swung(100);
+		tracker.experienceGained(60, 100);
+		tickEnded(100, true, PunishWeapon.SCYTHE);
+
+		mine(21, 101);
+		mine(5, 101);
+		mine(1, 101);
+		thrallTook.put(101, 2);
+		tickEnded(101, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=21", "scythePunish=5", "scythePunish=1"), recorded);
+	}
+
+	/** With the rate not read, a hit too many is counted as it was before. */
+	@Test
+	public void withoutTheRateAHitTooManyIsStillCounted()
+	{
+		tickEnded(485, true, null);
+		tracker.swung(486);
+		tracker.experienceGained(64, 486);
+		tickEnded(486, true, PunishWeapon.SCYTHE);
+
+		mine(1, 487);
+		mine(24, 487);
+		mine(1, 487);
+		mine(4, 487);
+		tickEnded(487, false, PunishWeapon.SCYTHE);
+
+		assertEquals(list("scythePunish=1", "scythePunish=24", "scythePunish=1", "scythePunish=4"),
+			recorded);
+	}
+
 	@Test
 	public void eachWeaponIsCreditedToItsOwnFigure()
 	{
@@ -828,9 +969,13 @@ public class PunishTrackerTest
 		{
 			reads[0]++;
 			return null;
+		}, () ->
+		{
+			reads[0]++;
+			return 0;
 		});
 
-		assertEquals("a tick without a swing looks at no equipment", 0, reads[0]);
+		assertEquals("a tick without a swing looks at no equipment or rate", 0, reads[0]);
 	}
 
 	/** A hit of ours on the boss, offered the way the plugin offers it. */
@@ -856,7 +1001,7 @@ public class PunishTrackerTest
 
 	private void tickEnded(int tick, boolean praying, PunishWeapon inHand)
 	{
-		tracker.tickEnded(tick, praying, () -> inHand);
+		tracker.tickEnded(tick, praying, () -> inHand, () -> rate);
 	}
 
 	private static List<String> list(String... values)
