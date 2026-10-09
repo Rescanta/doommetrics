@@ -1,7 +1,9 @@
 package com.rescanta.doommetrics;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.time.Instant;
@@ -11,11 +13,15 @@ import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.Hitsplat;
 import net.runelite.api.HitsplatID;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.VarPlayerID;
@@ -109,6 +115,21 @@ public class CombatWatcherTest
 		watcher.hitsplatApplied(event);
 	}
 
+	/** The inventory as the client sends it after a change: one of each of these. */
+	private void carry(int... itemIds)
+	{
+		Item[] held = new Item[itemIds.length];
+
+		for (int i = 0; i < itemIds.length; i++)
+		{
+			held[i] = new Item(itemIds[i], 1);
+		}
+
+		ItemContainer inventory = mock(ItemContainer.class);
+		when(inventory.getItems()).thenReturn(held);
+		watcher.itemContainerChanged(new ItemContainerChanged(InventoryID.INV, inventory));
+	}
+
 	private long credited(CombatMetric metric)
 	{
 		return credited.getOrDefault(metric, 0L);
@@ -171,5 +192,25 @@ public class CombatWatcherTest
 		watcher.tickEnded();
 
 		assertEquals(credited.toString(), 0, credited.size());
+	}
+
+	@Test
+	public void aPotionLeavingTheInventoryIsReadAsDrunk()
+	{
+		carry(ItemID._4DOSE2RESTORE);
+		carry();
+
+		verify(items).isDrunk(ItemID._4DOSE2RESTORE);
+	}
+
+	/** Seen in game: every potion carried was read as drunk on the tick of the respawn. */
+	@Test
+	public void whatLeavesTheInventoryOnADeathWasNotDrunk()
+	{
+		carry(ItemID._4DOSE2RESTORE);
+		watcher.playerDied();
+		carry();
+
+		verify(items, never()).isDrunk(anyInt());
 	}
 }

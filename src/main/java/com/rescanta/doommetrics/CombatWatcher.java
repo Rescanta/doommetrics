@@ -109,6 +109,9 @@ class CombatWatcher
 	/** How many of each item the inventory held when it was last sent; null until it is read. */
 	private Map<Integer, Integer> carried;
 
+	/** Whether the player has died this run: what then leaves the inventory was not eaten. */
+	private boolean dead;
+
 	/**
 	 * The tick's rises, settled at its end: what was eaten or drunk on the tick is only known
 	 * once the whole tick is in, whichever of the two the game sent first.
@@ -158,6 +161,7 @@ class CombatWatcher
 	void playerDied()
 	{
 		combatTracker.reset();
+		dead = true;
 	}
 
 	/** Forgets every cause in flight. */
@@ -168,6 +172,7 @@ class CombatWatcher
 		thrallTracker.reset();
 		consumables.reset();
 		rises.clear();
+		dead = false;
 	}
 
 	/**
@@ -200,7 +205,8 @@ class CombatWatcher
 		Map<Integer, Integer> before = carried;
 		carried = GameItems.count(event.getItemContainer());
 
-		if (before == null || carried == null || run.get() == null)
+		// A death empties the inventory as the respawn restores every level.
+		if (before == null || carried == null || run.get() == null || dead)
 		{
 			return;
 		}
