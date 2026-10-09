@@ -51,7 +51,7 @@ public class CombatWatcherTest
 
 	private final CombatWatcher watcher = new CombatWatcher(client, clientThread, config, items,
 		() -> run, (metric, amount) -> credited.merge(metric, amount, Long::sum),
-		new CombatDiagnostics(client, config, () -> run));
+		new CombatDiagnostics(client, config, items, () -> run));
 
 	@Before
 	public void setUp()

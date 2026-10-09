@@ -1,0 +1,467 @@
+package com.rescanta.doommetrics;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeMap;
+
+/**
+ * A second reading of whose hit each hitsplat of ours is, kept beside the trackers and only ever
+ * written to the debug log. Every attack is a record of when it was made, what at and the tick it
+ * should land on, and a splat goes to the record due nearest its tick on what it hit, of those
+ * whose experience allows a hit of its size. Splats are settled a tick late: a projectile is first
+ * seen after the tick it was fired on has ended. No RuneLite types.
+ */
+final class AttackLedger
+{
+	/** A target nothing could name: a zombie thrall's, or a swing made at nothing. */
+	static final int UNKNOWN = -1;
+
+	enum Kind
+	{
+		/** Our own attack with nothing seen to fly: lands a tick after its animation. */
+		SWING("swing", 0, 2, false),
+
+		/** Our own projectile, due on the tick its flight ends. */
+		SHOT("shot", 1, 1, false),
+
+		THRALL_SHOT("thrall shot", 1, 1, true),
+
+		/** A zombie thrall's attack, which has no projectile and no readable target. */
+		THRALL_SWING("thrall swing", 0, 0, true);
+
+		private final String label;
+
+		/** How many ticks ahead of its due tick, and after it, a hit may still be this attack's. */
+		private final int early;
+		private final int late;
+
+		private final boolean thrall;
+
+		Kind(String label, int early, int late, boolean thrall)
+		{
+			this.label = label;
+			this.early = early;
+			this.late = late;
+			this.thrall = thrall;
+		}
+
+		boolean isThrall()
+		{
+			return thrall;
+		}
+	}
+
+	/** Where each verdict goes. */
+	interface Listener
+	{
+		void settled(Verdict verdict);
+
+		/** An attack's last tick went by with no hitsplat taken for it. */
+		void lapsed(Attack attack);
+	}
+
+	static final class Attack
+	{
+		final Kind kind;
+		final int made;
+		final int due;
+
+		/** The NPC it was made at, or {@link #UNKNOWN}. */
+		final int target;
+
+		/** The projectile's id, or 0 for an attack without one. */
+		final int projectile;
+
+		private int left;
+		private int hits;
+		private long damage;
+
+		private Attack(Kind kind, int made, int due, int target, int projectile, int left)
+		{
+			this.kind = kind;
+			this.made = made;
+			this.due = due;
+			this.target = target;
+			this.projectile = projectile;
+			this.left = left;
+		}
+
+		int hits()
+		{
+			return hits;
+		}
+
+		long damage()
+		{
+			return damage;
+		}
+
+		private boolean takes(Splat splat)
+		{
+			return left > 0 && (target == UNKNOWN || target == splat.target)
+				&& splat.tick >= due - kind.early && splat.tick <= due + kind.late
+				&& (!kind.thrall || splat.amount <= ThrallTracker.MAX_HIT);
+		}
+
+		private void take(Splat splat)
+		{
+			left--;
+			hits++;
+			damage += splat.amount;
+		}
+
+		@Override
+		public String toString()
+		{
+			return kind.label + (projectile > 0 ? " " + projectile : "") + " made " + made + " due "
+				+ due + " at " + (target == UNKNOWN ? "anything" : "#" + target);
+		}
+	}
+
+	/** What the hitpoints experience of a tick says its attack hit for. */
+	private static final class Earned
+	{
+		private int experience;
+		private double perDamage;
+	}
+
+	private static final class Splat
+	{
+		private final int tick;
+		private final int target;
+		private final int amount;
+		private final String on;
+
+		private Splat(int tick, int target, int amount, String on)
+		{
+			this.tick = tick;
+			this.target = target;
+			this.amount = amount;
+			this.on = on;
+		}
+	}
+
+	static final class Verdict
+	{
+		final int tick;
+		final int target;
+		final int amount;
+
+		/** How the caller named what was hit, carried through for the log. */
+		final String on;
+
+		/** The attack the splat was given to, or null when none was due. */
+		final Attack attack;
+
+		final boolean spec;
+
+		/** The hitpoints experience earned on the tick the attack was made, or 0. */
+		final int experience;
+
+		/** Whether the experience says what the attack's hits come to - see {@link #least}. */
+		final boolean sized;
+
+		/** The least and most all of the attack's hits may come to by that experience. */
+		final int least;
+		final int most;
+
+		/**
+		 * An attack that was due and left the splat alone, as not what its experience says it hit
+		 * for; null when there was none, or another took the splat.
+		 */
+		final Attack refused;
+
+		private Verdict(Splat splat, Attack attack, boolean spec, Earned earned, Attack refused)
+		{
+			boolean sized = isSized(attack, earned);
+
+			this.tick = splat.tick;
+			this.target = splat.target;
+			this.amount = splat.amount;
+			this.on = splat.on;
+			this.attack = attack;
+			this.spec = spec;
+			this.experience = attack != null && !attack.kind.thrall && earned != null
+				? earned.experience
+				: 0;
+			this.sized = sized;
+			this.least = sized ? ExperienceRate.leastDamage(earned.experience, earned.perDamage) : 0;
+			this.most = sized ? ExperienceRate.mostDamage(earned.experience, earned.perDamage) : 0;
+			this.refused = attack == null ? refused : null;
+		}
+
+		/** How many ticks after its due tick the splat came; negative when it came ahead of it. */
+		int offset()
+		{
+			return attack == null ? 0 : tick - attack.due;
+		}
+
+		@Override
+		public String toString()
+		{
+			StringBuilder text = new StringBuilder().append(amount).append(" on ").append(on)
+				.append(" at tick ").append(tick).append(" = ");
+
+			if (attack == null)
+			{
+				text.append("nothing due");
+				return refused == null ? text.toString()
+					: text.append(", too much or too little for ").append(refused).toString();
+			}
+
+			text.append(spec ? "spec " : "").append(attack.kind.label);
+
+			if (attack.projectile > 0)
+			{
+				text.append(' ').append(attack.projectile);
+			}
+
+			text.append(" made ").append(attack.made).append(" due ").append(attack.due)
+				.append(" (").append(offset() < 0 ? "" : "+").append(offset()).append(')');
+
+			if (sized || experience > 0)
+			{
+				text.append(", experience ").append(experience);
+			}
+
+			if (sized)
+			{
+				text.append(" says ").append(least).append(" to ").append(most);
+			}
+
+			return text.toString();
+		}
+	}
+
+	/** Whether what an attack earned says what its hits come to: ours, at a rate that is known. */
+	private static boolean isSized(Attack attack, Earned earned)
+	{
+		return attack != null && !attack.kind.thrall && earned != null && earned.perDamage > 0;
+	}
+
+	/** More than can be in flight at once; a guard against leaks, not a limit in play. */
+	private static final int MAX_ATTACKS = 32;
+
+	/** How long what a tick said is kept for attacks made on it. */
+	private static final int KEPT_TICKS = 16;
+
+	private final Listener listener;
+	private final List<Attack> attacks = new ArrayList<>();
+	private final List<Splat> splats = new ArrayList<>();
+	private final Set<Integer> specs = new HashSet<>();
+	private final TreeMap<Integer, Earned> earned = new TreeMap<>();
+
+	AttackLedger(Listener listener)
+	{
+		this.listener = listener;
+	}
+
+	void reset()
+	{
+		attacks.clear();
+		splats.clear();
+		specs.clear();
+		earned.clear();
+	}
+
+	/**
+	 * We made an attack animation. Taken for a swing unless a projectile of ours fired on the same
+	 * tick shows it was a shot, whichever of the two is seen first.
+	 */
+	void swung(int tick, int target)
+	{
+		for (Attack attack : attacks)
+		{
+			if (attack.kind == Kind.SHOT && attack.made == tick)
+			{
+				return;
+			}
+		}
+
+		add(new Attack(Kind.SWING, tick, tick + 1, target, 0, Integer.MAX_VALUE));
+	}
+
+	/** A projectile of ours, one hit each. Replaces the swing its animation was taken for. */
+	void shot(int projectile, int made, int due, int target)
+	{
+		attacks.removeIf(attack -> attack.kind == Kind.SWING && attack.made == made
+			&& attack.hits == 0);
+		add(new Attack(Kind.SHOT, made, due, target, projectile, 1));
+	}
+
+	void thrallShot(int projectile, int made, int due, int target)
+	{
+		add(new Attack(Kind.THRALL_SHOT, made, due, target, projectile, 1));
+	}
+
+	void thrallSwung(int tick)
+	{
+		add(new Attack(Kind.THRALL_SWING, tick, tick + 1, UNKNOWN, 0, 1));
+	}
+
+	/** Special attack energy was spent on this tick: the attack made on it is the spec. */
+	void specFired(int tick)
+	{
+		specs.add(tick);
+	}
+
+	/**
+	 * Hitpoints experience earned on a tick, which is the attack made on it. None at a known rate
+	 * says the attack missed.
+	 *
+	 * @param perDamage what a point of damage on its target earns, or 0 when that is not known
+	 */
+	void experience(int tick, int amount, double perDamage)
+	{
+		Earned total = earned.computeIfAbsent(tick, at -> new Earned());
+		total.experience += amount;
+		total.perDamage = perDamage;
+	}
+
+	/**
+	 * A hitsplat of ours on an NPC.
+	 *
+	 * @param on how to name the NPC in the verdict
+	 */
+	void splat(int tick, int target, int amount, String on)
+	{
+		splats.add(new Splat(tick, target, amount, on));
+	}
+
+	/** Settles the splats of the tick before, and lets go of attacks whose time has gone by. */
+	void tickEnded(int tick)
+	{
+		Iterator<Splat> waiting = splats.iterator();
+
+		while (waiting.hasNext())
+		{
+			Splat splat = waiting.next();
+
+			if (splat.tick < tick)
+			{
+				waiting.remove();
+				settle(splat);
+			}
+		}
+
+		Iterator<Attack> open = attacks.iterator();
+
+		while (open.hasNext())
+		{
+			Attack attack = open.next();
+
+			if (attack.due + attack.kind.late < tick)
+			{
+				open.remove();
+
+				if (attack.hits == 0)
+				{
+					listener.lapsed(attack);
+				}
+			}
+		}
+
+		specs.removeIf(at -> at < tick - KEPT_TICKS);
+		earned.headMap(tick - KEPT_TICKS).clear();
+	}
+
+	private void settle(Splat splat)
+	{
+		Attack taker = null;
+		Attack refused = null;
+
+		for (Attack attack : attacks)
+		{
+			if (!attack.takes(splat))
+			{
+				continue;
+			}
+
+			if (!fits(attack, splat))
+			{
+				refused = refused == null || isAhead(attack, refused, splat.tick) ? attack : refused;
+			}
+			else if (taker == null || isAhead(attack, taker, splat.tick))
+			{
+				taker = attack;
+			}
+		}
+
+		listener.settled(new Verdict(splat, taker, taker != null && !taker.kind.thrall
+			&& specs.contains(taker.made), taker == null ? null : earned.get(taker.made), refused));
+
+		if (taker == null)
+		{
+			return;
+		}
+
+		taker.take(splat);
+
+		if (taker.left == 0)
+		{
+			attacks.remove(taker);
+		}
+	}
+
+	/**
+	 * Whether a splat can be the attack's by the experience its tick earned. A shot's one hit is
+	 * what the experience says; a swing's hits may not come to more than it. True when the
+	 * experience says nothing.
+	 */
+	private boolean fits(Attack attack, Splat splat)
+	{
+		Earned made = earned.get(attack.made);
+
+		if (!isSized(attack, made))
+		{
+			return true;
+		}
+
+		long soFar = attack.damage + splat.amount;
+
+		return soFar <= ExperienceRate.mostDamage(made.experience, made.perDamage)
+			&& (attack.kind != Kind.SHOT
+			|| soFar >= ExperienceRate.leastDamage(made.experience, made.perDamage));
+	}
+
+	/**
+	 * The attack due nearest the tick takes the hit. Of two as near, hits land in the order their
+	 * attacks were made; of two made on one tick the thrall's comes first, and something seen to
+	 * fly comes ahead of a swing.
+	 */
+	private static boolean isAhead(Attack attack, Attack other, int tick)
+	{
+		int near = Math.abs(tick - attack.due);
+		int otherNear = Math.abs(tick - other.due);
+
+		if (near != otherNear)
+		{
+			return near < otherNear;
+		}
+
+		if (attack.made != other.made)
+		{
+			return attack.made < other.made;
+		}
+
+		if (attack.kind.thrall != other.kind.thrall)
+		{
+			return attack.kind.thrall;
+		}
+
+		return attack.kind != Kind.SWING && other.kind == Kind.SWING;
+	}
+
+	private void add(Attack attack)
+	{
+		if (attacks.size() >= MAX_ATTACKS)
+		{
+			attacks.remove(0);
+		}
+
+		attacks.add(attack);
+	}
+}

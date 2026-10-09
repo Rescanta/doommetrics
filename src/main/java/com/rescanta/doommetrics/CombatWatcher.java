@@ -520,6 +520,7 @@ class CombatWatcher
 			if (style != null)
 			{
 				thrallTracker.attacked(style, tick);
+				diagnostics.thrallAttacked(style, tick);
 
 				if (config.debugLogging())
 				{
@@ -624,6 +625,7 @@ class CombatWatcher
 		experience = (experienceTick == tick ? experience : 0) + gained;
 		experienceTick = tick;
 		punishTracker.experienceGained(gained, tick);
+		diagnostics.experienceGained(gained, tick);
 
 		if (config.debugLogging())
 		{
@@ -713,6 +715,7 @@ class CombatWatcher
 		}
 		else
 		{
+			diagnostics.healed(left, tick);
 			combatTracker.healed(left, tick);
 		}
 	}
@@ -844,7 +847,7 @@ class CombatWatcher
 				experienceTick == tick ? experience : 0);
 			log.debug("Special attack fired on delve {}: {} (item {} \"{}\") at tick {}",
 				current.creditLevel(), weapon, itemId, items.name(itemId), tick);
-			diagnostics.specFired(tick);
+			diagnostics.specFired(tick, weapon);
 		});
 	}
 

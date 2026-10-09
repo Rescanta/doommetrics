@@ -88,7 +88,7 @@ class ThrallTracker
 	 */
 	static Style attackStyle(int npcId, int animation)
 	{
-		if (npcId < NpcID.ARCEUUS_THRALL_GHOST_LESSER || npcId > NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER)
+		if (!isThrall(npcId))
 		{
 			return null;
 		}
@@ -107,6 +107,12 @@ class ThrallTracker
 			default:
 				return null;
 		}
+	}
+
+	static boolean isThrall(int npcId)
+	{
+		return npcId >= NpcID.ARCEUUS_THRALL_GHOST_LESSER
+			&& npcId <= NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER;
 	}
 
 	/**

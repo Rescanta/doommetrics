@@ -192,7 +192,7 @@ public class DoomMetricsPlugin extends Plugin
 	{
 		GameItems items = new GameItems(client, itemManager);
 		claims = new ClaimWatcher(clientThread, () -> run, () -> endRun(EndReason.FINISHED, -1));
-		diagnostics = new CombatDiagnostics(client, config, () -> run);
+		diagnostics = new CombatDiagnostics(client, config, items, () -> run);
 		combat = new CombatWatcher(client, clientThread, config, items, () -> run, this::recordCombat,
 			diagnostics);
 		totals = new Totals(totalsStore, runHistoryStore, () -> runProfile, () -> run);
@@ -637,6 +637,8 @@ public class DoomMetricsPlugin extends Plugin
 	@Subscribe
 	public void onActorDeath(ActorDeath event)
 	{
+		diagnostics.actorDeath(event);
+
 		if (run == null || deathLevel >= 0 || event.getActor() != client.getLocalPlayer())
 		{
 			return;
