@@ -341,6 +341,25 @@ public class CombatDiagnosticsTest
 		assertTrue(written.list.toString(), lines("Projectile").isEmpty());
 	}
 
+	/** The heal comes with the cast; the hit it is a share of comes two to five ticks later. */
+	@Test
+	public void aBloodSpellsHitsAreAddedUpOnceTheyAreIn()
+	{
+		diagnostics.bloodSpell(100);
+		diagnostics.swung(100);
+		diagnostics.experienceGained(65, 100);
+		endTicksTo(103);
+
+		at(104);
+		hit(boss, 29);
+		endTicksTo(106);
+
+		assertTrue(only("Ledger"), only("Ledger").endsWith(
+			"= cast made 100 due 102 (+2), experience 65 says 29 to 29"));
+		assertEquals("Blood spell made at tick 100 hit 29 in all, a quarter of which is 7",
+			only("Blood spell made"));
+	}
+
 	@Test
 	public void nothingIsWrittenWithDebugLoggingOff()
 	{

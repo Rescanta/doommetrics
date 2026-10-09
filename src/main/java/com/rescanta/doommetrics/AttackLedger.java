@@ -28,6 +28,12 @@ final class AttackLedger
 		/** Our own projectile, due on the tick its flight ends. */
 		SHOT("shot", 1, 1, false),
 
+		/**
+		 * A spell with nothing seen to fly, which hits everything in its reach: two ticks on from
+		 * beside its target and one more for every three tiles.
+		 */
+		CAST("cast", 0, 3, false),
+
 		THRALL_SHOT("thrall shot", 1, 1, true),
 
 		/** A zombie thrall's attack, which has no projectile and no readable target. */
@@ -62,6 +68,11 @@ final class AttackLedger
 
 		/** An attack's last tick went by with no hitsplat taken for it. */
 		void lapsed(Attack attack);
+
+		/** A spell's last tick went by: what it hit for over every target is known. */
+		default void castLanded(Attack attack)
+		{
+		}
 	}
 
 	static final class Attack
@@ -255,12 +266,16 @@ final class AttackLedger
 	 */
 	private static final int[] TICKS_TO_START = {2, 1};
 
+	/** A spell lands no sooner than this after its cast. */
+	private static final int CAST_TICKS = 2;
+
 	private static final int NEVER = Integer.MIN_VALUE;
 
 	private final Listener listener;
 	private final List<Attack> attacks = new ArrayList<>();
 	private final List<Splat> splats = new ArrayList<>();
 	private final Set<Integer> specs = new HashSet<>();
+	private final Set<Integer> casts = new HashSet<>();
 	private final TreeMap<Integer, Earned> earned = new TreeMap<>();
 
 	/** The tick a thrall last animated a shot. */
@@ -276,6 +291,7 @@ final class AttackLedger
 		attacks.clear();
 		splats.clear();
 		specs.clear();
+		casts.clear();
 		earned.clear();
 		thrallShotAt = NEVER;
 	}
@@ -294,7 +310,26 @@ final class AttackLedger
 			}
 		}
 
-		add(new Attack(Kind.SWING, tick, tick + 1, target, 0, Integer.MAX_VALUE));
+		add(casts.contains(tick)
+			? castAt(tick)
+			: new Attack(Kind.SWING, tick, tick + 1, target, 0, Integer.MAX_VALUE));
+	}
+
+	/** A spell with no projectile was cast on this tick: its animation is the cast, not a swing. */
+	void cast(int tick)
+	{
+		casts.add(tick);
+
+		if (attacks.removeIf(attack -> attack.kind == Kind.SWING && attack.made == tick
+			&& attack.hits == 0))
+		{
+			add(castAt(tick));
+		}
+	}
+
+	private static Attack castAt(int tick)
+	{
+		return new Attack(Kind.CAST, tick, tick + CAST_TICKS, UNKNOWN, 0, Integer.MAX_VALUE);
 	}
 
 	/** A projectile of ours, one hit each. Replaces the swing its animation was taken for. */
@@ -418,10 +453,15 @@ final class AttackLedger
 				{
 					listener.lapsed(attack);
 				}
+				else if (attack.hits > 0 && attack.kind == Kind.CAST)
+				{
+					listener.castLanded(attack);
+				}
 			}
 		}
 
 		specs.removeIf(at -> at < tick - KEPT_TICKS);
+		casts.removeIf(at -> at < tick - KEPT_TICKS);
 		earned.headMap(tick - KEPT_TICKS).clear();
 	}
 

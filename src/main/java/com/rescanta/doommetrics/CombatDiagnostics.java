@@ -86,8 +86,6 @@ class CombatDiagnostics
 	private SpecWeapon specWeapon;
 	private int specTick = -1;
 
-	private int bloodSpellTick = -1;
-
 	/** What our hits on NPCs came to on each of the last few ticks. */
 	private final TreeMap<Integer, Integer> dealt = new TreeMap<>();
 
@@ -111,7 +109,6 @@ class CombatDiagnostics
 		experienceTick = -1;
 		rateOnBoss = 0;
 		specTick = -1;
-		bloodSpellTick = -1;
 		lastCast = null;
 		lastTickAt = 0;
 	}
@@ -144,6 +141,14 @@ class CombatDiagnostics
 		public void lapsed(AttackLedger.Attack attack)
 		{
 			log.debug("Ledger: {} took nothing", attack);
+		}
+
+		/** Only a blood spell is told to the ledger as a cast. Its heal came with the cast. */
+		@Override
+		public void castLanded(AttackLedger.Attack attack)
+		{
+			log.debug("Blood spell made at tick {} hit {} in all, a quarter of which is {}",
+				attack.made, attack.damage(), HealBound.bloodSpellHeal((int) attack.damage()));
 		}
 	}
 
@@ -272,7 +277,7 @@ class CombatDiagnostics
 		{
 			log.debug("Blood spell at tick {}: autocast {}, last cast clicked \"{}\" at tick {}",
 				tick, client.getVarbitValue(VarbitID.AUTOCAST_SPELL), lastCast, lastCastTick);
-			bloodSpellTick = tick;
+			ledger.cast(tick);
 		}
 	}
 
@@ -455,7 +460,6 @@ class CombatDiagnostics
 		}
 
 		ledger.tickEnded(tick);
-		bloodSpellLanded(tick);
 		dealt.headMap(tick - KEPT_TICKS).clear();
 
 		int cycle = client.getGameCycle();
@@ -484,22 +488,6 @@ class CombatDiagnostics
 		{
 			log.debug("Tick {} came {} ms after the one before", tick, millis);
 		}
-	}
-
-	/** A blood spell heals a quarter of what it hit for, written once the hits of its tick are in. */
-	private void bloodSpellLanded(int tick)
-	{
-		if (bloodSpellTick != tick)
-		{
-			return;
-		}
-
-		int now = dealt.getOrDefault(tick, 0);
-		int before = dealt.getOrDefault(tick - 1, 0);
-
-		log.debug("Blood spell at tick {}: our hits came to {} this tick and {} the tick before,"
-				+ " which would heal {} and {}", tick, now, before, HealBound.bloodSpellHeal(now),
-			HealBound.bloodSpellHeal(before));
 	}
 
 	private Actor aim()

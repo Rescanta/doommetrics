@@ -20,6 +20,7 @@ public class AttackLedgerTest
 
 	private final List<AttackLedger.Verdict> verdicts = new ArrayList<>();
 	private final List<AttackLedger.Attack> lapsed = new ArrayList<>();
+	private final List<AttackLedger.Attack> landed = new ArrayList<>();
 
 	private final AttackLedger ledger = new AttackLedger(new AttackLedger.Listener()
 	{
@@ -33,6 +34,12 @@ public class AttackLedgerTest
 		public void lapsed(AttackLedger.Attack attack)
 		{
 			lapsed.add(attack);
+		}
+
+		@Override
+		public void castLanded(AttackLedger.Attack attack)
+		{
+			landed.add(attack);
 		}
 	});
 
@@ -570,6 +577,47 @@ public class AttackLedgerTest
 		endTicks(102, 104);
 
 		assertEquals(101, verdicts.get(0).attack.made);
+	}
+
+	/** Seen in game: a blood barrage from range landing four ticks after its cast. */
+	@Test
+	public void aSpellLandsLaterThanASwingAndOnEverythingInReach()
+	{
+		ledger.cast(100);
+		ledger.swung(100, BOSS);
+		ledger.experience(100, 68, RATE);
+		ledger.splat(104, BOSS, 29, "boss");
+		ledger.splat(104, LARVA, 1, "larva");
+		endTicks(100, 106);
+
+		assertEquals(AttackLedger.Kind.CAST, kindOf(0));
+		assertEquals(AttackLedger.Kind.CAST, kindOf(1));
+		assertEquals(1, landed.size());
+		assertEquals(30, landed.get(0).damage());
+		assertTrue(lapsed.isEmpty());
+	}
+
+	@Test
+	public void aSpellIsACastWhicheverOfItsTwoSignsIsHeardFirst()
+	{
+		ledger.swung(100, BOSS);
+		ledger.cast(100);
+		ledger.splat(104, BOSS, 29, "boss");
+		endTicks(100, 106);
+
+		assertEquals(AttackLedger.Kind.CAST, kindOf(0));
+		assertTrue(lapsed.isEmpty());
+	}
+
+	@Test
+	public void aSpellsHitDoesNotComeTheTickAfterItsCast()
+	{
+		ledger.cast(100);
+		ledger.swung(100, BOSS);
+		ledger.splat(101, BOSS, 29, "boss");
+		endTicks(100, 102);
+
+		assertNull(verdicts.get(0).attack);
 	}
 
 	@Test
