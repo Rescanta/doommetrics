@@ -12,8 +12,9 @@ final class Flight
 	/** A bow's flight is 5 cycles a tile and 5 over, and its hit a tick later from 3 tiles on. */
 	private static final int OWN_LEAD = 10;
 
-	/** A thrall's hit is ahead of its projectile by about this much. */
-	private static final int THRALL_LAG = 15;
+	/** A thrall's hit is ahead of its projectile: a ghost's by about this much, a skeleton's less. */
+	private static final int GHOST_LAG = 15;
+	private static final int SKELETON_LAG = 5;
 
 	private Flight()
 	{
@@ -35,9 +36,12 @@ final class Flight
 		return started + (Math.max(0, length) + OWN_LEAD) / CYCLES_PER_TICK;
 	}
 
-	/** A thrall's: up to 40 cycles land on the tick it starts, 45 to 60 the tick after. */
-	static int thrallLandingTick(int started, int length)
+	/**
+	 * A thrall's. A ghost's lands on the tick it starts up to 40 cycles and the tick after from
+	 * 45 to 60; a skeleton's on the tick it starts up to 30 and the tick after from 35 to 60.
+	 */
+	static int thrallLandingTick(int started, int length, boolean ghost)
 	{
-		return started + Math.max(0, length - THRALL_LAG) / CYCLES_PER_TICK;
+		return started + Math.max(0, length - (ghost ? GHOST_LAG : SKELETON_LAG)) / CYCLES_PER_TICK;
 	}
 }

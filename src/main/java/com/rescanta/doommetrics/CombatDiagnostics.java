@@ -191,7 +191,8 @@ class CombatDiagnostics
 		int length = projectile.getEndCycle() - projectile.getStartCycle();
 		boolean thrall = isThrallShot(projectile);
 		int lands = thrall
-			? Flight.thrallLandingTick(started, length)
+			? Flight.thrallLandingTick(started, length,
+				projectile.getId() == SpotanimID.THRALL_MAGIC_TRAVEL)
 			: Flight.landingTick(started, length);
 		int index = ((NPC) target).getIndex();
 
