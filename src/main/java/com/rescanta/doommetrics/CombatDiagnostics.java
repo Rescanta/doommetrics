@@ -267,6 +267,11 @@ class CombatDiagnostics
 			specWeapon = weapon;
 			specTick = tick;
 			ledger.specFired(tick);
+
+			if (weapon == SpecWeapon.ANCIENT_GODSWORD)
+			{
+				ledger.sacrifice(tick);
+			}
 		}
 	}
 

@@ -23,21 +23,27 @@ final class AttackLedger
 	enum Kind
 	{
 		/** Our own attack with nothing seen to fly: lands a tick after its animation. */
-		SWING("swing", 0, 2, false),
+		SWING("swing", 0, 2, false, 0, Integer.MAX_VALUE),
 
 		/** Our own projectile, due on the tick its flight ends. */
-		SHOT("shot", 1, 1, false),
+		SHOT("shot", 1, 1, false, 0, Integer.MAX_VALUE),
 
 		/**
 		 * A spell with nothing seen to fly, which hits everything in its reach: two ticks on from
 		 * beside its target and one more for every three tiles.
 		 */
-		CAST("cast", 0, 3, false),
+		CAST("cast", 0, 3, false, 0, Integer.MAX_VALUE),
 
-		THRALL_SHOT("thrall shot", 1, 1, true),
+		/**
+		 * Blood Sacrifice, the ancient godsword's second hit: always the same and earning
+		 * nothing. It follows a spec that landed, also one the shield took for a 0.
+		 */
+		SACRIFICE("sacrifice", 1, 1, false, SpecWeapon.SACRIFICE_DAMAGE, SpecWeapon.SACRIFICE_DAMAGE),
+
+		THRALL_SHOT("thrall shot", 1, 1, true, 0, ThrallTracker.MAX_HIT),
 
 		/** A zombie thrall's attack, which has no projectile and no readable target. */
-		THRALL_SWING("thrall swing", 0, 0, true);
+		THRALL_SWING("thrall swing", 0, 0, true, 0, ThrallTracker.MAX_HIT);
 
 		private final String label;
 
@@ -47,17 +53,29 @@ final class AttackLedger
 
 		private final boolean thrall;
 
-		Kind(String label, int early, int late, boolean thrall)
+		/** The least and the most one hit of it can be. */
+		private final int least;
+		private final int most;
+
+		Kind(String label, int early, int late, boolean thrall, int least, int most)
 		{
 			this.label = label;
 			this.early = early;
 			this.late = late;
 			this.thrall = thrall;
+			this.least = least;
+			this.most = most;
 		}
 
 		boolean isThrall()
 		{
 			return thrall;
+		}
+
+		/** Whether the hitpoints experience of the tick it was made on is its own. */
+		private boolean earns()
+		{
+			return !thrall && this != SACRIFICE;
 		}
 	}
 
@@ -115,7 +133,7 @@ final class AttackLedger
 		{
 			return left > 0 && (target == UNKNOWN || target == splat.target)
 				&& splat.tick >= due - kind.early && splat.tick <= due + kind.late
-				&& (!kind.thrall || splat.amount <= ThrallTracker.MAX_HIT);
+				&& splat.amount >= kind.least && splat.amount <= kind.most;
 		}
 
 		private void take(Splat splat)
@@ -196,7 +214,7 @@ final class AttackLedger
 			this.on = splat.on;
 			this.attack = attack;
 			this.spec = spec;
-			this.experience = attack != null && !attack.kind.thrall && earned != null
+			this.experience = attack != null && attack.kind.earns() && earned != null
 				? earned.experience
 				: 0;
 			this.sized = sized;
@@ -251,7 +269,7 @@ final class AttackLedger
 	/** Whether what an attack earned says what its hits come to: ours, at a rate that is known. */
 	private static boolean isSized(Attack attack, Earned earned)
 	{
-		return attack != null && !attack.kind.thrall && earned != null && earned.perDamage > 0;
+		return attack != null && attack.kind.earns() && earned != null && earned.perDamage > 0;
 	}
 
 	/** More than can be in flight at once; a guard against leaks, not a limit in play. */
@@ -268,6 +286,9 @@ final class AttackLedger
 
 	/** A spell lands no sooner than this after its cast. */
 	private static final int CAST_TICKS = 2;
+
+	/** How long after the spec its sacrifice hits: seen at 9 ticks, and once at 8. */
+	private static final int SACRIFICE_TICKS = 9;
 
 	private static final int NEVER = Integer.MIN_VALUE;
 
@@ -400,6 +421,12 @@ final class AttackLedger
 		specs.add(tick);
 	}
 
+	/** The spec made on this tick has a second hit to come, on whatever it hit. */
+	void sacrifice(int tick)
+	{
+		add(new Attack(Kind.SACRIFICE, tick, tick + SACRIFICE_TICKS, UNKNOWN, 0, 1));
+	}
+
 	/**
 	 * Hitpoints experience earned on a tick, which is the attack made on it. None says the attack
 	 * missed, or that its animation was no attack.
@@ -449,7 +476,8 @@ final class AttackLedger
 			{
 				open.remove();
 
-				if (attack.hits == 0 && isKnownAttack(attack))
+				// A sacrifice that never came followed a spec that missed, which is no news.
+				if (attack.hits == 0 && attack.kind != Kind.SACRIFICE && isKnownAttack(attack))
 				{
 					listener.lapsed(attack);
 				}
@@ -524,7 +552,7 @@ final class AttackLedger
 	{
 		Earned made = earned.get(attack.made);
 
-		if (attack.kind.thrall || made == null)
+		if (!attack.kind.earns() || made == null)
 		{
 			return true;
 		}

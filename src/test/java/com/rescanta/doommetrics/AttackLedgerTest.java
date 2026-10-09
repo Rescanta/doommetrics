@@ -621,6 +621,54 @@ public class AttackLedgerTest
 	}
 
 	@Test
+	public void theSacrificeIsTheSpecsSecondHitNineTicksOn()
+	{
+		ledger.swung(100, BOSS);
+		ledger.specFired(100);
+		ledger.sacrifice(100);
+		ledger.experience(100, 89, RATE);
+		ledger.splat(101, BOSS, 40, "boss");
+		ledger.splat(109, BOSS, 25, "boss");
+		endTicks(100, 112);
+
+		assertEquals(AttackLedger.Kind.SWING, kindOf(0));
+		assertEquals(AttackLedger.Kind.SACRIFICE, kindOf(1));
+		assertTrue(verdicts.get(1).spec);
+		assertFalse("it earns nothing of its own", verdicts.get(1).sized);
+		assertTrue(lapsed.isEmpty());
+	}
+
+	@Test
+	public void aSacrificeIsNoOtherAmountAndIsNotReportedWhenItNeverComes()
+	{
+		ledger.swung(100, BOSS);
+		ledger.specFired(100);
+		ledger.sacrifice(100);
+		ledger.experience(100, 89, RATE);
+		ledger.splat(101, BOSS, 40, "boss");
+		ledger.splat(109, BOSS, 3, "boss");
+		endTicks(100, 112);
+
+		assertNull(verdicts.get(1).attack);
+		assertTrue(lapsed.isEmpty());
+	}
+
+	/** Seen in game: the shield takes the spec for a 0 that earns nothing, and the 25 still comes. */
+	@Test
+	public void theSacrificeFollowsASpecTheShieldTookForNothing()
+	{
+		ledger.swung(100, BOSS);
+		ledger.specFired(100);
+		ledger.sacrifice(100);
+		ledger.experience(100, 0, RATE);
+		ledger.splat(101, BOSS, 0, "shield");
+		ledger.splat(109, BOSS, 25, "shield");
+		endTicks(100, 112);
+
+		assertEquals(AttackLedger.Kind.SACRIFICE, kindOf(1));
+	}
+
+	@Test
 	public void resetForgetsWhatWasInFlight()
 	{
 		ledger.shot(ARROW, 100, 102, BOSS);

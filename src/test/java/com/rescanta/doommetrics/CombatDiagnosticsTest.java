@@ -341,6 +341,27 @@ public class CombatDiagnosticsTest
 		assertTrue(written.list.toString(), lines("Projectile").isEmpty());
 	}
 
+	@Test
+	public void anAncientGodswordSpecHasItsSacrificeToCome()
+	{
+		diagnostics.swung(100);
+		diagnostics.experienceGained(89, 100);
+		diagnostics.specFired(100, SpecWeapon.ANCIENT_GODSWORD);
+		endTicksTo(100);
+
+		at(101);
+		hit(boss, 40);
+		endTicksTo(108);
+
+		at(109);
+		hit(boss, 25);
+		endTicksTo(110);
+
+		List<String> verdicts = lines("Ledger");
+		assertEquals(verdicts.toString(), 2, verdicts.size());
+		assertTrue(verdicts.get(1), verdicts.get(1).endsWith("= spec sacrifice made 100 due 109 (+0)"));
+	}
+
 	/** The heal comes with the cast; the hit it is a share of comes two to five ticks later. */
 	@Test
 	public void aBloodSpellsHitsAreAddedUpOnceTheyAreIn()
