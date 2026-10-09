@@ -50,7 +50,8 @@ public class CombatWatcherTest
 	private final Map<CombatMetric, Long> credited = new EnumMap<>(CombatMetric.class);
 
 	private final CombatWatcher watcher = new CombatWatcher(client, clientThread, config, items,
-		() -> run, (metric, amount) -> credited.merge(metric, amount, Long::sum));
+		() -> run, (metric, amount) -> credited.merge(metric, amount, Long::sum),
+		new CombatDiagnostics(client, config, items, () -> run));
 
 	@Before
 	public void setUp()

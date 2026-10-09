@@ -89,7 +89,7 @@ enum SpecWeapon
 
 	private static final int SACRIFICE_TO = 10;
 
-	private static final int SACRIFICE_DAMAGE = 25;
+	static final int SACRIFICE_DAMAGE = 25;
 
 	/** What Blood Sacrifice heals: 15% of the target's hitpoints, to 25 on an NPC. */
 	private static final int SACRIFICE_HEAL = 25;
