@@ -668,6 +668,38 @@ public class AttackLedgerTest
 		assertEquals(AttackLedger.Kind.SACRIFICE, kindOf(1));
 	}
 
+	/** Seen in game: a barrage took a sword's hit on a larva beside the boss, and lost its own. */
+	@Test
+	public void aSpellLeavesWhatItOnlyReachesToAnAttackMadeAtIt()
+	{
+		ledger.cast(100);
+		ledger.swung(100, BOSS);
+		ledger.experience(100, 58, RATE);
+		ledger.swung(101, LARVA);
+		ledger.experience(101, 3, 0);
+		ledger.splat(102, LARVA, 2, "larva");
+		ledger.splat(103, BOSS, 26, "boss");
+		endTicks(100, 107);
+
+		assertEquals(AttackLedger.Kind.SWING, kindOf(0));
+		assertEquals(AttackLedger.Kind.CAST, kindOf(1));
+		assertEquals(26, landed.get(0).damage());
+		assertTrue(lapsed.isEmpty());
+	}
+
+	/** Seen in game: an arrow that earned 55 for 24 and splatted the 17 the boss had left. */
+	@Test
+	public void aShotThatKillsMayHitForLessThanItEarned()
+	{
+		ledger.shot(ARROW, 100, 102, BOSS);
+		ledger.experience(100, 55, RATE);
+		ledger.died(102, BOSS);
+		ledger.splat(102, BOSS, 17, "boss");
+		endTicks(100, 103);
+
+		assertEquals(AttackLedger.Kind.SHOT, kindOf(0));
+	}
+
 	@Test
 	public void resetForgetsWhatWasInFlight()
 	{

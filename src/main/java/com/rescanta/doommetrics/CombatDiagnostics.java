@@ -396,7 +396,15 @@ class CombatDiagnostics
 	{
 		Actor actor = event.getActor();
 
-		if (on() && actor instanceof NPC && DoomMetricsPlugin.isDoomBoss(((NPC) actor).getId()))
+		if (!on() || !(actor instanceof NPC))
+		{
+			return;
+		}
+
+		NPC npc = (NPC) actor;
+		ledger.died(client.getTickCount(), npc.getIndex());
+
+		if (DoomMetricsPlugin.isDoomBoss(npc.getId()))
 		{
 			log.debug("Boss died at tick {}", client.getTickCount());
 		}

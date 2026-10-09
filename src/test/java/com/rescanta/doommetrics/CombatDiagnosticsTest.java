@@ -19,6 +19,7 @@ import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Projectile;
 import net.runelite.api.Skill;
+import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.FakeXpDrop;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ProjectileMoved;
@@ -374,6 +375,20 @@ public class CombatDiagnosticsTest
 		endTicksTo(103);
 
 		assertTrue(written.list.toString(), lines("Projectile").isEmpty());
+	}
+
+	@Test
+	public void theArrowThatKillsTheBossTakesWhatItHadLeft()
+	{
+		diagnostics.experienceGained(55, 100);
+		shoot(15);
+		endTicksTo(102);
+		hit(boss, 17);
+		diagnostics.actorDeath(new ActorDeath(boss));
+		endTicksTo(103);
+
+		assertTrue(only("Ledger"), only("Ledger").contains("= shot 1120 made 100 due 102 (+0)"));
+		assertEquals("Boss died at tick 102", only("Boss died"));
 	}
 
 	@Test

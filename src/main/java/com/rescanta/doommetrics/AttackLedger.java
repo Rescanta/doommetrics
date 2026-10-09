@@ -105,6 +105,9 @@ final class AttackLedger
 		/** The projectile's id, or 0 for an attack without one. */
 		final int projectile;
 
+		/** For a spell, which is at whatever it reaches: the NPC it was cast at. */
+		private int aim = UNKNOWN;
+
 		private int left;
 		private int hits;
 		private long damage;
@@ -292,6 +295,9 @@ final class AttackLedger
 	private final Set<Integer> casts = new HashSet<>();
 	private final TreeMap<Integer, Earned> earned = new TreeMap<>();
 
+	/** The NPCs that died on each of the last few ticks. */
+	private final TreeMap<Integer, Set<Integer>> deaths = new TreeMap<>();
+
 	/** The tick a thrall last animated a shot. */
 	private int thrallShotAt = NEVER;
 
@@ -307,6 +313,7 @@ final class AttackLedger
 		specs.clear();
 		casts.clear();
 		earned.clear();
+		deaths.clear();
 		thrallShotAt = NEVER;
 	}
 
@@ -325,7 +332,7 @@ final class AttackLedger
 		}
 
 		add(casts.contains(tick)
-			? castAt(tick)
+			? castAt(tick, target)
 			: new Attack(Kind.SWING, tick, tick + 1, target, 0, Integer.MAX_VALUE));
 	}
 
@@ -334,16 +341,22 @@ final class AttackLedger
 	{
 		casts.add(tick);
 
-		if (attacks.removeIf(attack -> attack.kind == Kind.SWING && attack.made == tick
-			&& attack.hits == 0))
+		for (Attack attack : attacks)
 		{
-			add(castAt(tick));
+			if (attack.kind == Kind.SWING && attack.made == tick && attack.hits == 0)
+			{
+				attacks.remove(attack);
+				add(castAt(tick, attack.target));
+				return;
+			}
 		}
 	}
 
-	private static Attack castAt(int tick)
+	private static Attack castAt(int tick, int aim)
 	{
-		return new Attack(Kind.CAST, tick, tick + CAST_TICKS, UNKNOWN, 0, Integer.MAX_VALUE);
+		Attack cast = new Attack(Kind.CAST, tick, tick + CAST_TICKS, UNKNOWN, 0, Integer.MAX_VALUE);
+		cast.aim = aim;
+		return cast;
 	}
 
 	/** A projectile of ours, one hit each. Replaces the swing its animation was taken for. */
@@ -412,6 +425,12 @@ final class AttackLedger
 	void specFired(int tick)
 	{
 		specs.add(tick);
+	}
+
+	/** An NPC died on this tick: the hit that killed it is cut to what it had left. */
+	void died(int tick, int target)
+	{
+		deaths.computeIfAbsent(tick, at -> new HashSet<>()).add(target);
 	}
 
 	/** The spec made on this tick has a second hit to come, on whatever it hit. */
@@ -483,6 +502,7 @@ final class AttackLedger
 
 		specs.removeIf(at -> at < tick - KEPT_TICKS);
 		casts.removeIf(at -> at < tick - KEPT_TICKS);
+		deaths.headMap(tick - KEPT_TICKS).clear();
 		earned.headMap(tick - KEPT_TICKS).clear();
 	}
 
@@ -500,9 +520,9 @@ final class AttackLedger
 
 			if (!fits(attack, splat))
 			{
-				refused = refused == null || isAhead(attack, refused, splat.tick) ? attack : refused;
+				refused = refused == null || isAhead(attack, refused, splat) ? attack : refused;
 			}
-			else if (taker == null || isAhead(attack, taker, splat.tick))
+			else if (taker == null || isAhead(attack, taker, splat))
 			{
 				taker = attack;
 			}
@@ -538,8 +558,9 @@ final class AttackLedger
 
 	/**
 	 * Whether a splat can be the attack's by the experience its tick earned. Nothing earned leaves
-	 * it only a 0, whatever it was made at. A shot's one hit is what the experience says; a
-	 * swing's hits may not come to more than it. True when the experience says nothing.
+	 * it only a 0, whatever it was made at. A shot's one hit is what the experience says, or less
+	 * when it killed; a swing's hits may not come to more than it. True when the experience says
+	 * nothing.
 	 */
 	private boolean fits(Attack attack, Splat splat)
 	{
@@ -563,17 +584,29 @@ final class AttackLedger
 		long soFar = attack.damage + splat.amount;
 
 		return soFar <= ExperienceRate.mostDamage(made.experience, made.perDamage)
-			&& (attack.kind != Kind.SHOT
+			&& (attack.kind != Kind.SHOT || killed(splat)
 			|| soFar >= ExperienceRate.leastDamage(made.experience, made.perDamage));
+	}
+
+	private boolean killed(Splat splat)
+	{
+		Set<Integer> dead = deaths.get(splat.tick);
+		return dead != null && dead.contains(splat.target);
+	}
+
+	/** Whether the splat is on something a spell was not cast at: it may reach it, no more. */
+	private static boolean onlyReaches(Attack attack, Splat splat)
+	{
+		return attack.kind == Kind.CAST && attack.aim != splat.target;
 	}
 
 	/**
 	 * A known attack comes before a swing only its animation speaks for. Then the attack due
-	 * nearest the tick takes the hit. Of two as near, hits land in the order their attacks were
-	 * made; of two made on one tick the thrall's comes first, and something seen to fly comes
-	 * ahead of a swing.
+	 * nearest the tick takes the hit. Of two as near, one made at what was hit comes before a
+	 * spell that only reaches it, and then hits land in the order their attacks were made; of two
+	 * made on one tick the thrall's comes first, and something seen to fly comes ahead of a swing.
 	 */
-	private boolean isAhead(Attack attack, Attack other, int tick)
+	private boolean isAhead(Attack attack, Attack other, Splat splat)
 	{
 		boolean known = isKnownAttack(attack);
 
@@ -582,12 +615,19 @@ final class AttackLedger
 			return known;
 		}
 
-		int near = Math.abs(tick - attack.due);
-		int otherNear = Math.abs(tick - other.due);
+		int near = Math.abs(splat.tick - attack.due);
+		int otherNear = Math.abs(splat.tick - other.due);
 
 		if (near != otherNear)
 		{
 			return near < otherNear;
+		}
+
+		boolean reaches = onlyReaches(attack, splat);
+
+		if (reaches != onlyReaches(other, splat))
+		{
+			return !reaches;
 		}
 
 		if (attack.made != other.made)
