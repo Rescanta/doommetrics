@@ -119,11 +119,6 @@ final class AttackLedger
 			this.left = left;
 		}
 
-		int hits()
-		{
-			return hits;
-		}
-
 		long damage()
 		{
 			return damage;
@@ -177,7 +172,6 @@ final class AttackLedger
 	static final class Verdict
 	{
 		final int tick;
-		final int target;
 		final int amount;
 
 		/** How the caller named what was hit, carried through for the log. */
@@ -209,7 +203,6 @@ final class AttackLedger
 			boolean sized = isSized(attack, earned);
 
 			this.tick = splat.tick;
-			this.target = splat.target;
 			this.amount = splat.amount;
 			this.on = splat.on;
 			this.attack = attack;

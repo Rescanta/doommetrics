@@ -18,6 +18,8 @@ import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Projectile;
+import net.runelite.api.Skill;
+import net.runelite.api.events.FakeXpDrop;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.gameval.NpcID;
@@ -225,6 +227,7 @@ public class CombatDiagnosticsTest
 	@Test
 	public void aProjectileIsWrittenAndCountedOnce()
 	{
+		diagnostics.experienceGained(69, 100);
 		Projectile arrow = shoot(20);
 		moved(arrow);
 		moved(arrow);
@@ -243,6 +246,7 @@ public class CombatDiagnosticsTest
 	@Test
 	public void aThrallsBoltTakesItsSmallHitAndOursIsLeftToOurShot()
 	{
+		diagnostics.experienceGained(69, 100);
 		shoot(20);
 		endTicksTo(102);
 
@@ -274,6 +278,35 @@ public class CombatDiagnosticsTest
 			"= swing made 100 due 101 (+0), experience 89 says 40 to 40"));
 	}
 
+	/** Seen in game: a thrall summoned before the run's first hit was written as an attack. */
+	@Test
+	public void anAnimationBeforeAnyExperienceIsStillOnlyAnAnimation()
+	{
+		diagnostics.swung(100);
+		endTicksTo(101);
+
+		at(102);
+		hit(boss, 31);
+		endTicksTo(106);
+
+		assertTrue(only("Ledger"), only("Ledger").contains("= nothing due"));
+	}
+
+	/** At the cap no experience says anything, so none on a swing's tick is not a miss. */
+	@Test
+	public void withHitpointsAtTheCapASwingIsNotHeldToExperience()
+	{
+		diagnostics.fakeXpDrop(new FakeXpDrop(Skill.HITPOINTS, 89));
+		diagnostics.swung(100);
+		endTicksTo(100);
+
+		at(101);
+		hit(boss, 40);
+		endTicksTo(102);
+
+		assertTrue(only("Ledger"), only("Ledger").endsWith("= swing made 100 due 101 (+0)"));
+	}
+
 	/** The bar reads the shield's 500 hitpoints while it is up; the experience is still the boss's. */
 	@Test
 	public void aHitOnTheShieldIsSizedAtTheBossesRate()
@@ -301,6 +334,7 @@ public class CombatDiagnosticsTest
 	{
 		when(player.getInteracting()).thenReturn(larva);
 		diagnostics.swung(100);
+		diagnostics.experienceGained(3, 100);
 		diagnostics.tickEnded(100);
 
 		at(101);
@@ -320,6 +354,7 @@ public class CombatDiagnosticsTest
 	public void theSpecsHitSaysWhatItShouldGiveBack()
 	{
 		diagnostics.swung(100);
+		diagnostics.experienceGained(89, 100);
 		diagnostics.specFired(100, SpecWeapon.SARADOMIN_GODSWORD);
 		diagnostics.tickEnded(100);
 

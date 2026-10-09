@@ -15,6 +15,7 @@ import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Projectile;
+import net.runelite.api.Skill;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ActorDeath;
@@ -75,6 +76,9 @@ class CombatDiagnostics
 	/** Hitpoints experience so far on a tick, handed to the ledger at its end. */
 	private int experience;
 	private int experienceTick = -1;
+
+	/** Whether hitpoints experience has stopped rising: at the cap a drop changes no total. */
+	private boolean hitpointsCapped;
 
 	/**
 	 * What a point of damage on the boss earned when its hitpoints bar was last its own: the bar
@@ -154,7 +158,7 @@ class CombatDiagnostics
 
 	private boolean on()
 	{
-		return run.get() != null && config.debugLogging();
+		return run.get() != null && config.debugLogging() && log.isDebugEnabled();
 	}
 
 	/**
@@ -429,6 +433,8 @@ class CombatDiagnostics
 	/** Experience in a skill at its cap arrives this way, with no level change behind it. */
 	void fakeXpDrop(FakeXpDrop event)
 	{
+		hitpointsCapped |= event.getSkill() == Skill.HITPOINTS;
+
 		if (on())
 		{
 			log.debug("Experience drop without a level change: {} +{} at tick {}", event.getSkill(),
@@ -454,12 +460,12 @@ class CombatDiagnostics
 			ledger.swung(tick, aim instanceof NPC ? ((NPC) aim).getIndex() : AttackLedger.UNKNOWN);
 		}
 
-		// None on a swing's tick says it missed, once this run has shown experience is earned at all.
+		// None on a swing's tick says it missed, while experience is still there to be earned.
 		if (experienceTick == tick)
 		{
 			ledger.experience(tick, experience, bossRate(aim()));
 		}
-		else if (swingTick == tick && experienceTick >= 0)
+		else if (swingTick == tick && !hitpointsCapped)
 		{
 			ledger.experience(tick, 0, bossRate(aim()));
 		}
