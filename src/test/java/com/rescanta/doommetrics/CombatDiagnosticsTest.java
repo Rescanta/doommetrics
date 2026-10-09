@@ -42,6 +42,7 @@ public class CombatDiagnosticsTest
 	private final GameItems items = mock(GameItems.class);
 	private final Player player = mock(Player.class);
 	private final NPC boss = npc(NpcID.DOM_BOSS, 7, "Doom of Mokhaiotl");
+	private final NPC shield = npc(NpcID.DOM_BOSS_SHIELDED, 7, "Doom of Mokhaiotl (Shielded)");
 	private final NPC larva = npc(NpcID.DOM_DEMONIC_ENERGY_RANGE, 9, "Demonic larva");
 
 	private final ListAppender<ILoggingEvent> written = new ListAppender<>();
@@ -271,6 +272,28 @@ public class CombatDiagnosticsTest
 			"Swing at tick 100 aimed at Doom of Mokhaiotl (" + NpcID.DOM_BOSS + ") #7"));
 		assertTrue(only("Ledger"), only("Ledger").endsWith(
 			"= swing made 100 due 101 (+0), experience 89 says 40 to 40"));
+	}
+
+	/** The bar reads the shield's 500 hitpoints while it is up; the experience is still the boss's. */
+	@Test
+	public void aHitOnTheShieldIsSizedAtTheBossesRate()
+	{
+		diagnostics.experienceGained(3, 100);
+		endTicksTo(103);
+
+		when(client.getVarbitValue(VarbitID.HPBAR_HUD_BASEHP)).thenReturn(500);
+		when(player.getInteracting()).thenReturn(shield);
+		at(104);
+		diagnostics.swung(104);
+		diagnostics.experienceGained(89, 104);
+		endTicksTo(104);
+
+		at(105);
+		hit(shield, 40);
+		endTicksTo(106);
+
+		assertTrue(only("Ledger"), only("Ledger").endsWith(
+			"= swing made 104 due 105 (+0), experience 89 says 40 to 40"));
 	}
 
 	@Test

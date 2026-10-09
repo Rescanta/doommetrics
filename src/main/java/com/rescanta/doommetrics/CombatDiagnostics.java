@@ -76,6 +76,12 @@ class CombatDiagnostics
 	private int experience;
 	private int experienceTick = -1;
 
+	/**
+	 * What a point of damage on the boss earned when its hitpoints bar was last its own: the bar
+	 * reads the shield's while that is up and nothing between delves, and the rate stays.
+	 */
+	private double rateOnBoss;
+
 	/** The weapon of the last spec, for what its hit should give back. */
 	private SpecWeapon specWeapon;
 	private int specTick = -1;
@@ -103,6 +109,7 @@ class CombatDiagnostics
 		dealt.clear();
 		swingTick = -1;
 		experienceTick = -1;
+		rateOnBoss = 0;
 		specTick = -1;
 		bloodSpellTick = -1;
 		lastCast = null;
@@ -449,8 +456,11 @@ class CombatDiagnostics
 	/** What a point of damage earns on what we are aimed at; 0 for anything but the boss. */
 	private double bossRate(Actor aim)
 	{
+		double shown = ExperienceRate.perDamage(client.getVarbitValue(VarbitID.HPBAR_HUD_BASEHP));
+		rateOnBoss = shown > 0 ? shown : rateOnBoss;
+
 		return aim instanceof NPC && DoomMetricsPlugin.isDoomBoss(((NPC) aim).getId())
-			? ExperienceRate.perDamage(client.getVarbitValue(VarbitID.HPBAR_HUD_BASEHP))
+			? rateOnBoss
 			: 0;
 	}
 
