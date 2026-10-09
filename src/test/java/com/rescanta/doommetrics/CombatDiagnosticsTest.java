@@ -254,7 +254,7 @@ public class CombatDiagnosticsTest
 
 		List<String> verdicts = lines("Ledger");
 		assertTrue(verdicts.get(0), verdicts.get(0).contains("= shot 1120 made 100 due 103 (+0)"));
-		assertTrue(verdicts.get(1), verdicts.get(1).contains("= thrall shot 1907 made 103 due 103 (+0)"));
+		assertTrue(verdicts.get(1), verdicts.get(1).contains("= thrall shot 1907 made 102 due 103 (+0)"));
 	}
 
 	@Test

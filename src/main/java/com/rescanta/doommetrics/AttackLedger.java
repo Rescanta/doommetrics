@@ -255,11 +255,16 @@ final class AttackLedger
 	 */
 	private static final int[] TICKS_TO_START = {2, 1};
 
+	private static final int NEVER = Integer.MIN_VALUE;
+
 	private final Listener listener;
 	private final List<Attack> attacks = new ArrayList<>();
 	private final List<Splat> splats = new ArrayList<>();
 	private final Set<Integer> specs = new HashSet<>();
 	private final TreeMap<Integer, Earned> earned = new TreeMap<>();
+
+	/** The tick a thrall last animated a shot. */
+	private int thrallShotAt = NEVER;
 
 	AttackLedger(Listener listener)
 	{
@@ -272,6 +277,7 @@ final class AttackLedger
 		splats.clear();
 		specs.clear();
 		earned.clear();
+		thrallShotAt = NEVER;
 	}
 
 	/**
@@ -328,6 +334,24 @@ final class AttackLedger
 	void thrallShot(int projectile, int made, int due, int target)
 	{
 		add(new Attack(Kind.THRALL_SHOT, made, due, target, projectile, 1));
+	}
+
+	/** A ghost or a skeleton animated its attack; the projectile follows. */
+	void thrallShooting(int tick)
+	{
+		thrallShotAt = tick;
+	}
+
+	/**
+	 * A thrall's projectile, heard of as it starts to move: a tick after a ghost's animation and
+	 * two after a skeleton's. A ghost's first attack has no animation.
+	 */
+	void thrallShotStarted(int projectile, int started, int due, int target)
+	{
+		boolean animated = thrallShotAt != NEVER && thrallShotAt < started
+			&& started - thrallShotAt <= TICKS_TO_START[0];
+
+		thrallShot(projectile, animated ? thrallShotAt : started - 1, due, target);
 	}
 
 	void thrallSwung(int tick)

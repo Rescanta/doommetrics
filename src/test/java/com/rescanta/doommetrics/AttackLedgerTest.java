@@ -544,6 +544,34 @@ public class AttackLedgerTest
 		assertTrue(lapsed.isEmpty());
 	}
 
+	/** Seen in game: a thrall that attacked first, with a scythe's three hits due on its tick. */
+	@Test
+	public void aThrallThatAnimatedBeforeOurSwingLandsFirst()
+	{
+		ledger.thrallShooting(100);
+		ledger.swung(101, BOSS);
+		ledger.experience(101, 84, RATE);
+		endTicks(100, 101);
+		ledger.thrallShotStarted(GHOST_BOLT, 102, 102, BOSS);
+		ledger.splat(102, BOSS, 0, "boss");
+		ledger.splat(102, BOSS, 22, "boss");
+		endTicks(102, 106);
+
+		assertEquals(AttackLedger.Kind.THRALL_SHOT, kindOf(0));
+		assertEquals(100, verdicts.get(0).attack.made);
+		assertEquals(AttackLedger.Kind.SWING, kindOf(1));
+	}
+
+	@Test
+	public void aThrallsShotWithNoAnimationWasMadeTheTickBefore()
+	{
+		ledger.thrallShotStarted(GHOST_BOLT, 102, 102, BOSS);
+		ledger.splat(102, BOSS, 2, "boss");
+		endTicks(102, 104);
+
+		assertEquals(101, verdicts.get(0).attack.made);
+	}
+
 	@Test
 	public void resetForgetsWhatWasInFlight()
 	{

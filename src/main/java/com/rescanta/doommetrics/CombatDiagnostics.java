@@ -192,7 +192,7 @@ class CombatDiagnostics
 
 		if (thrall)
 		{
-			ledger.thrallShot(projectile.getId(), started, lands, index);
+			ledger.thrallShotStarted(projectile.getId(), started, lands, index);
 		}
 		else
 		{
@@ -206,12 +206,21 @@ class CombatDiagnostics
 			|| projectile.getId() == SpotanimID.THRALL_MAGIC_TRAVEL;
 	}
 
-	/** Only a zombie's attack is taken from its animation: the other two have a projectile. */
+	/** A zombie's attack is its animation alone; the other two have a projectile to come. */
 	void thrallAttacked(ThrallTracker.Style style, int tick)
 	{
-		if (on() && style == ThrallTracker.Style.MELEE)
+		if (!on())
+		{
+			return;
+		}
+
+		if (style == ThrallTracker.Style.MELEE)
 		{
 			ledger.thrallSwung(tick);
+		}
+		else
+		{
+			ledger.thrallShooting(tick);
 		}
 	}
 
