@@ -2,6 +2,7 @@ package com.rescanta.doommetrics;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -22,6 +23,22 @@ class PunishTracker
 
 		/** The punish's own, counted here: a spec swung as the punish has spent a hit on it. */
 		void punished(int tick, int swing);
+
+		/** The small splat a thrall's window took on the boss on this tick, or -1 for none. */
+		default int tookForThrall(int tick)
+		{
+			return -1;
+		}
+
+		/** That splat was the swing's by its experience and is counted; the thrall's is to come. */
+		default void notThralls(int amount, int tick)
+		{
+		}
+
+		/** A hit held with the swing's was the thrall's by the swing's experience: not counted. */
+		default void thralls(int amount, int tick)
+		{
+		}
 	}
 
 	/**
@@ -66,6 +83,9 @@ class PunishTracker
 
 		/** Ours, but from an attack made before the swing. */
 		private boolean stray;
+
+		/** Drawn as ours, but the thrall's. */
+		private boolean thralls;
 
 		private Held(int amount, boolean mine, int tick)
 		{
@@ -273,9 +293,12 @@ class PunishTracker
 	/**
 	 * Settles everything held for the tick.
 	 *
-	 * @param equipped the melee weapon held, or null; only asked for when a swing is waiting
+	 * @param equipped  the melee weapon held, or null; only asked for when a swing is waiting
+	 * @param perDamage the hitpoints experience a point of damage on the boss earns, or 0 when
+	 *                  that is not known; only asked for when a punish's hits have landed
 	 */
-	void tickEnded(int tick, boolean prayerUp, Supplier<PunishWeapon> equipped)
+	void tickEnded(int tick, boolean prayerUp, Supplier<PunishWeapon> equipped,
+		DoubleSupplier perDamage)
 	{
 		if (prayerUp && !praying)
 		{
@@ -312,6 +335,7 @@ class PunishTracker
 		if (punish && tick == swungAt + 1)
 		{
 			findStray(tick);
+			findThralls(tick, perDamage);
 		}
 
 		for (Held hit : held)
@@ -445,6 +469,78 @@ class PunishTracker
 	}
 
 	/**
+	 * A thrall's splat is drawn as ours, and its window takes the first small one it sees. At a
+	 * punish that can be the wrong one: a hit of the swing's, or an arrow's miss, which leaves the
+	 * thrall's own to land among the swing's. A weapon whose hits can be counted earns exactly
+	 * what they come to. So one hit too many that the experience has no room for is the thrall's,
+	 * and one too few, where the window took what the experience is short of, is the swing's.
+	 * Nothing changes unless the experience is out as things stand and exact once put right.
+	 */
+	private void findThralls(int tick, DoubleSupplier perDamage)
+	{
+		int swingXp = experienceBetween(swungAt, swungAt);
+
+		if (weapon.hits() <= 0 || swingXp <= 0)
+		{
+			return;
+		}
+
+		double rate = perDamage.getAsDouble();
+
+		if (rate <= 0)
+		{
+			return;
+		}
+
+		int least = ExperienceRate.leastDamage(swingXp, rate);
+		int most = ExperienceRate.mostDamage(swingXp, rate);
+		List<Held> own = new ArrayList<>();
+		int total = 0;
+
+		for (Held hit : held)
+		{
+			if (hit.mine && hit.tick == tick && !hit.stray)
+			{
+				own.add(hit);
+				total += hit.amount;
+			}
+		}
+
+		if (own.size() == weapon.hits() + 1 && total > most)
+		{
+			for (Held hit : own)
+			{
+				if (hit.amount <= ThrallTracker.MAX_HIT && total - hit.amount >= least
+					&& total - hit.amount <= most)
+				{
+					hit.thralls = true;
+					ownHits--;
+					return;
+				}
+			}
+		}
+		else if (own.size() == weapon.hits() - 1 && total < least)
+		{
+			int took = handback.tookForThrall(tick);
+
+			if (took < 0 || total + took < least || total + took > most)
+			{
+				return;
+			}
+
+			if (took > 0)
+			{
+				sink.record(weapon.metric(), took);
+			}
+
+			ownHits++;
+			landed++;
+			handback.notThralls(took, tick);
+			handback.punished(tick, swungAt);
+		}
+	}
+
+	/**
 	 * The weapon's own number of hits, coming to more than the swing's experience can account for:
 	 * a thrall's window took a small one of the swing's on this tick, leaving the arrow among the
 	 * rest. The thrall's own splat lands on another tick and is turned away there.
@@ -476,6 +572,12 @@ class PunishTracker
 
 	private void settle(Held hit, boolean punish)
 	{
+		if (hit.thralls)
+		{
+			handback.thralls(hit.amount, hit.tick);
+			return;
+		}
+
 		if (punish && !hit.mine && !isBonus(hit))
 		{
 			return;

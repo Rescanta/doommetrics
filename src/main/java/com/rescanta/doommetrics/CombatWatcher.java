@@ -414,6 +414,27 @@ class CombatWatcher
 				log.debug("Punish hit at tick {} spent a hit of {}", tick, metric.key());
 			}
 		}
+
+		@Override
+		public int tookForThrall(int tick)
+		{
+			return thrallTracker.tookOnBoss(tick);
+		}
+
+		@Override
+		public void notThralls(int amount, int tick)
+		{
+			thrallTracker.handBack();
+			log.debug("Punish at tick {}: the {} the thrall's window took is the swing's by its"
+				+ " experience", tick, amount);
+		}
+
+		@Override
+		public void thralls(int amount, int tick)
+		{
+			log.debug("Punish at tick {}: a {} is the thrall's by the swing's experience, not"
+				+ " counted", tick, amount);
+		}
 	}
 
 	/** Only hits on the standing or burrowed boss count as damage. */
@@ -863,7 +884,17 @@ class CombatWatcher
 				boss == null ? "" : Arrays.toString(boss.getOverheadSpriteIds()), tick);
 		}
 
-		punishTracker.tickEnded(tick, praying, this::equippedPunishWeapon);
+		punishTracker.tickEnded(tick, praying, this::equippedPunishWeapon,
+			this::experiencePerDamage);
+	}
+
+	/**
+	 * What a point of damage on the boss earns, by the hitpoints its bar shows; 0 while the bar is
+	 * the shield's or not up.
+	 */
+	private double experiencePerDamage()
+	{
+		return ExperienceRate.perDamage(client.getVarbitValue(VarbitID.HPBAR_HUD_BASEHP));
 	}
 
 	/** The only overhead the boss uses is the one a punish answers, so any icon will do. */

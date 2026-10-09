@@ -171,4 +171,18 @@ public class ThrallTrackerTest
 		assertFalse(ThrallTracker.isSummoning(AnimationID.GHOST_UPDATE_TENDRILL_ATTACK_THRALL));
 		assertFalse(ThrallTracker.isSummoning(-1));
 	}
+
+	/** At a punish a splat the window took can turn out to be the swing's - see PunishTracker. */
+	@Test
+	public void aSplatHandedBackLeavesTheAttackOpenForTheThrallsOwn()
+	{
+		thralls.attacked(ThrallTracker.Style.RANGED, 100);
+		assertTrue(thralls.isThrallHit(1, 102, true));
+		assertEquals(1, thralls.tookOnBoss(102));
+		assertEquals(-1, thralls.tookOnBoss(103));
+
+		thralls.handBack();
+		assertTrue(thralls.isThrallHit(3, 103, true));
+		assertFalse("the attack is spent again", thralls.isThrallHit(2, 103, true));
+	}
 }

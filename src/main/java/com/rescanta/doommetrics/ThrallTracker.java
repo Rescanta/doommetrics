@@ -71,9 +71,15 @@ class ThrallTracker
 
 	private final List<Attack> pending = new ArrayList<>();
 
+	/** The attack whose window last took a splat on the boss, and that splat's size and tick. */
+	private Attack taker;
+	private int tookAmount;
+	private int tookAt;
+
 	void reset()
 	{
 		pending.clear();
+		taker = null;
 	}
 
 	/**
@@ -172,6 +178,9 @@ class ThrallTracker
 			if (onBoss)
 			{
 				pending.remove(i);
+				taker = attack;
+				tookAmount = amount;
+				tookAt = tick;
 				return true;
 			}
 
@@ -183,5 +192,24 @@ class ThrallTracker
 		}
 
 		return false;
+	}
+
+	/** The splat a window took on the boss on this tick, or -1 when none did. */
+	int tookOnBoss(int tick)
+	{
+		return taker != null && tookAt == tick ? tookAmount : -1;
+	}
+
+	/**
+	 * That splat was not the thrall's after all - see {@link PunishTracker}. Its attack is open
+	 * again for the splat that is.
+	 */
+	void handBack()
+	{
+		if (taker != null)
+		{
+			pending.add(0, taker);
+			taker = null;
+		}
 	}
 }
