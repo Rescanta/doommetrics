@@ -347,4 +347,21 @@ public class CombatWatcherTest
 		assertEquals(20, credited(CombatMetric.SGS_HEAL));
 		assertEquals(10, credited(CombatMetric.SGS_PRAYER));
 	}
+
+	/** The noxious halberd poisons the boss. Those splats are nobody's attack and never counted. */
+	@Test
+	public void poisonOnTheBossIsNotASpecsHit()
+	{
+		Runnable readWeapon = spendEnergy();
+		healingBlade();
+		readWeapon.run();
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(101);
+		splat(boss, HitsplatID.POISON, 6);
+		splat(boss, HitsplatID.VENOM, 8);
+		watcher.tickEnded();
+
+		assertEquals(0, credited(CombatMetric.OTHER_SPEC_DAMAGE));
+	}
 }
