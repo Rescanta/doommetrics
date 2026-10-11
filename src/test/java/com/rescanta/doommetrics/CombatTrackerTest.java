@@ -118,8 +118,8 @@ public class CombatTrackerTest
 		tracker.specFired(SpecWeapon.SCORCHING_BOW, 5094);
 		tracker.damaged(12, 5098);
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 6000);
-		tracker.damaged(80, 6004);
-		tracker.damaged(30, 6005);
+		tracker.damaged(80, 6003);
+		tracker.damaged(30, 6004);
 
 		assertEquals(list("otherSpecDamage=12", "zcbDamage=80"), recorded);
 	}
@@ -151,9 +151,9 @@ public class CombatTrackerTest
 	@Test
 	public void aHitTooBigForTheSpecsExperienceIsAnotherAttacks()
 	{
-		tracker.specFired(SpecWeapon.ELDRITCH_STAFF, 100, 0, 111);
-		tracker.damaged(72, 102);
-		tracker.damaged(49, 103);
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 100, 0, 111);
+		tracker.damaged(72, 103);
+		tracker.damaged(49, 104);
 
 		assertEquals(list("otherSpecDamage=49"), recorded);
 	}
@@ -166,23 +166,23 @@ public class CombatTrackerTest
 	@Test
 	public void aMissLandingFirstDoesNotCostAOneHitSpecItsHit()
 	{
-		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 111);
-		tracker.damaged(0, 102);
-		tracker.damaged(49, 103);
-		tracker.damaged(47, 104);
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 100, 0, 111);
+		tracker.damaged(0, 103);
+		tracker.damaged(49, 104);
+		tracker.damaged(47, 105);
 
-		assertEquals(list("zcbDamage=0", "zcbDamage=49"), recorded);
+		assertEquals(list("otherSpecDamage=0", "otherSpecDamage=49"), recorded);
 	}
 
 	/** A small hit landing first is made up to the spec's own when that lands. */
 	@Test
 	public void aSmallHitLandingFirstIsMadeUpToTheSpecsOwn()
 	{
-		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 111);
-		tracker.damaged(7, 102);
-		tracker.damaged(49, 103);
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 100, 0, 111);
+		tracker.damaged(7, 103);
+		tracker.damaged(49, 104);
 
-		assertEquals(list("zcbDamage=7", "zcbDamage=42"), recorded);
+		assertEquals(list("otherSpecDamage=7", "otherSpecDamage=42"), recorded);
 	}
 
 	/** The blow that kills is cut to what the boss had left, and is still the spec's. */
@@ -228,7 +228,7 @@ public class CombatTrackerTest
 	public void aSpecThatEarnedNoExperienceIsCountedAsItWas()
 	{
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100, 0, 0);
-		tracker.damaged(44, 102);
+		tracker.damaged(44, 103);
 
 		assertEquals(list("zcbDamage=44"), recorded);
 	}
@@ -411,12 +411,69 @@ public class CombatTrackerTest
 	public void aZaryteSpecIsCreditedWithOneHitAndNoMore()
 	{
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100);
-		tracker.damaged(44, 102);
 
-		// The auto-attack behind it lands inside the window and is not part of the spec.
-		tracker.damaged(30, 103);
+		// The bolts fired before and behind it land a tick either side and are no part of it.
+		tracker.damaged(30, 102);
+		tracker.damaged(44, 103);
+		tracker.damaged(30, 104);
 
 		assertEquals(list("zcbDamage=44"), recorded);
+	}
+
+	/** The Eldritch staff's spell lands three ticks on from any distance, as the crossbow's does. */
+	@Test
+	public void anEldritchSpecLandsThreeTicksOnAndNoOther()
+	{
+		tracker.specFired(SpecWeapon.ELDRITCH_STAFF, 100);
+		tracker.damaged(31, 102);
+		tracker.damaged(40, 103);
+		tracker.damaged(28, 104);
+
+		assertEquals(list("otherSpecDamage=40"), recorded);
+	}
+
+	/** A godsword's swing lands the tick after it. The bow shot behind it is two ticks on. */
+	@Test
+	public void aGodswordSpecLandsTheTickAfterAndNoOther()
+	{
+		tracker.specFired(SpecWeapon.SARADOMIN_GODSWORD, 100);
+		tracker.damaged(33, 103);
+
+		tracker.specFired(SpecWeapon.ANCIENT_GODSWORD, 200);
+		tracker.damaged(52, 201);
+		tracker.damaged(33, 203);
+
+		assertEquals(list("otherSpecDamage=52"), recorded);
+	}
+
+	/** The toxic blowpipe's dart lands two ticks on, or three from four tiles off. */
+	@Test
+	public void aBlowpipeSpecLandsTwoOrThreeTicksOn()
+	{
+		tracker.specFired(SpecWeapon.BLOWPIPE, 100);
+		tracker.damaged(33, 102);
+
+		tracker.specFired(SpecWeapon.BLOWPIPE, 200);
+		tracker.damaged(29, 203);
+
+		tracker.specFired(SpecWeapon.BLOWPIPE, 300);
+		tracker.damaged(25, 304);
+
+		assertEquals(list("otherSpecDamage=33", "otherSpecDamage=29"), recorded);
+	}
+
+	/**
+	 * Seen in a log: a thrall's 3 two ticks after a scorching bow spec, and the spec's own 17,
+	 * with its burn, four ticks after. The arrow is never there sooner than three.
+	 */
+	@Test
+	public void aScorchingBowSpecIsNotTheHitTwoTicksOn()
+	{
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 1400);
+		tracker.damaged(3, 1402);
+		tracker.damaged(17, 1404);
+
+		assertEquals(list("otherSpecDamage=17"), recorded);
 	}
 
 	/**
@@ -583,11 +640,11 @@ public class CombatTrackerTest
 	@Test
 	public void aMissedSpecStillSpendsItsHit()
 	{
-		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 100);
-		tracker.damaged(0, 102);
-		tracker.damaged(30, 103);
+		tracker.specFired(SpecWeapon.SCORCHING_BOW, 100);
+		tracker.damaged(0, 103);
+		tracker.damaged(30, 104);
 
-		assertEquals(list("zcbDamage=0"), recorded);
+		assertEquals(list("otherSpecDamage=0"), recorded);
 	}
 
 	/**
@@ -759,7 +816,7 @@ public class CombatTrackerTest
 		tracker.damaged(52, 101);
 
 		tracker.specFired(SpecWeapon.ZARYTE_CROSSBOW, 103);
-		tracker.damaged(44, 105);
+		tracker.damaged(44, 106);
 
 		tracker.damaged(25, 108);
 		tracker.healed(25, 109);
