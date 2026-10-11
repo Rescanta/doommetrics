@@ -193,7 +193,7 @@ class CombatDiagnostics
 		int lands = thrall
 			? Flight.thrallLandingTick(started, length,
 				projectile.getId() == SpotanimID.THRALL_MAGIC_TRAVEL)
-			: Flight.landingTick(started, length);
+			: Flight.landingTick(started, length, projectile.getId());
 		int index = ((NPC) target).getIndex();
 
 		log.debug("Projectile {} at {}, cycles {} to {} from now: started tick {}, lands tick {}",

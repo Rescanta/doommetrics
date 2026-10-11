@@ -1,10 +1,13 @@
 package com.rescanta.doommetrics;
 
+import net.runelite.api.gameval.SpotanimID;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class FlightTest
 {
+	private static final int ARROW = SpotanimID.II_DRAGON_ARROW_NORMAL_PROJANIM;
+
 	@Test
 	public void aProjectileSeenAsItStartsStartedThisTick()
 	{
@@ -23,11 +26,48 @@ public class FlightTest
 	@Test
 	public void ourShotLandsByHowLongItFlies()
 	{
-		assertEquals(100, Flight.landingTick(100, 10));
-		assertEquals(100, Flight.landingTick(100, 15));
-		assertEquals(101, Flight.landingTick(100, 20));
-		assertEquals(101, Flight.landingTick(100, 45));
-		assertEquals(102, Flight.landingTick(100, 50));
+		assertEquals(100, Flight.landingTick(100, 10, ARROW));
+		assertEquals(100, Flight.landingTick(100, 15, ARROW));
+		assertEquals(101, Flight.landingTick(100, 20, ARROW));
+		assertEquals(101, Flight.landingTick(100, 45, ARROW));
+		assertEquals(102, Flight.landingTick(100, 50, ARROW));
+	}
+
+	/** As logged: on the tick it starts from one or two tiles, the tick after from three to eight. */
+	@Test
+	public void theEyeOfAyaksBoltLandsATickLaterFromThreeTiles()
+	{
+		assertEquals(100, Flight.landingTick(100, 0, SpotanimID.VFX_AYAK_NORMAL_PROJECTILE));
+		assertEquals(100, Flight.landingTick(100, 5, SpotanimID.VFX_AYAK_NORMAL_PROJECTILE));
+		assertEquals(101, Flight.landingTick(100, 10, SpotanimID.VFX_AYAK_NORMAL_PROJECTILE));
+		assertEquals(101, Flight.landingTick(100, 35, SpotanimID.VFX_AYAK_NORMAL_PROJECTILE));
+	}
+
+	/** As logged with a toxic blowpipe: a dart from five tiles still lands on the tick it starts. */
+	@Test
+	public void aDartLandsATickLaterOnlyFromSixTiles()
+	{
+		assertEquals(100, Flight.landingTick(100, 5, SpotanimID.II_DRAGON_DART_PROJANIM));
+		assertEquals(100, Flight.landingTick(100, 25, SpotanimID.II_DRAGON_DART_PROJANIM));
+		assertEquals(101, Flight.landingTick(100, 30, SpotanimID.AMETHYST_DART_TRAVEL));
+	}
+
+	/** As logged, twice: 21 cycles on the tick it starts, 28 the tick after. */
+	@Test
+	public void theBlowpipesSpecLandsATickLaterFromFourTiles()
+	{
+		assertEquals(100, Flight.landingTick(100, 21, SpotanimID.TOXIC_BLOWPIPE_SPECIALATTACK));
+		assertEquals(101, Flight.landingTick(100, 28, SpotanimID.TOXIC_BLOWPIPE_SPECIALATTACK));
+	}
+
+	/** As logged: 8 to 24 cycles land the tick after it starts, 28 and 32 the one after that. */
+	@Test
+	public void theScorchingBowsSpecIsATickBehindItsShots()
+	{
+		assertEquals(101, Flight.landingTick(100, 8, SpotanimID.VFX_SCORCHING_BOW_PROJECTILE));
+		assertEquals(101, Flight.landingTick(100, 24, SpotanimID.VFX_SCORCHING_BOW_PROJECTILE));
+		assertEquals(102, Flight.landingTick(100, 28, SpotanimID.VFX_SCORCHING_BOW_PROJECTILE));
+		assertEquals(102, Flight.landingTick(100, 32, SpotanimID.VFX_SCORCHING_BOW_PROJECTILE));
 	}
 
 	/** As logged with a ghost. */
