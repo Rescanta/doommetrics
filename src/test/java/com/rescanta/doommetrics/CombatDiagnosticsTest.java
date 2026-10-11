@@ -22,6 +22,7 @@ import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.FakeXpDrop;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.InteractingChanged;
 import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
@@ -460,5 +461,19 @@ public class CombatDiagnosticsTest
 		endTicksTo(104);
 
 		assertTrue(written.list.toString(), written.list.isEmpty());
+	}
+
+	/** A zombie thrall's attack has no projectile to name its target: what it turns to is written. */
+	@Test
+	public void whatAThrallTurnsToIsWritten()
+	{
+		NPC thrall = npc(NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER, 3, "Greater zombified thrall");
+
+		at(100);
+		diagnostics.interactingChanged(new InteractingChanged(thrall, boss));
+		diagnostics.interactingChanged(new InteractingChanged(larva, player));
+
+		assertEquals(1, lines("Thrall target ->").size());
+		assertTrue(only("Thrall target ->").contains("Doom of Mokhaiotl"));
 	}
 }

@@ -82,13 +82,19 @@ class ThrallTracker
 		taker = null;
 	}
 
+	static boolean isThrall(int npcId)
+	{
+		return npcId >= NpcID.ARCEUUS_THRALL_GHOST_LESSER
+			&& npcId <= NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER;
+	}
+
 	/**
 	 * The attacking style of a thrall's attack animation, or null for anything else it does
 	 * (spawning, walking, standing).
 	 */
 	static Style attackStyle(int npcId, int animation)
 	{
-		if (npcId < NpcID.ARCEUUS_THRALL_GHOST_LESSER || npcId > NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER)
+		if (!isThrall(npcId))
 		{
 			return null;
 		}

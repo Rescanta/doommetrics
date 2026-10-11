@@ -245,9 +245,22 @@ class CombatDiagnostics
 
 	void interactingChanged(InteractingChanged event)
 	{
-		if (on() && event.getSource() == client.getLocalPlayer())
+		if (!on())
+		{
+			return;
+		}
+
+		Actor source = event.getSource();
+
+		if (source == client.getLocalPlayer())
 		{
 			log.debug("Target -> {} at tick {}", describe(event.getTarget()), client.getTickCount());
+		}
+		else if (source instanceof NPC && ThrallTracker.isThrall(((NPC) source).getId()))
+		{
+			// A zombie's attack has no projectile to name its target, so this is the only sign.
+			log.debug("Thrall target -> {} at tick {}", describe(event.getTarget()),
+				client.getTickCount());
 		}
 	}
 
