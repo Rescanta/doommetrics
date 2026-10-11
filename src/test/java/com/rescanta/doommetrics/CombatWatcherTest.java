@@ -214,4 +214,52 @@ public class CombatWatcherTest
 
 		verify(items, never()).isDrunk(anyInt());
 	}
+
+	/** With a holy wrench carried the dose is 34 at 99, and that is what comes out of the rise. */
+	@Test
+	public void aDoseWithAWrenchCarriedTakesItsLargerShareOutOfARestore()
+	{
+		when(client.getRealSkillLevel(Skill.PRAYER)).thenReturn(99);
+		watcher.statChanged(new StatChanged(Skill.PRAYER, 0, 99, 10));
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(200);
+		carry(ItemID._1DOSE2RESTORE, ItemID.DEAL_WRENCH_BLESSED);
+		Runnable readWeapon = spendEnergy();
+		carry(ItemID.DEAL_WRENCH_BLESSED);
+		watcher.statChanged(new StatChanged(Skill.HITPOINTS, HITPOINTS_XP + 89, 99, 90));
+		watcher.statChanged(new StatChanged(Skill.PRAYER, 0, 99, 54));
+		readWeapon.run();
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(201);
+		hitBoss(40);
+		watcher.tickEnded();
+
+		assertEquals(20, credited(CombatMetric.SGS_HEAL));
+		assertEquals(10, credited(CombatMetric.SGS_PRAYER));
+	}
+
+	/** A brew's 16 at 99 hitpoints is known from the first sip and comes out of the spec's heal. */
+	@Test
+	public void aBrewSippedOnASpecsTickIsTakenOutOfItsHeal()
+	{
+		when(client.getRealSkillLevel(Skill.HITPOINTS)).thenReturn(99);
+		when(client.getRealSkillLevel(Skill.PRAYER)).thenReturn(99);
+
+		carry(ItemID._1DOSEPOTIONOFSARADOMIN);
+		Runnable readWeapon = spendEnergy();
+		carry();
+		watcher.statChanged(new StatChanged(Skill.HITPOINTS, HITPOINTS_XP + 89, 99, 106));
+		watcher.statChanged(new StatChanged(Skill.PRAYER, 0, 99, 60));
+		readWeapon.run();
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(101);
+		hitBoss(40);
+		watcher.tickEnded();
+
+		assertEquals(20, credited(CombatMetric.SGS_HEAL));
+		assertEquals(10, credited(CombatMetric.SGS_PRAYER));
+	}
 }

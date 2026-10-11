@@ -125,6 +125,76 @@ public class ConsumablesTest
 		assertEquals(24, consumables.without(PRAYER, 56, 200, false, false));
 	}
 
+	/**
+	 * Seen in game: a Super restore sipped as the holy water of a punish kill gave 4 hitpoints and
+	 * 3 prayer. Read as the potion's, the 4 came out of two Blood Sacrifices later in the run.
+	 */
+	@Test
+	public void aDrinkOfKnownSizeIsNotTaughtByARiseItSharesATickWith()
+	{
+		consumables.consumed("Super restore", true, 100, 0, 32);
+		assertEquals(0, consumables.without(HEAL, 4, 100, true, false));
+		assertEquals(0, consumables.without(PRAYER, 35, 100, true, false));
+
+		consumables.consumed("Super restore", true, 200, 0, 32);
+		assertEquals(25, consumables.without(HEAL, 25, 200, false, false));
+		assertEquals(24, consumables.without(PRAYER, 56, 200, false, false));
+	}
+
+	/** Its size is taken out from the first sip: there is nothing to wait to learn. */
+	@Test
+	public void aDrinkOfKnownSizeIsTakenOutUnseen()
+	{
+		consumables.consumed("Prayer potion", true, 100, 0, 31);
+
+		assertEquals(24, consumables.without(PRAYER, 55, 100, false, false));
+		assertEquals(25, consumables.without(HEAL, 25, 100, false, false));
+	}
+
+	/** A sip with little missing restores less than its size, and what is left is nothing. */
+	@Test
+	public void aDrinkOfKnownSizeCutShortByTheLevelLeavesNothingOver()
+	{
+		consumables.consumed("Super restore", true, 100, 0, 32);
+
+		assertEquals(0, consumables.without(PRAYER, 20, 100, false, true));
+	}
+
+	/** Beside one of known size, the other thing taken is still learned from what is left. */
+	@Test
+	public void anItemBesideADrinkOfKnownSizeIsLearnedFromTheRest()
+	{
+		consumables.consumed("Super restore", true, 100, 0, 32);
+		consumables.consumed("Saradomin brew", true, 100);
+		assertEquals(0, consumables.without(HEAL, 16, 100, true, false));
+
+		consumables.consumed("Saradomin brew", true, 200);
+		assertEquals(25, consumables.without(HEAL, 41, 200, false, false));
+	}
+
+	/**
+	 * A brew heals past the trained level, so a sip near full hitpoints still gives its 16. Known
+	 * ahead, that is what comes out of a Blood Sacrifice on its tick, first sip or not.
+	 */
+	@Test
+	public void aBrewOfKnownSizeIsTakenOutOfAHealOnItsTick()
+	{
+		consumables.consumed("Saradomin brew", true, 100, 16, 0);
+
+		assertEquals(25, consumables.without(HEAL, 41, 100, false, true));
+		assertEquals(24, consumables.without(PRAYER, 24, 100, false, false));
+	}
+
+	/** An anglerfish is food: its 22 comes out of a heal, and it has nothing to do with prayer. */
+	@Test
+	public void foodOfKnownSizeDoesNotRestorePrayer()
+	{
+		consumables.consumed("Anglerfish", false, 100, 22, 0);
+
+		assertEquals(3, consumables.without(HEAL, 25, 100, false, false));
+		assertEquals(24, consumables.without(PRAYER, 24, 100, false, false));
+	}
+
 	/** What an item gives outlives a run; what was taken on a tick does not. */
 	@Test
 	public void aResetKeepsWhatWasLearned()

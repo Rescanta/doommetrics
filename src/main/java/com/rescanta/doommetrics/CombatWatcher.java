@@ -227,10 +227,20 @@ class CombatWatcher
 			}
 
 			String name = withoutDose(items.name(held.getKey()));
+			KnownDose dose = KnownDose.of(held.getKey());
 
 			for (int i = 0; i < gone; i++)
 			{
-				consumables.consumed(name, drunk, tick);
+				if (dose == null)
+				{
+					consumables.consumed(name, drunk, tick);
+				}
+				else
+				{
+					consumables.consumed(name, dose.isDrink(), tick,
+						dose.heals(client.getRealSkillLevel(Skill.HITPOINTS)),
+						dose.restores(client.getRealSkillLevel(Skill.PRAYER), restoresMore()));
+				}
 			}
 
 			if (config.debugLogging())
@@ -746,18 +756,41 @@ class CombatWatcher
 		return HITPOINTS_REGEN_PERIOD / rate;
 	}
 
-	/** Max capes come in too many recolours for an id list, so they're matched by name. */
 	private boolean isWearingRegenCape()
 	{
 		int itemId = items.equipped(EquipmentInventorySlot.CAPE);
 
-		if (itemId == ItemID.SKILLCAPE_HITPOINTS || itemId == ItemID.SKILLCAPE_HITPOINTS_TRIMMED)
+		return itemId == ItemID.SKILLCAPE_HITPOINTS || itemId == ItemID.SKILLCAPE_HITPOINTS_TRIMMED
+			|| isMaxCape(itemId);
+	}
+
+	/** Max capes come in too many recolours for an id list, so they're matched by name. */
+	private boolean isMaxCape(int itemId)
+	{
+		String name = items.name(itemId);
+		return name != null && name.toLowerCase().contains("max cape");
+	}
+
+	/** Whether a dose of a prayer potion restores the larger share - see {@link KnownDose}. */
+	private boolean restoresMore()
+	{
+		int cape = items.equipped(EquipmentInventorySlot.CAPE);
+
+		if (KnownDose.boosts(cape, true) || isMaxCape(cape)
+			|| KnownDose.boosts(items.equipped(EquipmentInventorySlot.RING), true))
 		{
 			return true;
 		}
 
-		String name = items.name(itemId);
-		return name != null && name.toLowerCase().contains("max cape");
+		for (int itemId : carried.keySet())
+		{
+			if (KnownDose.boosts(itemId, false) || isMaxCape(itemId))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/** Healing spell impacts on a target. Blood spells are read from chat instead. */
