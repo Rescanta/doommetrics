@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Map;
+import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.Hitsplat;
@@ -18,12 +19,14 @@ import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
+import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.NpcID;
+import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.client.callback.ClientThread;
 import org.junit.Before;
@@ -91,14 +94,19 @@ public class CombatWatcherTest
 
 	private void hitBoss(int amount)
 	{
+		splat(boss, HitsplatID.DAMAGE_ME, amount);
+	}
+
+	private void splat(Actor target, int type, int amount)
+	{
 		HitsplatApplied event = new HitsplatApplied();
-		event.setActor(boss);
+		event.setActor(target);
 		event.setHitsplat(new Hitsplat()
 		{
 			@Override
 			public int getHitsplatType()
 			{
-				return HitsplatID.DAMAGE_ME;
+				return type;
 			}
 
 			@Override
@@ -215,6 +223,55 @@ public class CombatWatcherTest
 		verify(items, never()).isDrunk(anyInt());
 	}
 
+	/** The holy water of a punish kill heals with a splat of its own, and no spec does. */
+	@Test
+	public void aHealWithASplatOfItsOwnIsNotTheSpecs()
+	{
+		Runnable readWeapon = spendEnergy();
+		splat(player, HitsplatID.HEAL, 4);
+		watcher.statChanged(new StatChanged(Skill.HITPOINTS, HITPOINTS_XP + 89, 99, 94));
+		watcher.statChanged(new StatChanged(Skill.PRAYER, 0, 99, 60));
+		readWeapon.run();
+		watcher.tickEnded();
+
+		assertHealingBladeCredited();
+	}
+
+	/**
+	 * Seen in game: a Super restore sipped on a tick of the holy water was taken to heal 4, and
+	 * every heal it later shared a tick with was counted 4 short.
+	 */
+	@Test
+	public void theHolyWaterDoesNotTeachAPotionToHeal()
+	{
+		when(client.getRealSkillLevel(Skill.PRAYER)).thenReturn(99);
+		watcher.statChanged(new StatChanged(Skill.PRAYER, 0, 99, 10));
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(150);
+		carry(ItemID._2DOSE2RESTORE);
+		carry(ItemID._1DOSE2RESTORE);
+		splat(player, HitsplatID.HEAL, 4);
+		watcher.statChanged(new StatChanged(Skill.HITPOINTS, HITPOINTS_XP, 99, 74));
+		watcher.statChanged(new StatChanged(Skill.PRAYER, 0, 99, 45));
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(200);
+		Runnable readWeapon = spendEnergy();
+		carry();
+		watcher.statChanged(new StatChanged(Skill.HITPOINTS, HITPOINTS_XP + 89, 99, 94));
+		watcher.statChanged(new StatChanged(Skill.PRAYER, 0, 99, 87));
+		readWeapon.run();
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(201);
+		hitBoss(40);
+		watcher.tickEnded();
+
+		assertEquals(20, credited(CombatMetric.SGS_HEAL));
+		assertEquals(10, credited(CombatMetric.SGS_PRAYER));
+	}
+
 	/** With a holy wrench carried the dose is 34 at 99, and that is what comes out of the rise. */
 	@Test
 	public void aDoseWithAWrenchCarriedTakesItsLargerShareOutOfARestore()
@@ -238,6 +295,34 @@ public class CombatWatcherTest
 
 		assertEquals(20, credited(CombatMetric.SGS_HEAL));
 		assertEquals(10, credited(CombatMetric.SGS_PRAYER));
+	}
+
+	/**
+	 * Seen in game: at 4 hitpoints Redemption healed 24, a quarter of 99 prayer. On the tick a
+	 * godsword heals it is no part of the godsword's.
+	 */
+	@Test
+	public void redemptionsHealIsNotTheSpecs()
+	{
+		when(client.getRealSkillLevel(Skill.PRAYER)).thenReturn(99);
+		when(player.hasSpotAnim(SpotanimID.REDEMPTION_SPOTANIM)).thenReturn(true);
+		GraphicChanged graphic = new GraphicChanged();
+		graphic.setActor(player);
+
+		Runnable readWeapon = spendEnergy();
+		watcher.graphicChanged(graphic);
+		watcher.statChanged(new StatChanged(Skill.HITPOINTS, HITPOINTS_XP + 89, 99, 99));
+		watcher.statChanged(new StatChanged(Skill.PRAYER, 0, 99, 60));
+		readWeapon.run();
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(101);
+		watcher.graphicChanged(graphic);
+		hitBoss(40);
+		watcher.tickEnded();
+
+		assertEquals(5, credited(CombatMetric.SGS_HEAL));
+		assertEquals(40, credited(CombatMetric.OTHER_SPEC_DAMAGE));
 	}
 
 	/** A brew's 16 at 99 hitpoints is known from the first sip and comes out of the spec's heal. */
