@@ -471,8 +471,8 @@ class CombatDiagnostics
 
 			log.debug("Swing at tick {} aimed at {} (at the animation: {}), spec bar armed {}",
 				tick, describe(aim), aimAtSwing, armedAtSwing);
-			ledger.swung(tick, aim instanceof NPC ? ((NPC) aim).getIndex() : AttackLedger.UNKNOWN);
-			logDistance(tick, aim);
+			ledger.swung(tick, aim instanceof NPC ? ((NPC) aim).getIndex() : AttackLedger.UNKNOWN,
+				distance(tick, aim));
 		}
 
 		// None on a swing's tick says it missed, while experience is still there to be earned.
@@ -518,20 +518,25 @@ class CombatDiagnostics
 
 	/**
 	 * How far off the attack was made, which is what its hit's delay goes by: edge to edge for
-	 * most, and to the target's south-west tile for a barrage.
+	 * most, and to the target's south-west tile for a barrage. Both are written; the second is
+	 * returned, or {@link AttackLedger#UNKNOWN}.
 	 */
-	private void logDistance(int tick, Actor aim)
+	private int distance(int tick, Actor aim)
 	{
 		Player player = client.getLocalPlayer();
 		WorldArea from = player == null ? null : player.getWorldArea();
 		WorldArea to = aim instanceof NPC ? aim.getWorldArea() : null;
 		WorldPoint corner = to == null ? null : aim.getWorldLocation();
 
-		if (from != null && to != null && corner != null)
+		if (from == null || to == null || corner == null)
 		{
-			log.debug("Swing at tick {} was made {} tiles from its target, {} from the target's"
-				+ " south-west tile", tick, from.distanceTo(to), from.distanceTo(corner));
+			return AttackLedger.UNKNOWN;
 		}
+
+		int tiles = from.distanceTo(corner);
+		log.debug("Swing at tick {} was made {} tiles from its target, {} from the target's"
+			+ " south-west tile", tick, from.distanceTo(to), tiles);
+		return tiles;
 	}
 
 	private Actor aim()

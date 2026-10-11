@@ -110,6 +110,9 @@ final class AttackLedger
 		/** For a spell, which is at whatever it reaches: the NPC it was cast at. */
 		private int aim = UNKNOWN;
 
+		/** How far off it was made, to its target's south-west tile, or {@link #UNKNOWN}. */
+		private int tiles = UNKNOWN;
+
 		private int left;
 		private int hits;
 		private long damage;
@@ -282,7 +285,7 @@ final class AttackLedger
 	 */
 	private static final int[] TICKS_TO_START = {2, 1};
 
-	/** A spell lands no sooner than this after its cast. */
+	/** A spell lands no sooner than this after its cast, and so when the distance is not known. */
 	private static final int CAST_TICKS = 2;
 
 	/** How long after the spec its sacrifice hits: seen at 9 ticks, and once at 8. */
@@ -329,6 +332,15 @@ final class AttackLedger
 	 */
 	void swung(int tick, int target)
 	{
+		swung(tick, target, UNKNOWN);
+	}
+
+	/**
+	 * @param tiles how far off it was made, to its target's south-west tile, which is what a
+	 *              spell's delay goes by; {@link #UNKNOWN} when that could not be read
+	 */
+	void swung(int tick, int target, int tiles)
+	{
 		for (Attack attack : attacks)
 		{
 			if (attack.kind == Kind.SHOT && attack.made == tick)
@@ -337,10 +349,16 @@ final class AttackLedger
 			}
 		}
 
-		add(casts.contains(tick)
-			? castAt(tick, target)
-			: new Attack(Kind.SWING, tick, specDue.getOrDefault(tick, tick + 1), target, 0,
-				Integer.MAX_VALUE));
+		if (casts.contains(tick))
+		{
+			add(castAt(tick, target, tiles));
+			return;
+		}
+
+		Attack swing = new Attack(Kind.SWING, tick, specDue.getOrDefault(tick, tick + 1), target, 0,
+			Integer.MAX_VALUE);
+		swing.tiles = tiles;
+		add(swing);
 	}
 
 	/**
@@ -372,17 +390,27 @@ final class AttackLedger
 			if (attack.kind == Kind.SWING && attack.made == tick && attack.hits == 0)
 			{
 				attacks.remove(attack);
-				add(castAt(tick, attack.target));
+				add(castAt(tick, attack.target, attack.tiles));
 				return;
 			}
 		}
 	}
 
-	private static Attack castAt(int tick, int aim)
+	private static Attack castAt(int tick, int aim, int tiles)
 	{
-		Attack cast = new Attack(Kind.CAST, tick, tick + CAST_TICKS, UNKNOWN, 0, Integer.MAX_VALUE);
+		Attack cast = new Attack(Kind.CAST, tick, tick + castTicks(tiles), UNKNOWN, 0,
+			Integer.MAX_VALUE);
 		cast.aim = aim;
 		return cast;
+	}
+
+	/**
+	 * How long after its cast a spell lands: two ticks from beside its target, and one more for
+	 * every three tiles to the target's south-west tile.
+	 */
+	static int castTicks(int tiles)
+	{
+		return CAST_TICKS + (tiles == UNKNOWN ? 0 : (Math.max(1, tiles) + 1) / 3);
 	}
 
 	/** A projectile of ours, one hit each. Replaces the swing its animation was taken for. */

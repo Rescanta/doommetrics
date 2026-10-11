@@ -621,6 +621,37 @@ public class AttackLedgerTest
 		assertTrue(lapsed.isEmpty());
 	}
 
+	/**
+	 * Seen in game: a barrage cast one tile from the shield's edge and four from its south-west
+	 * tile landed three ticks on. Nine of nine went by the south-west tile.
+	 */
+	@Test
+	public void aSpellIsDueByTheTilesToItsTargetsSouthWestTile()
+	{
+		assertEquals(2, AttackLedger.castTicks(1));
+		assertEquals(3, AttackLedger.castTicks(2));
+		assertEquals(3, AttackLedger.castTicks(4));
+		assertEquals(4, AttackLedger.castTicks(5));
+		assertEquals(4, AttackLedger.castTicks(7));
+		assertEquals(5, AttackLedger.castTicks(8));
+		assertEquals(5, AttackLedger.castTicks(9));
+		assertEquals(2, AttackLedger.castTicks(AttackLedger.UNKNOWN));
+
+		ledger.cast(100);
+		ledger.swung(100, BOSS, 4);
+		ledger.splat(103, BOSS, 29, "boss");
+
+		ledger.swung(200, BOSS, 8);
+		ledger.cast(200);
+		ledger.splat(205, BOSS, 29, "boss");
+		endTicks(100, 208);
+
+		assertEquals(AttackLedger.Kind.CAST, kindOf(0));
+		assertEquals(0, verdicts.get(0).offset());
+		assertEquals(AttackLedger.Kind.CAST, kindOf(1));
+		assertEquals(0, verdicts.get(1).offset());
+	}
+
 	@Test
 	public void aSpellIsACastWhicheverOfItsTwoSignsIsHeardFirst()
 	{
