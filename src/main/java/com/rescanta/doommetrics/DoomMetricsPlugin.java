@@ -700,6 +700,7 @@ public class DoomMetricsPlugin extends Plugin
 	public void onFakeXpDrop(FakeXpDrop event)
 	{
 		diagnostics.fakeXpDrop(event);
+		combat.fakeXpDrop(event);
 	}
 
 	@Subscribe

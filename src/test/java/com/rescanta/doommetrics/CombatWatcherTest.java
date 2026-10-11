@@ -19,6 +19,7 @@ import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
+import net.runelite.api.events.FakeXpDrop;
 import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
@@ -295,6 +296,40 @@ public class CombatWatcherTest
 
 		assertEquals(20, credited(CombatMetric.SGS_HEAL));
 		assertEquals(10, credited(CombatMetric.SGS_PRAYER));
+	}
+
+	/**
+	 * At 200 million hitpoints experience the skill stands still and the drop still comes. It
+	 * holds a spec to what it earned as real experience does: a swing that earned 22 did not hit 40.
+	 */
+	@Test
+	public void anExperienceDropAtTheCapHoldsASpecToWhatItEarned()
+	{
+		Runnable readWeapon = spendEnergy();
+		watcher.fakeXpDrop(new FakeXpDrop(Skill.HITPOINTS, 22));
+		readWeapon.run();
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(101);
+		hitBoss(40);
+		watcher.tickEnded();
+
+		assertEquals(0, credited(CombatMetric.OTHER_SPEC_DAMAGE));
+	}
+
+	@Test
+	public void anExperienceDropAtTheCapThatFitsTheHitLetsItCount()
+	{
+		Runnable readWeapon = spendEnergy();
+		watcher.fakeXpDrop(new FakeXpDrop(Skill.HITPOINTS, 89));
+		readWeapon.run();
+		watcher.tickEnded();
+
+		when(client.getTickCount()).thenReturn(101);
+		hitBoss(40);
+		watcher.tickEnded();
+
+		assertEquals(40, credited(CombatMetric.OTHER_SPEC_DAMAGE));
 	}
 
 	/**
