@@ -534,6 +534,30 @@ public class AttackLedgerTest
 		assertEquals(1, lapsed.size());
 	}
 
+	/** The Eldritch staff's spec has no projectile and lands three ticks on, heard in either order. */
+	@Test
+	public void aSpecWithASetDelayIsDueOnItsOwnTick()
+	{
+		ledger.swung(100, BOSS);
+		ledger.specFired(100);
+		ledger.specDue(100, 103);
+		ledger.experience(100, 89, RATE);
+		ledger.splat(103, BOSS, 40, "boss");
+
+		ledger.specFired(200);
+		ledger.specDue(200, 203);
+		ledger.swung(200, BOSS);
+		ledger.experience(200, 89, RATE);
+		ledger.splat(203, BOSS, 40, "boss");
+		endTicks(100, 206);
+
+		assertEquals(AttackLedger.Kind.SWING, kindOf(0));
+		assertEquals(0, verdicts.get(0).offset());
+		assertEquals(0, verdicts.get(1).offset());
+		assertTrue(verdicts.get(1).spec);
+		assertTrue(lapsed.isEmpty());
+	}
+
 	/** Seen in game: a spec that hit 0 two ticks late, with a cast animated in between. */
 	@Test
 	public void aKnownAttackTakesAZeroAheadOfAnAnimationDueNearer()

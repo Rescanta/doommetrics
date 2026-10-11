@@ -1,9 +1,11 @@
 package com.rescanta.doommetrics;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -293,6 +295,9 @@ final class AttackLedger
 	private final List<Splat> splats = new ArrayList<>();
 	private final Set<Integer> specs = new HashSet<>();
 	private final Set<Integer> casts = new HashSet<>();
+
+	/** The ticks specs that land on a set tick were made on, and the tick each is due. */
+	private final Map<Integer, Integer> specDue = new HashMap<>();
 	private final TreeMap<Integer, Earned> earned = new TreeMap<>();
 
 	/** The NPCs that died on each of the last few ticks. */
@@ -312,6 +317,7 @@ final class AttackLedger
 		splats.clear();
 		specs.clear();
 		casts.clear();
+		specDue.clear();
 		earned.clear();
 		deaths.clear();
 		thrallShotAt = NEVER;
@@ -333,7 +339,27 @@ final class AttackLedger
 
 		add(casts.contains(tick)
 			? castAt(tick, target)
-			: new Attack(Kind.SWING, tick, tick + 1, target, 0, Integer.MAX_VALUE));
+			: new Attack(Kind.SWING, tick, specDue.getOrDefault(tick, tick + 1), target, 0,
+				Integer.MAX_VALUE));
+	}
+
+	/**
+	 * The spec made on this tick has nothing seen to fly and still lands on a tick of its own,
+	 * whatever the distance: the Eldritch staff's. Its animation was or will be taken for a swing.
+	 */
+	void specDue(int tick, int due)
+	{
+		specDue.put(tick, due);
+
+		for (Attack attack : attacks)
+		{
+			if (attack.kind == Kind.SWING && attack.made == tick && attack.hits == 0)
+			{
+				attacks.remove(attack);
+				add(new Attack(Kind.SWING, tick, due, attack.target, 0, Integer.MAX_VALUE));
+				return;
+			}
+		}
 	}
 
 	/** A spell with no projectile was cast on this tick: its animation is the cast, not a swing. */
@@ -502,6 +528,7 @@ final class AttackLedger
 
 		specs.removeIf(at -> at < tick - KEPT_TICKS);
 		casts.removeIf(at -> at < tick - KEPT_TICKS);
+		specDue.keySet().removeIf(at -> at < tick - KEPT_TICKS);
 		deaths.headMap(tick - KEPT_TICKS).clear();
 		earned.headMap(tick - KEPT_TICKS).clear();
 	}

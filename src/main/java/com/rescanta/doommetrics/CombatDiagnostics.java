@@ -273,6 +273,11 @@ class CombatDiagnostics
 			specTick = tick;
 			ledger.specFired(tick);
 
+			if (weapon == SpecWeapon.ELDRITCH_STAFF)
+			{
+				ledger.specDue(tick, tick + SpecWeapon.SET_DELAY);
+			}
+
 			if (weapon == SpecWeapon.ANCIENT_GODSWORD)
 			{
 				ledger.sacrifice(tick);
