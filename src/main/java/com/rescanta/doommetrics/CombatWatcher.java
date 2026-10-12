@@ -15,6 +15,7 @@ import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
 import net.runelite.api.Skill;
 import net.runelite.api.events.AnimationChanged;
+import net.runelite.api.events.FakeXpDrop;
 import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
@@ -651,11 +652,26 @@ class CombatWatcher
 		boolean known = hitpointsXp > 0;
 		hitpointsXp = xp;
 
-		if (!running || !known || gained <= 0)
+		if (running && known && gained > 0)
 		{
-			return;
+			experienceGained(gained, tick);
 		}
+	}
 
+	/**
+	 * At 200 million experience the skill no longer moves, and the drop for a hit still comes: the
+	 * same amount, by another road.
+	 */
+	void fakeXpDrop(FakeXpDrop event)
+	{
+		if (event.getSkill() == Skill.HITPOINTS && event.getXp() > 0 && run.get() != null)
+		{
+			experienceGained(event.getXp(), client.getTickCount());
+		}
+	}
+
+	private void experienceGained(int gained, int tick)
+	{
 		experience = (experienceTick == tick ? experience : 0) + gained;
 		experienceTick = tick;
 		punishTracker.experienceGained(gained, tick);

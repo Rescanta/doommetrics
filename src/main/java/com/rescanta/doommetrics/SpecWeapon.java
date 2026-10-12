@@ -11,7 +11,7 @@ import net.runelite.api.gameval.ItemID;
  */
 enum SpecWeapon
 {
-	ZARYTE_CROSSBOW("Zaryte crossbow", projectile(CombatMetric.ZCB_DAMAGE, 1)),
+	ZARYTE_CROSSBOW("Zaryte crossbow", set(CombatMetric.ZCB_DAMAGE)),
 
 	/**
 	 * Dragon knife. Duality throws two knives at once, each rolling its own hit, and heals nothing.
@@ -30,12 +30,12 @@ enum SpecWeapon
 	 * the dart has landed.
 	 */
 	BLOWPIPE("Toxic blowpipe",
-		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
+		thrown(CombatMetric.OTHER_SPEC_DAMAGE),
 		atOnce(SpecEffect.Kind.HEAL, CombatMetric.BLOWPIPE_HEAL)),
 
 	/** Ancient godsword: the swing, then Blood Sacrifice's damage and heal eight ticks later. */
 	ANCIENT_GODSWORD("Ancient godsword",
-		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
+		blow(CombatMetric.OTHER_SPEC_DAMAGE),
 		sacrificeDamage(),
 		sacrificeHeal()),
 
@@ -44,13 +44,13 @@ enum SpecWeapon
 	 * quarter as prayer, both on the spec's own tick - a tick ahead of the hitsplat.
 	 */
 	SARADOMIN_GODSWORD("Saradomin godsword",
-		swing(CombatMetric.OTHER_SPEC_DAMAGE, 1),
+		blow(CombatMetric.OTHER_SPEC_DAMAGE),
 		atOnce(SpecEffect.Kind.HEAL, CombatMetric.SGS_HEAL),
 		atOnce(SpecEffect.Kind.PRAYER, CombatMetric.SGS_PRAYER)),
 
 	/** Eldritch nightmare staff. Restores prayer rather than hitpoints, both when the spell lands. */
 	ELDRITCH_STAFF("Eldritch staff",
-		projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1),
+		set(CombatMetric.OTHER_SPEC_DAMAGE),
 		prayer(CombatMetric.ELDRITCH_PRAYER, 2)),
 
 	/**
@@ -58,7 +58,7 @@ enum SpecWeapon
 	 * behind it and landing in its window is not a second hit of its. Its burns are counted from
 	 * their own hitsplats.
 	 */
-	SCORCHING_BOW("Scorching bow", projectile(CombatMetric.OTHER_SPEC_DAMAGE, 1)),
+	SCORCHING_BOW("Scorching bow", scorching(CombatMetric.OTHER_SPEC_DAMAGE)),
 
 	/** Every other melee spec. Four hits covers dragon claws. None of them heals. */
 	OTHER(null, swing(CombatMetric.OTHER_SPEC_DAMAGE, 4)),
@@ -80,6 +80,15 @@ enum SpecWeapon
 
 	/** The latest a thrown or fired spec lands: a bow at range, and the scorching bow's spec. */
 	private static final int LANDED = 4;
+
+	/**
+	 * When a Zaryte crossbow's or an Eldritch staff's spec lands, whatever the distance. The
+	 * scorching bow's is never sooner, and a tick later from six tiles.
+	 */
+	static final int SET_DELAY = 3;
+
+	/** The latest a toxic blowpipe's spec lands: from four tiles, a tick sooner from nearer. */
+	private static final int THROWN = 3;
 
 	/** How long after an Eldritch spec its restore may arrive: it lands when the spell does. */
 	private static final int RESTORE = 7;
@@ -119,6 +128,36 @@ enum SpecWeapon
 	private static SpecEffect swing(CombatMetric metric, int budget)
 	{
 		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, SWING, PROMPT, budget).ofTheAttack();
+	}
+
+	/** A named melee spec's one hit, which lands on the tick after the swing and no other. */
+	private static SpecEffect blow(CombatMetric metric)
+	{
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, SWING, SWING, 1).ofTheAttack();
+	}
+
+	/** One hit landing {@link #SET_DELAY} ticks on, whatever the distance. */
+	private static SpecEffect set(CombatMetric metric)
+	{
+		return fired(metric, SET_DELAY, SET_DELAY);
+	}
+
+	/** The toxic blowpipe's dart - see {@link #THROWN}. */
+	private static SpecEffect thrown(CombatMetric metric)
+	{
+		return fired(metric, FLIGHT, THROWN);
+	}
+
+	/** The scorching bow's arrow - see {@link #SET_DELAY}. */
+	private static SpecEffect scorching(CombatMetric metric)
+	{
+		return fired(metric, SET_DELAY, LANDED);
+	}
+
+	/** A named spec's one hit that flies, landing between these two ticks after it is made. */
+	private static SpecEffect fired(CombatMetric metric, int from, int to)
+	{
+		return new SpecEffect(SpecEffect.Kind.DAMAGE, metric, from, to, 1).ofTheAttack();
 	}
 
 	/** A spec's hit that has to fly to its target - see {@link #FLIGHT}. */
