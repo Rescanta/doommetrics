@@ -193,7 +193,7 @@ class CombatDiagnostics
 		int lands = thrall
 			? Flight.thrallLandingTick(started, length,
 				projectile.getId() == SpotanimID.THRALL_MAGIC_TRAVEL)
-			: Flight.landingTick(started, length);
+			: Flight.landingTick(started, length, projectile.getId());
 		int index = ((NPC) target).getIndex();
 
 		log.debug("Projectile {} at {}, cycles {} to {} from now: started tick {}, lands tick {}",
@@ -245,9 +245,22 @@ class CombatDiagnostics
 
 	void interactingChanged(InteractingChanged event)
 	{
-		if (on() && event.getSource() == client.getLocalPlayer())
+		if (!on())
+		{
+			return;
+		}
+
+		Actor source = event.getSource();
+
+		if (source == client.getLocalPlayer())
 		{
 			log.debug("Target -> {} at tick {}", describe(event.getTarget()), client.getTickCount());
+		}
+		else if (source instanceof NPC && ThrallTracker.isThrall(((NPC) source).getId()))
+		{
+			// A zombie's attack has no projectile to name its target, so this is the only sign.
+			log.debug("Thrall target -> {} at tick {}", describe(event.getTarget()),
+				client.getTickCount());
 		}
 	}
 
@@ -272,6 +285,11 @@ class CombatDiagnostics
 			specWeapon = weapon;
 			specTick = tick;
 			ledger.specFired(tick);
+
+			if (weapon == SpecWeapon.ELDRITCH_STAFF)
+			{
+				ledger.specDue(tick, tick + SpecWeapon.SET_DELAY);
+			}
 
 			if (weapon == SpecWeapon.ANCIENT_GODSWORD)
 			{
@@ -466,7 +484,8 @@ class CombatDiagnostics
 
 			log.debug("Swing at tick {} aimed at {} (at the animation: {}), spec bar armed {}",
 				tick, describe(aim), aimAtSwing, armedAtSwing);
-			ledger.swung(tick, aim instanceof NPC ? ((NPC) aim).getIndex() : AttackLedger.UNKNOWN);
+			ledger.swung(tick, aim instanceof NPC ? ((NPC) aim).getIndex() : AttackLedger.UNKNOWN,
+				distance(tick, aim));
 		}
 
 		// None on a swing's tick says it missed, while experience is still there to be earned.
@@ -508,6 +527,29 @@ class CombatDiagnostics
 		{
 			log.debug("Tick {} came {} ms after the one before", tick, millis);
 		}
+	}
+
+	/**
+	 * How far off the attack was made, which is what its hit's delay goes by: edge to edge for
+	 * most, and to the target's south-west tile for a barrage. Both are written; the second is
+	 * returned, or {@link AttackLedger#UNKNOWN}.
+	 */
+	private int distance(int tick, Actor aim)
+	{
+		Player player = client.getLocalPlayer();
+		WorldArea from = player == null ? null : player.getWorldArea();
+		WorldArea to = aim instanceof NPC ? aim.getWorldArea() : null;
+		WorldPoint corner = to == null ? null : aim.getWorldLocation();
+
+		if (from == null || to == null || corner == null)
+		{
+			return AttackLedger.UNKNOWN;
+		}
+
+		int tiles = from.distanceTo(corner);
+		log.debug("Swing at tick {} was made {} tiles from its target, {} from the target's"
+			+ " south-west tile", tick, from.distanceTo(to), tiles);
+		return tiles;
 	}
 
 	private Actor aim()
