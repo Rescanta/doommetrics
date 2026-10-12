@@ -51,6 +51,12 @@ class CombatWatcher
 	private static final int PRAYER_REGEN_PERIOD = 12;
 	private static final int HITPOINTS_REGEN_PERIOD = 100;
 
+	/** Redemption heals this share of the trained prayer level, and its graphic stays a while. */
+	private static final int REDEMPTION_PERCENT = 25;
+	private static final int REDEMPTION_SHOWN = 5;
+
+	private static final int NEVER = Integer.MIN_VALUE / 2;
+
 	/** A rise in hitpoints or prayer, waiting on the end of its tick. */
 	private static final class Rise
 	{
@@ -102,6 +108,18 @@ class CombatWatcher
 	private int taken;
 	private int takenTick;
 
+	/**
+	 * Healed this tick with a splat of its own. Nothing counted heals that way: the specs and the
+	 * blood spells raise the level with no splat. It is the holy water thrown when the boss dies
+	 * to a melee punish on delves 1 to 8.
+	 */
+	private int splatHealed;
+	private int splatHealedTick;
+
+	/** The tick Redemption last went off, which heals a quarter of the trained prayer level. */
+	private int redeemedTick = NEVER;
+	private boolean redeemed;
+
 	private final Regeneration prayerRegeneration = new Regeneration();
 	private final Regeneration hitpointsRegeneration = new Regeneration();
 	private final Consumables consumables = new Consumables();
@@ -151,6 +169,7 @@ class CombatWatcher
 		hitpoints = 0;
 		hitpointsXp = 0;
 		taken = 0;
+		splatHealed = 0;
 		carried = null;
 		prayerRegeneration.reset();
 		hitpointsRegeneration.reset();
@@ -227,10 +246,20 @@ class CombatWatcher
 			}
 
 			String name = withoutDose(items.name(held.getKey()));
+			KnownDose dose = KnownDose.of(held.getKey());
 
 			for (int i = 0; i < gone; i++)
 			{
-				consumables.consumed(name, drunk, tick);
+				if (dose == null)
+				{
+					consumables.consumed(name, drunk, tick);
+				}
+				else
+				{
+					consumables.consumed(name, dose.isDrink(), tick,
+						dose.heals(client.getRealSkillLevel(Skill.HITPOINTS)),
+						dose.restores(client.getRealSkillLevel(Skill.PRAYER), restoresMore()));
+				}
 			}
 
 			if (config.debugLogging())
@@ -301,7 +330,12 @@ class CombatWatcher
 					hitsplat.getHitsplatType(), tick);
 			}
 
-			if (hitsplat.getHitsplatType() != HitsplatID.HEAL && hitsplat.getAmount() > 0)
+			if (hitsplat.getHitsplatType() == HitsplatID.HEAL)
+			{
+				splatHealed = (splatHealedTick == tick ? splatHealed : 0) + hitsplat.getAmount();
+				splatHealedTick = tick;
+			}
+			else if (hitsplat.getAmount() > 0)
 			{
 				taken = (takenTick == tick ? taken : 0) + hitsplat.getAmount();
 				takenTick = tick;
@@ -675,9 +709,17 @@ class CombatWatcher
 		Regeneration regeneration = kind == SpecEffect.Kind.PRAYER
 			? prayerRegeneration
 			: hitpointsRegeneration;
-		int size = rise.to - rise.from;
+		int to = rise.to - healedWithASplat(rise, tick);
+		to -= healedByRedemption(rise, to - rise.from, tick);
+		int size = to - rise.from;
+
+		if (size <= 0)
+		{
+			return;
+		}
+
 		boolean spare = combatTracker.wouldCredit(kind, size, tick) == null;
-		int gain = regeneration.without(rise.from, rise.to, rise.natural, tick, rise.period, spare);
+		int gain = regeneration.without(rise.from, to, rise.natural, tick, rise.period, spare);
 
 		if (gain < size && config.debugLogging())
 		{
@@ -720,6 +762,47 @@ class CombatWatcher
 		}
 	}
 
+	/** How much of a heal came with a splat of its own this tick, which is taken out once. */
+	private int healedWithASplat(Rise rise, int tick)
+	{
+		if (rise.kind != SpecEffect.Kind.HEAL || splatHealedTick != tick)
+		{
+			return 0;
+		}
+
+		int own = Math.min(rise.to - rise.from, splatHealed);
+		splatHealed -= own;
+
+		if (own > 0 && config.debugLogging())
+		{
+			log.debug("HEAL of {} at tick {} has {} with a splat of its own in it",
+				rise.to - rise.from, tick, own);
+		}
+
+		return own;
+	}
+
+	/** How much of a heal is Redemption's, which is taken out once. No spec heals that way. */
+	private int healedByRedemption(Rise rise, int left, int tick)
+	{
+		if (rise.kind != SpecEffect.Kind.HEAL || redeemedTick != tick || redeemed)
+		{
+			return 0;
+		}
+
+		redeemed = true;
+		int own = Math.min(left,
+			client.getRealSkillLevel(Skill.PRAYER) * REDEMPTION_PERCENT / 100);
+
+		if (own > 0 && config.debugLogging())
+		{
+			log.debug("HEAL of {} at tick {} has {} of Redemption's in it", rise.to - rise.from,
+				tick, own);
+		}
+
+		return own;
+	}
+
 	/** 0 while no prayer regeneration dose is in effect. */
 	private int prayerRegenerationPeriod()
 	{
@@ -746,18 +829,41 @@ class CombatWatcher
 		return HITPOINTS_REGEN_PERIOD / rate;
 	}
 
-	/** Max capes come in too many recolours for an id list, so they're matched by name. */
 	private boolean isWearingRegenCape()
 	{
 		int itemId = items.equipped(EquipmentInventorySlot.CAPE);
 
-		if (itemId == ItemID.SKILLCAPE_HITPOINTS || itemId == ItemID.SKILLCAPE_HITPOINTS_TRIMMED)
+		return itemId == ItemID.SKILLCAPE_HITPOINTS || itemId == ItemID.SKILLCAPE_HITPOINTS_TRIMMED
+			|| isMaxCape(itemId);
+	}
+
+	/** Max capes come in too many recolours for an id list, so they're matched by name. */
+	private boolean isMaxCape(int itemId)
+	{
+		String name = items.name(itemId);
+		return name != null && name.toLowerCase().contains("max cape");
+	}
+
+	/** Whether a dose of a prayer potion restores the larger share - see {@link KnownDose}. */
+	private boolean restoresMore()
+	{
+		int cape = items.equipped(EquipmentInventorySlot.CAPE);
+
+		if (KnownDose.boosts(cape, true) || isMaxCape(cape)
+			|| KnownDose.boosts(items.equipped(EquipmentInventorySlot.RING), true))
 		{
 			return true;
 		}
 
-		String name = items.name(itemId);
-		return name != null && name.toLowerCase().contains("max cape");
+		for (int itemId : carried.keySet())
+		{
+			if (KnownDose.boosts(itemId, false) || isMaxCape(itemId))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/** Healing spell impacts on a target. Blood spells are read from chat instead. */
@@ -774,6 +880,16 @@ class CombatWatcher
 
 		if (actor == client.getLocalPlayer())
 		{
+			int tick = client.getTickCount();
+
+			// The graphic outlasts its tick and is reported again with whatever joins it.
+			if (actor.hasSpotAnim(SpotanimID.REDEMPTION_SPOTANIM)
+				&& tick > redeemedTick + REDEMPTION_SHOWN)
+			{
+				redeemedTick = tick;
+				redeemed = false;
+			}
+
 			return;
 		}
 

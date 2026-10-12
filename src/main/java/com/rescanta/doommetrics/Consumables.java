@@ -9,7 +9,8 @@ import java.util.Map;
  * Takes what was eaten or drunk out of a heal or a restore on the same tick. The game reports one
  * rise whatever raised it, and a brew can go down on the tick a spec pays out. What an item gives
  * is learned from a rise nothing else explains; until then a rise it shares a tick with is left
- * uncounted. Errs short. No RuneLite types.
+ * uncounted. An item the caller knows the size of is taken at that and never learned. Errs short.
+ * No RuneLite types.
  */
 final class Consumables
 {
@@ -21,10 +22,27 @@ final class Consumables
 		private final String item;
 		private final boolean drink;
 
+		/** Whether what it gives was known ahead, and then how much. */
+		private final boolean known;
+		private final int heals;
+		private final int restores;
+
 		private Taken(String item, boolean drink)
 		{
 			this.item = item;
 			this.drink = drink;
+			this.known = false;
+			this.heals = 0;
+			this.restores = 0;
+		}
+
+		private Taken(String item, boolean drink, int heals, int restores)
+		{
+			this.item = item;
+			this.drink = drink;
+			this.known = true;
+			this.heals = heals;
+			this.restores = restores;
 		}
 	}
 
@@ -48,13 +66,27 @@ final class Consumables
 	 */
 	void consumed(String item, boolean drink, int tick)
 	{
+		add(new Taken(item, drink), tick);
+	}
+
+	/**
+	 * Something whose size is known ahead. A rise on its tick says nothing about it: something
+	 * the plugin doesn't follow may have raised the level with it.
+	 */
+	void consumed(String item, boolean drink, int tick, int heals, int restores)
+	{
+		add(new Taken(item, drink, heals, restores), tick);
+	}
+
+	private void add(Taken one, int tick)
+	{
 		if (tick != takenAt)
 		{
 			taken.clear();
 			takenAt = tick;
 		}
 
-		taken.add(new Taken(item, drink));
+		taken.add(one);
 	}
 
 	boolean anyAt(int tick)
@@ -84,7 +116,9 @@ final class Consumables
 
 		for (Taken each : relevant)
 		{
-			Integer known = gives.get(each.item);
+			Integer known = each.known
+				? Integer.valueOf(kind == SpecEffect.Kind.HEAL ? each.heals : each.restores)
+				: gives.get(each.item);
 
 			if (known == null)
 			{
@@ -103,7 +137,7 @@ final class Consumables
 			{
 				gives.put(unknown, (int) Math.max(0, rise - explained));
 			}
-			else if (unknowns == 0 && relevant.size() == 1)
+			else if (unknowns == 0 && relevant.size() == 1 && !relevant.get(0).known)
 			{
 				gives.merge(relevant.get(0).item, (int) rise, Math::max);
 			}
@@ -125,7 +159,10 @@ final class Consumables
 
 		for (Taken each : relevant(kind, tick))
 		{
-			gives.putIfAbsent(each.item, 0);
+			if (!each.known)
+			{
+				gives.putIfAbsent(each.item, 0);
+			}
 		}
 	}
 

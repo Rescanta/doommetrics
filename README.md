@@ -286,7 +286,14 @@ never earned. Every number here is a floor - what could be proven - and never an
 A brew or a restore dose taken on the very tick a spec or spell pays out arrives as one rise with
 it. The plugin watches the inventory for what is eaten or drunk, learns what each item gives the
 first time it is taken on its own, and takes that out of a rise it shares a tick with. Until an
-item has been seen on its own, a rise it shares a tick with is left uncounted.
+item has been seen on its own, a rise it shares a tick with is left uncounted. The common ones
+need no learning, because what they give follows from your levels: a dose of a prayer potion, a
+super restore or a Sanfew serum (more with a holy wrench, a prayer or max cape or an imbued ring
+of the gods), a dose of a Saradomin or an Armadyl brew, and an anglerfish.
+
+Two heals the game gives on its own are taken out of the tick's heal before anything is credited:
+the holy water thrown when the boss dies to a melee punish on delves 1 to 8, which heals with a
+splat of its own, and Redemption.
 
 Spec and punish damage are only counted on the boss itself, standing or burrowed. Larvae, volatile earth and
 the boss behind its demonic shield are all worth a spec, but not for the damage, so a spec fired at
